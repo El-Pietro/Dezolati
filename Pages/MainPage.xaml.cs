@@ -1,11 +1,12 @@
 ﻿using Dezolati.Models;
 using Dezolati.Services;
 
-namespace Dezolati
+namespace Dezolati.Pages
 {
     public partial class MainPage : ContentPage
-    {
+    {   
         private int pocetPiv = 0;
+        
 
         public MainPage()
         {
@@ -18,14 +19,16 @@ namespace Dezolati
             SouhrnLabel.Text = $"Dnešní souhrn: {pocetPiv} piv";
 
             var firestoreService = new FirestoreService();
-            var sample = new SampleModel
+            var sample = new DrinkModel
             {
-                Name = "Petr",
-                Pivo = pocetPiv,
-                CreatedAt = DateTime.Now
+                UserId = SignInModel.ID,
+                Name = SignInModel.Username,
+                DrinkType = 1,
+                Quantity = 1,
+                DrinkAt = DateTime.Now
             };
 
-            await firestoreService.InsertSampleModel(sample);
+            await firestoreService.InsertDrinkModel(sample);
 
             // Přidání nové čárky
             if (pocetPiv % 5 == 0)

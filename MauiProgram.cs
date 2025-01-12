@@ -1,4 +1,9 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using Dezolati.Models;
+using Dezolati.Pages;
+using Firebase.Auth;
+using Firebase.Auth.Providers;
+using Firebase.Auth.Repository;
+using Microsoft.Extensions.Logging;
 
 namespace Dezolati
 {
@@ -17,6 +22,22 @@ namespace Dezolati
 
 #if DEBUG
     		builder.Logging.AddDebug();
+
+            builder.Services.AddSingleton(new FirebaseAuthClient(new FirebaseAuthConfig()
+            {
+                ApiKey = "AIzaSyBmfjw3PRo85_PDq8Z763rmh49pags1PjA",
+                AuthDomain = "dezolati.firebaseapp.com",
+                Providers = new FirebaseAuthProvider[]
+                {
+                    new EmailProvider()
+                },
+                UserRepository = new FileUserRepository("Dezolati")
+            }));
+
+            builder.Services.AddSingleton<SignIn>();
+            builder.Services.AddSingleton<SignInModel>();
+            builder.Services.AddSingleton<SignUp>();
+            builder.Services.AddSingleton<SignUpModel>();
 #endif
 
             return builder.Build();

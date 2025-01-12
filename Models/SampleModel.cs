@@ -20,17 +20,6 @@ namespace Dezolati.Models
         public DateTime CreatedAt { get; set; }
     }
 
-    public class DateTimeToTimestampConverter : IFirestoreConverter<DateTime>
-    {
-        public object ToFirestore(DateTime value) => Timestamp.FromDateTime(value.ToUniversalTime());
-        public DateTime FromFirestore(object value)
-        {
-            if (value is Timestamp timestamp)
-            {
-                return timestamp.ToDateTime();
-            }
-            throw new ArgumentException("InvalidValue");
-        }
-    }
+
 
 }

@@ -33,40 +33,42 @@ namespace Dezolati.Services
                 }
             }
         }
-        public async Task InsertSampleModel(SampleModel sample)
+
+
+        public async Task InsertDrinkModel(DrinkModel sample)
         {
             try
             {
                 await SetupFirestore();
-                await db.Collection("SampleModels").AddAsync(sample);
+                await db.Collection("Drinks").AddAsync(sample);
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Chyba při zápisu do Firestore: {ex.Message}");
             }
         }
-        public async Task <List<SampleModel>> GetSampleModels()
+        public async Task <List<DrinkModel>> GetDrinkModels()
         {
             try
             {
                 await SetupFirestore();
                 var data = await db
-                                    .Collection("SampleModels")
+                                    .Collection("DrinkModels")
                                     .GetSnapshotAsync();
-                var sampleModels = data.Documents
+                var DrinkModels = data.Documents
                     .Select(doc =>
                     {
-                        var sampleModel = doc.ConvertTo<SampleModel>();
-                        sampleModel.Id = doc.Id;
-                        return sampleModel;
+                        var DrinkModel = doc.ConvertTo<DrinkModel>();
+                        DrinkModel.Id = doc.Id;
+                        return DrinkModel;
                     })
                     .ToList();
-                return sampleModels;
+                return DrinkModels;
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Chyba při načítání dat z Firestore: {ex.Message}");
-                return new List<SampleModel>();
+                return new List<DrinkModel>();
             }
         }
     }
