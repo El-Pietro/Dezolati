@@ -15,8 +15,8 @@ namespace Dezolati.Models
         [FirestoreProperty]
         public string Name { get; set; }
         [FirestoreProperty]
-        public string Description { get; set; }
-        [FirestoreProperty(ConverterType = typeof(DateTimeToTimestampConverter))]
+        public int Pivo { get; set; }
+        [FirestoreProperty]
         public DateTime CreatedAt { get; set; }
     }
 
@@ -32,4 +32,5 @@ namespace Dezolati.Models
             throw new ArgumentException("InvalidValue");
         }
     }
+
 }
