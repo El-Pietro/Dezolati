@@ -16,7 +16,7 @@ namespace Dezolati.Services
         {
             if (db == null)
             {
-                var stream = await FileSystem.OpenAppPackageFileAsync("dezolati-firebase-adminsdk-s46cq-e34ecf9d3b.json");
+                var stream = await FileSystem.OpenAppPackageFileAsync("dezolati-firebase-adminsdk-s46cq-76d411c057.json");
                 var reader = new StreamReader(stream);
                 {
                     var contents = reader.ReadToEnd();
@@ -32,6 +32,22 @@ namespace Dezolati.Services
                     }.Build();
                 }
             }
+        }
+
+        public async Task<int> GetTotalDrinksByUser(string userId, int DrinkType)
+        {
+            await SetupFirestore();
+
+            var snapshot = await db.Collection("Drinks")
+                                    .WhereEqualTo("UserId", userId)
+                                    .WhereEqualTo("DrinkType", DrinkType)
+                                    .GetSnapshotAsync();
+            int totalDrinks = snapshot.Documents
+                .Select(doc => doc.GetValue<int>("Quantity"))
+                .Sum();
+            return totalDrinks;
+
+
         }
 
 

@@ -21,11 +21,15 @@ namespace Dezolati.Models
         private string _password;
         public static string ID { get; private set; }
         public static string Username { get; private set; }
+        //public static FirebaseAuthClient AuthClient { get; private set; }
 
 
         public SignInModel(FirebaseAuthClient authClient)
         {
             _authClient = authClient;
+
+            Email = Preferences.Get("LastEmail", string.Empty);
+            Password = Preferences.Get("LastPassword", string.Empty);
         }
 
         [RelayCommand]
@@ -35,6 +39,11 @@ namespace Dezolati.Models
 
             ID = _authClient.User.Info.Uid;
             Username = _authClient.User.Info.DisplayName;
+            //AuthClient = _authClient;
+
+            Preferences.Set("LastEmail", Email);
+            Preferences.Set("LastPassword", Password);
+
 
             await Shell.Current.GoToAsync("//MainPage");
         }
