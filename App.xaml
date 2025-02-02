@@ -11,6 +11,7 @@
             </ResourceDictionary.MergedDictionaries>
             <Style TargetType="Label">
                 <Setter Property="TextColor" Value="DarkBlue" />
+                <Setter Property="FontFamily" Value="Caveat" />
             </Style>
         </ResourceDictionary>
     </Application.Resources>

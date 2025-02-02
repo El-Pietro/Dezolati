@@ -3,6 +3,7 @@ using Dezolati.Pages;
 using Firebase.Auth;
 using Firebase.Auth.Providers;
 using Firebase.Auth.Repository;
+using Google.Cloud.Firestore.V1;
 using Microsoft.Extensions.Logging;
 
 namespace Dezolati
@@ -18,6 +19,7 @@ namespace Dezolati
                 {
                     fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
                     fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
+                    fonts.AddFont("Caveat-Regular.ttf", "Caveat");
                 });
 
 #if DEBUG
@@ -38,6 +40,7 @@ namespace Dezolati
             builder.Services.AddSingleton<SignInModel>();
             builder.Services.AddSingleton<SignUp>();
             builder.Services.AddSingleton<SignUpModel>();
+
 #endif
 
             return builder.Build();

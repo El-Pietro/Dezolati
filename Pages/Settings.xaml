@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="Dezolati.Pages.Settings">
+    <AbsoluteLayout VerticalOptions="FillAndExpand" HorizontalOptions="FillAndExpand">
+        <Image Source="{AppThemeBinding Light=woodlight.jpg, Dark=wooddark.jpg}"
+               Aspect="AspectFill"
+               AbsoluteLayout.LayoutBounds="0, 0, 1, 1"
+               AbsoluteLayout.LayoutFlags="All" />
+
+        <Frame BackgroundColor="Beige"
+           CornerRadius="1"
+           Padding="20"
+           AbsoluteLayout.LayoutBounds="0.5, 0.5, 0.8, 0.8"
+           AbsoluteLayout.LayoutFlags="All">
+            <VerticalStackLayout>
+                <Label Text="Nastavení píče" FontSize="Large" HorizontalOptions="Center"/>
+                <Label Text="Jméno:"/>
+                <Entry x:Name="NameEntry" Placeholder="Vaše jméno"/>
+
+                <Label Text="Přezdívka:" />
+                <Entry x:Name="NicknameEntry" Placeholder="Vaše přezdívka" />
+
+                <Label Text="Pohlaví:" />
+                <Picker x:Name="GenderPicker">
+                    <Picker.ItemsSource>
+                        <x:Array Type="{x:Type x:String}">
+                            <x:String>Píč</x:String>
+                            <x:String>Píčka</x:String>
+                        </x:Array>
+                    </Picker.ItemsSource>
+                </Picker>
+
+                <Label Text="Typ píče:" />
+                <Picker x:Name="DrinkerTypePicker">
+                    <Picker.ItemsSource>
+                        <x:Array Type="{x:Type x:String}">
+                            <x:String>Pivopíč/ka</x:String>
+                            <x:String>Vínopíč/ka</x:String>
+                        </x:Array>
+                    </Picker.ItemsSource>
+                </Picker>
+
+                <Button Text="Uložit změny" Clicked="OnSaveClicked" />
+
+                <Button Text="Odhlásit se" Clicked="OnLogoutClicked" BackgroundColor="Red" TextColor="White" />
+            </VerticalStackLayout>
+        </Frame>
+    </AbsoluteLayout>
+</ContentPage>

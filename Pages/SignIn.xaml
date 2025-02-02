@@ -1,12 +1,28 @@
-<?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="Dezolati.Pages.SignIn"
              Title="Přihlášení">
-    <VerticalStackLayout>
-        <Entry Text="{Binding Email}" />
-        <Entry IsPassword="True" Text="{Binding Password}" />
-        <Button Command="{Binding SignInCommand}" Text="Přihlásit se" />
-        <Button Command="{Binding NavigateSignUpCommand}" Text="Ty ještě nemáš účet?! Zaregistruj se!"/>
-    </VerticalStackLayout>
+    <AbsoluteLayout VerticalOptions="FillAndExpand" HorizontalOptions="FillAndExpand">
+
+        <!-- Pozadí stolu -->
+        <Image Source="{AppThemeBinding Light=woodlight.jpg, Dark=wooddark.jpg}"
+               Aspect="AspectFill"
+               AbsoluteLayout.LayoutBounds="0, 0, 1, 1"
+               AbsoluteLayout.LayoutFlags="All" />
+
+        <!-- Lístek -->
+        <Frame BackgroundColor="Beige"
+                CornerRadius="1"
+                Padding="20"
+                AbsoluteLayout.LayoutBounds="0.5, 0.5, 0.8, 0.8"
+                AbsoluteLayout.LayoutFlags="All">
+
+            <VerticalStackLayout>
+                <Entry Text="{Binding Email}" />
+                <Entry IsPassword="True" Text="{Binding Password}" />
+                <Button Command="{Binding SignInCommand}" Text="Přihlásit se" />
+                <Button Command="{Binding NavigateSignUpCommand}" Text="Ty ještě nemáš účet?! Zaregistruj se!"/>
+            </VerticalStackLayout>
+        </Frame>
+    </AbsoluteLayout>
 </ContentPage>

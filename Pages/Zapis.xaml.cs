@@ -40,49 +40,19 @@ public partial class Zapis : ContentPage
 
         if (userId != null)
         {
-            var tasks = new List<Task>();
-            if (piva > 0)
+            try
             {
-                tasks.Add(firestoreService.InsertDrinkModel(new DrinkModel
-                {
-                    UserId = userId,
-                    Name = username,
-                    DrinkType = 1,
-                    Quantity = piva,
-                    DrinkAt = DateTime.UtcNow
-                }));
-            }
+                // Zápis dat pomocí nové metody RecordDrink
+                await firestoreService.RecordDrink(userId, username, piva, vino, panaky);
 
-            if (vino > 0)
+                // Aktualizace hlavní stránky (UI) a návrat na ni
+                MainPage.Instance?.UpdateLocalData(piva, vino, panaky);
+                await Shell.Current.GoToAsync("//MainPage");
+            }
+            catch (Exception ex)
             {
-                tasks.Add(firestoreService.InsertDrinkModel(new DrinkModel
-                {
-                    UserId = userId,
-                    Name = username,
-                    DrinkType = 2,
-                    Quantity = vino,
-                    DrinkAt = DateTime.UtcNow
-                }));
+                await DisplayAlert("Chyba", $"Chyba pøi zápisu drinku: {ex.Message}", "OK");
             }
-
-            if (panaky > 0)
-            {
-                tasks.Add(firestoreService.InsertDrinkModel(new DrinkModel
-                {
-                    UserId = userId,
-                    Name = username,
-                    DrinkType = 3,
-                    Quantity = panaky,
-                    DrinkAt = DateTime.UtcNow
-                }));
-            }
-
-            await Task.WhenAll(tasks);
-
-            MainPage.Instance?.UpdateLocalData(piva, vino, panaky);
-            
-
-            await Shell.Current.GoToAsync("//MainPage");
         }
         else
         {

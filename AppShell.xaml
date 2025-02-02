@@ -5,6 +5,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:pages="clr-namespace:Dezolati.Pages"
     Shell.FlyoutBehavior="Disabled"
+    Shell.NavBarIsVisible="False"
     Title="Dezolati">
     <ShellContent
         Title="Přihlášení"
@@ -15,12 +16,15 @@
         ContentTemplate="{DataTemplate pages:SignUp}"
         Route="SignUp" />
     <ShellContent
-        Title="Lístek"
         ContentTemplate="{DataTemplate pages:MainPage}"
         Route="MainPage" />
     <ShellContent
         Title="Zápis"
         ContentTemplate="{DataTemplate pages:Zapis}"
         Route="Zapis" />
+    <ShellContent
+        Title="Nastavení"
+        ContentTemplate="{DataTemplate pages:Settings}"
+        Route="Settings" />
 
 </Shell>

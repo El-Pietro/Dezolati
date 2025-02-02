@@ -17,9 +17,11 @@ namespace Dezolati.Models
         [FirestoreProperty]
         public string Name { get; set; }
         [FirestoreProperty]
-        public int DrinkType { get; set; }
+        public int Pivo { get; set; }
         [FirestoreProperty]
-        public int Quantity { get; set; }
+        public int Vino { get; set; }
+        [FirestoreProperty]
+        public int Panaky { get; set; }
         [FirestoreProperty]
         public DateTime DrinkAt { get; set; }
     }

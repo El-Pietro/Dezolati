@@ -1,49 +1,104 @@
 ﻿<?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             x:Class="Dezolati.Pages.MainPage"
-             BackgroundImageSource="listek.png">
+             x:Class="Dezolati.Pages.MainPage">
+    
+    <AbsoluteLayout VerticalOptions="FillAndExpand" HorizontalOptions="FillAndExpand">
 
-    <ScrollView>
-        <VerticalStackLayout Padding="20" Spacing="10" HorizontalOptions="Center" VerticalOptions="Start">
+        <!-- Pozadí stolu -->
+        <Image Source="{AppThemeBinding Light=woodlight.jpg, Dark=wooddark.jpg}"
+               Aspect="AspectFill"
+               AbsoluteLayout.LayoutBounds="0, 0, 1, 1"
+               AbsoluteLayout.LayoutFlags="All" />
 
-            <!-- Nadpis Dezoláti -->
-            <Label Text="Dezoláti!"
-                   FontSize="36"
-                   HorizontalOptions="Center"
-                   TextColor="black"
-                   FontAttributes="Bold"
-                   VerticalOptions="Start" />
+        <!-- Lístek -->
+        <Frame BackgroundColor="Beige"
+       CornerRadius="1"
+       Padding="20"
+       AbsoluteLayout.LayoutBounds="0.5, 0.5, 0.8, 0.8"
+       AbsoluteLayout.LayoutFlags="All">
 
-            <!-- Počet dnešních piv -->
-            <Label x:Name="SouhrnLabel"
-                   Text="Dnešní spotřeba: 0 piv, 0 vín, 0 panáků"
-                   FontSize="20"
-                   HorizontalOptions="Center"
-                   TextColor="Black" />
+            <!-- Obsah lístku -->
+            <Grid RowDefinitions="Auto, *, Auto">
+                <!-- Nadpis -->
+                <Label Text="Dezoláti!"
+               Grid.Row="0"
+               FontSize="46"
+               FontFamily="Caveat"
+               HorizontalOptions="Center"
+               FontAttributes="Bold" />
 
-            <!-- Layout pro čárky -->
-            <FlexLayout x:Name="ListekLayout"
+                <!-- Obsah ve středu -->
+                <ScrollView Grid.Row="1">
+                    <VerticalStackLayout Spacing="10">
+                        <Label x:Name="SouhrnLabel"
+                        Text="Dnešní souhrn: 0 piv"
+                        FontSize="20"
+                        HorizontalOptions="Center" />
+                        <!-- Řádky -->
+                        <Label Text="Pívo:" FontSize="20" />
+                        <FlexLayout x:Name="Pivo"
                         Direction="Row"
                         Wrap="Wrap"
-                        JustifyContent="Center"
+                        JustifyContent="Start"
                         AlignItems="Start"
                         BackgroundColor="Transparent"
-                        Margin="1"
-                        Padding="1"
-                        VerticalOptions="Center"
-                        MaximumWidthRequest="250" />
+                        Margin="5"
+                        Padding="5" />
 
-            <!-- Tlačítko "+" -->
-            <Button Text="+"
-                    FontSize="24"
-                    BackgroundColor="Yellow"
-                    TextColor="White"
-                    HorizontalOptions="Center"
-                    VerticalOptions="End"
-                    WidthRequest="100"
-                    Clicked="OnPridatClicked" />
-        </VerticalStackLayout>
-    </ScrollView>
+                        <Label Text="Víno:" FontSize="20" />
+                        <FlexLayout x:Name="Vino"
+                        Direction="Row"
+                        Wrap="Wrap"
+                        JustifyContent="Start"
+                        AlignItems="Start"
+                        BackgroundColor="Transparent"
+                        Margin="5"
+                        Padding="5" />
 
+                        <Label Text="Panáky:" FontSize="20" />
+                        <FlexLayout x:Name="Panaky"
+                        Direction="Row"
+                        Wrap="Wrap"
+                        JustifyContent="Start"
+                        AlignItems="Start"
+                        BackgroundColor="Transparent"
+                        Margin="5"
+                        Padding="5" />
+
+                    </VerticalStackLayout>
+                </ScrollView>
+
+                <!-- Tlačítko pevně ve spodní části -->
+                <Button Text="Zapsat pivo"
+                Grid.Row="2"
+                HorizontalOptions="Center"
+                VerticalOptions="End"
+                Margin="10"
+                Clicked="OnPridatClicked" />
+                <Button Text="RESET"
+                Grid.Row="2"
+                HorizontalOptions="End"
+                VerticalOptions="End"
+                Margin="10"
+                Clicked="OnResetClicked" />
+            </Grid>
+        </Frame>
+        <Button Text="Nastavení"
+            Grid.Row="2"                 
+            AbsoluteLayout.LayoutBounds="0.5,1"
+            AbsoluteLayout.LayoutFlags="PositionProportional" 
+            Margin="10"
+            BorderColor="WhiteSmoke"
+            TextColor="WhiteSmoke"
+            Clicked="OnSettingsClicked" />
+        <Button Text="Přátelé"
+            Grid.Row="2"                 
+            AbsoluteLayout.LayoutBounds="1,1"
+            AbsoluteLayout.LayoutFlags="PositionProportional" 
+            Margin="10"
+            BorderColor="WhiteSmoke"
+            TextColor="WhiteSmoke"
+            Clicked="OnSettingsClicked" />
+    </AbsoluteLayout>
 </ContentPage>

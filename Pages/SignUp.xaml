@@ -3,11 +3,27 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="Dezolati.Pages.SignUp"
              Title="Registrace">
-    <VerticalStackLayout>
-        <Entry Text="{Binding Email}" />
-        <Entry Text="{Binding Username}" />
-        <Entry IsPassword="True" Text="{Binding Password}" />
-        <Button Command="{Binding SignUpCommand}" Text="Registrace" />
-        <Button Command="{Binding NavigateSignInCommand}" Text="Už máš účet? Přihlaš se!"/>
-    </VerticalStackLayout>
+    <AbsoluteLayout VerticalOptions="FillAndExpand" HorizontalOptions="FillAndExpand">
+
+        <!-- Pozadí stolu -->
+        <Image Source="{AppThemeBinding Light=woodlight.jpg, Dark=wooddark.jpg}"
+               Aspect="AspectFill"
+               AbsoluteLayout.LayoutBounds="0, 0, 1, 1"
+               AbsoluteLayout.LayoutFlags="All" />
+
+        <!-- Lístek -->
+        <Frame BackgroundColor="Beige"
+               CornerRadius="1"
+               Padding="20"
+               AbsoluteLayout.LayoutBounds="0.5, 0.5, 0.8, 0.8"
+               AbsoluteLayout.LayoutFlags="All">
+            <VerticalStackLayout>
+                <Entry Text="{Binding Email}" />
+                <Entry Text="{Binding Username}" />
+                <Entry IsPassword="True" Text="{Binding Password}" />
+                <Button Command="{Binding SignUpCommand}" Text="Registrace" />
+                <Button Command="{Binding NavigateSignInCommand}" Text="Už máš účet? Přihlaš se!"/>
+            </VerticalStackLayout>
+        </Frame>
+    </AbsoluteLayout>
 </ContentPage>
