@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8" ?>
+﻿<?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="Dezolati.Pages.Zapis"
@@ -18,24 +18,32 @@
                AbsoluteLayout.LayoutBounds="0.5, 0.5, 0.8, 0.8"
                AbsoluteLayout.LayoutFlags="All">
 
-            <VerticalStackLayout Padding="20" Spacing="20">
-                <Label Text="Zvolte množství:" FontSize="24" HorizontalOptions="Center" />
+            <VerticalStackLayout Padding="20" Spacing="16">
+                <Label Text="Co to bude?" FontFamily="Caveat" FontSize="36" TextColor="Black" HorizontalOptions="Center" />
 
-                <Label Text="Piva:" FontSize="18" />
+                <Label Text="Piva:" FontSize="18" TextColor="Black" />
                 <Slider x:Name="PivaSlider" Minimum="0" Maximum="10" Value="1" ValueChanged="OnSliderValueChanged" />
-                <Label x:Name="PivaLabel" Text="1" FontSize="14" HorizontalOptions="Center" />
+                <Label x:Name="PivaLabel" Text="1" FontSize="16" TextColor="Black" HorizontalOptions="Center" />
 
-                <Label Text="Víno:" FontSize="18" />
+                <Label Text="Víno:" FontSize="18" TextColor="Black" />
                 <Slider x:Name="VinoSlider" Minimum="0" Maximum="10" Value="0" ValueChanged="OnSliderValueChanged" />
-                <Label x:Name="VinoLabel" Text="0" FontSize="14" HorizontalOptions="Center" />
+                <Label x:Name="VinoLabel" Text="0" FontSize="16" TextColor="Black" HorizontalOptions="Center" />
 
-                <Label Text="Panáky:" FontSize="18" />
+                <Label Text="Panáky:" FontSize="18" TextColor="Black" />
                 <Slider x:Name="PanakySlider" Minimum="0" Maximum="10" Value="0" ValueChanged="OnSliderValueChanged" />
-                <Label x:Name="PanakyLabel" Text="0" FontSize="14" HorizontalOptions="Center" />
+                <Label x:Name="PanakyLabel" Text="0" FontSize="16" TextColor="Black" HorizontalOptions="Center" />
 
-                <Button Text="Zapsat" Clicked="OnZapsatClicked" BackgroundColor="Green" TextColor="White" HorizontalOptions="Center" />
-
+                <Button x:Name="ZapsatButton" Text="Zapsat" Clicked="OnZapsatClicked"
+                        BackgroundColor="Green" TextColor="White" HorizontalOptions="Center" />
+                <ActivityIndicator x:Name="Busy" IsRunning="False" IsVisible="False" Color="Black" />
             </VerticalStackLayout>
         </Frame>
+        <Button Text="Zpět"
+                AbsoluteLayout.LayoutBounds="0,0"
+                AbsoluteLayout.LayoutFlags="PositionProportional"
+                Margin="10"
+                BorderColor="WhiteSmoke"
+                TextColor="WhiteSmoke"
+                Clicked="OnZpetClicked" />
     </AbsoluteLayout>
 </ContentPage>

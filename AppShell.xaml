@@ -26,5 +26,13 @@
         Title="Nastavení"
         ContentTemplate="{DataTemplate pages:Settings}"
         Route="Settings" />
+    <ShellContent
+        Title="Přátelé"
+        ContentTemplate="{DataTemplate pages:Friends}"
+        Route="Friends" />
+    <ShellContent
+        Title="Statistiky Přítele"
+        ContentTemplate="{DataTemplate pages:StatsFriend}"
+        Route="StatsFriend" />
 
 </Shell>

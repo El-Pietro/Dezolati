@@ -1,62 +1,85 @@
-using Dezolati.Models;
-using Dezolati.Services;
+Ôªøusing Dezolati.Services;
 
 namespace Dezolati.Pages;
 
 public partial class Zapis : ContentPage
 {
-	private readonly FirestoreService _firestoreService;
-	public Zapis()
-	{
-		InitializeComponent();
-	}
+    private readonly FirestoreService firestoreService = new();
+
+    public Zapis()
+    {
+        InitializeComponent();
+    }
+
+    protected override void OnAppearing()
+    {
+        base.OnAppearing();
+        // ka≈æd√Ω z√°pis zaƒç√≠n√° od "jedno pivo", ne od posledn√≠ch hodnot
+        PivaSlider.Value = 1;
+        VinoSlider.Value = 0;
+        PanakySlider.Value = 0;
+    }
 
     private void OnSliderValueChanged(object sender, ValueChangedEventArgs e)
     {
-        if (sender == PivaSlider)
+        var slider = (Slider)sender;
+        var rounded = Math.Round(e.NewValue);
+        if (slider.Value != rounded)
         {
-            PivaLabel.Text = ((int)PivaSlider.Value).ToString();
+            slider.Value = rounded; // p≈ôicvaknout na cel√° ƒç√≠sla
+            return;
         }
-        else if (sender == VinoSlider)
-        {
-            VinoLabel.Text = ((int)VinoSlider.Value).ToString();
-        }
-        else if (sender == PanakySlider)
-        {
-            PanakyLabel.Text = ((int)PanakySlider.Value).ToString();
-        }
+
+        var text = ((int)rounded).ToString();
+        if (slider == PivaSlider) PivaLabel.Text = text;
+        else if (slider == VinoSlider) VinoLabel.Text = text;
+        else if (slider == PanakySlider) PanakyLabel.Text = text;
     }
 
     private async void OnZapsatClicked(object sender, EventArgs e)
     {
-        var firestoreService = new FirestoreService();
-        // ZÌsk·nÌ hodnot posuvnÌk˘
-        int piva = (int)PivaSlider.Value;
-        int vino = (int)VinoSlider.Value;
-        int panaky = (int)PanakySlider.Value;
+        int piva = (int)Math.Round(PivaSlider.Value);
+        int vino = (int)Math.Round(VinoSlider.Value);
+        int panaky = (int)Math.Round(PanakySlider.Value);
 
-        var userId = SignInModel.ID;
-        var username = SignInModel.Username;
-
-        if (userId != null)
+        if (piva + vino + panaky == 0)
         {
-            try
-            {
-                // Z·pis dat pomocÌ novÈ metody RecordDrink
-                await firestoreService.RecordDrink(userId, username, piva, vino, panaky);
+            await DisplayAlert("Nula?", "Zapsat nic? To si napi≈° do den√≠ku, ne na l√≠stek.", "OK");
+            return;
+        }
 
-                // Aktualizace hlavnÌ str·nky (UI) a n·vrat na ni
-                MainPage.Instance?.UpdateLocalData(piva, vino, panaky);
-                await Shell.Current.GoToAsync("//MainPage");
-            }
-            catch (Exception ex)
-            {
-                await DisplayAlert("Chyba", $"Chyba p¯i z·pisu drinku: {ex.Message}", "OK");
-            }
-        }
-        else
+        var userId = AuthSession.Uid;
+        if (userId == null)
         {
-            await DisplayAlert("Chyba", "Uûivatel nenÌ p¯ihl·öen.", "OK");
+            await Shell.Current.GoToAsync("//SignIn");
+            return;
         }
+
+        try
+        {
+            SetBusy(true);
+            await firestoreService.RecordDrink(userId, AuthSession.DisplayName, piva, vino, panaky);
+            await Shell.Current.GoToAsync("//MainPage"); // MainPage si data naƒçte sama
+        }
+        catch (Exception ex)
+        {
+            await DisplayAlert("Chyba", $"Chyba p≈ôi z√°pisu: {ex.Message}", "OK");
+        }
+        finally
+        {
+            SetBusy(false);
+        }
+    }
+
+    private void SetBusy(bool busy)
+    {
+        ZapsatButton.IsEnabled = !busy;
+        Busy.IsRunning = busy;
+        Busy.IsVisible = busy;
+    }
+
+    private async void OnZpetClicked(object sender, EventArgs e)
+    {
+        await Shell.Current.GoToAsync("//MainPage");
     }
 }

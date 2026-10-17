@@ -1,30 +1,17 @@
-﻿using Google.Cloud.Firestore;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace Dezolati.Models
+﻿namespace Dezolati.Models
 {
-    [FirestoreData]
     public class DailyDrinksModel
     {
-        [FirestoreProperty]
-        public string Id { get; set; }
-        [FirestoreProperty]
-        public string UserId { get; set; }
-        [FirestoreProperty]
-        public string Date { get; set; }
-        [FirestoreProperty]
-        public DateTime CreatedAt { get; set; }
-        [FirestoreProperty]
-        public DateTime UpdateAt { get; set; }
-        [FirestoreProperty]
+        public string Id { get; set; } = "";
+        public string UserId { get; set; } = "";
+        /// <summary>Hospodský den ve formátu dd-MM-yyyy.</summary>
+        public string Date { get; set; } = "";
+        public DateTime Day { get; set; }
+        public DateTime? UpdateAt { get; set; }
         public int Pivo { get; set; }
-        [FirestoreProperty]
         public int Vino { get; set; }
-        [FirestoreProperty]
         public int Panaky { get; set; }
+
+        public int Total => Pivo + Vino + Panaky;
     }
 }

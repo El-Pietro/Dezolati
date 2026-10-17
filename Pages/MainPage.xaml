@@ -2,7 +2,7 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="Dezolati.Pages.MainPage">
-    
+
     <AbsoluteLayout VerticalOptions="FillAndExpand" HorizontalOptions="FillAndExpand">
 
         <!-- Pozadí stolu -->
@@ -13,92 +13,79 @@
 
         <!-- Lístek -->
         <Frame BackgroundColor="Beige"
-       CornerRadius="1"
-       Padding="20"
-       AbsoluteLayout.LayoutBounds="0.5, 0.5, 0.8, 0.8"
-       AbsoluteLayout.LayoutFlags="All">
+               CornerRadius="1"
+               Padding="20"
+               AbsoluteLayout.LayoutBounds="0.5, 0.4, 0.8, 0.75"
+               AbsoluteLayout.LayoutFlags="All">
 
-            <!-- Obsah lístku -->
-            <Grid RowDefinitions="Auto, *, Auto">
-                <!-- Nadpis -->
+            <Grid RowDefinitions="Auto, Auto, *">
                 <Label Text="Dezoláti!"
-               Grid.Row="0"
-               FontSize="46"
-               FontFamily="Caveat"
-               HorizontalOptions="Center"
-               FontAttributes="Bold" />
+                       Grid.Row="0"
+                       FontSize="46"
+                       FontFamily="Caveat"
+                       TextColor="Black"
+                       HorizontalOptions="Center"
+                       FontAttributes="Bold" />
 
-                <!-- Obsah ve středu -->
-                <ScrollView Grid.Row="1">
-                    <VerticalStackLayout Spacing="10">
-                        <Label x:Name="SouhrnLabel"
-                        Text="Dnešní souhrn: 0 piv"
-                        FontSize="20"
-                        HorizontalOptions="Center" />
-                        <!-- Řádky -->
-                        <Label Text="Pívo:" FontSize="20" />
-                        <FlexLayout x:Name="Pivo"
-                        Direction="Row"
-                        Wrap="Wrap"
-                        JustifyContent="Start"
-                        AlignItems="Start"
-                        BackgroundColor="Transparent"
-                        Margin="5"
-                        Padding="5" />
+                <Label x:Name="SouhrnLabel"
+                       Grid.Row="1"
+                       Text="Načítám lístek…"
+                       FontFamily="Caveat"
+                       FontSize="24"
+                       TextColor="Black"
+                       HorizontalOptions="Center"
+                       HorizontalTextAlignment="Center" />
 
-                        <Label Text="Víno:" FontSize="20" />
-                        <FlexLayout x:Name="Vino"
-                        Direction="Row"
-                        Wrap="Wrap"
-                        JustifyContent="Start"
-                        AlignItems="Start"
-                        BackgroundColor="Transparent"
-                        Margin="5"
-                        Padding="5" />
+                <ScrollView Grid.Row="2">
+                    <VerticalStackLayout Spacing="6">
+                        <Label Text="Pívo:" FontFamily="Caveat" FontSize="28" TextColor="Black" />
+                        <FlexLayout x:Name="Pivo" Direction="Row" Wrap="Wrap" JustifyContent="Start"
+                                    AlignItems="Start" Margin="5" Padding="5" />
 
-                        <Label Text="Panáky:" FontSize="20" />
-                        <FlexLayout x:Name="Panaky"
-                        Direction="Row"
-                        Wrap="Wrap"
-                        JustifyContent="Start"
-                        AlignItems="Start"
-                        BackgroundColor="Transparent"
-                        Margin="5"
-                        Padding="5" />
+                        <Label Text="Víno:" FontFamily="Caveat" FontSize="28" TextColor="Black" />
+                        <FlexLayout x:Name="Vino" Direction="Row" Wrap="Wrap" JustifyContent="Start"
+                                    AlignItems="Start" Margin="5" Padding="5" />
 
+                        <Label Text="Panáky:" FontFamily="Caveat" FontSize="28" TextColor="Black" />
+                        <FlexLayout x:Name="Panaky" Direction="Row" Wrap="Wrap" JustifyContent="Start"
+                                    AlignItems="Start" Margin="5" Padding="5" />
                     </VerticalStackLayout>
                 </ScrollView>
-
-                <!-- Tlačítko pevně ve spodní části -->
-                <Button Text="Zapsat pivo"
-                Grid.Row="2"
-                HorizontalOptions="Center"
-                VerticalOptions="End"
-                Margin="10"
-                Clicked="OnPridatClicked" />
-                <Button Text="RESET"
-                Grid.Row="2"
-                HorizontalOptions="End"
-                VerticalOptions="End"
-                Margin="10"
-                Clicked="OnResetClicked" />
             </Grid>
         </Frame>
+
+        <!-- Velké plus pod lístkem -->
+        <Button Text="+"
+                FontSize="40"
+                FontAttributes="Bold"
+                WidthRequest="80"
+                HeightRequest="80"
+                CornerRadius="40"
+                Padding="0"
+                AbsoluteLayout.LayoutBounds="0.5, 0.88, 80, 80"
+                AbsoluteLayout.LayoutFlags="PositionProportional"
+                Clicked="OnPridatClicked" />
+
+        <Button Text="Statistiky"
+                AbsoluteLayout.LayoutBounds="0,1"
+                AbsoluteLayout.LayoutFlags="PositionProportional"
+                Margin="10"
+                BorderColor="WhiteSmoke"
+                TextColor="WhiteSmoke"
+                Clicked="OnStatsClicked" />
         <Button Text="Nastavení"
-            Grid.Row="2"                 
-            AbsoluteLayout.LayoutBounds="0.5,1"
-            AbsoluteLayout.LayoutFlags="PositionProportional" 
-            Margin="10"
-            BorderColor="WhiteSmoke"
-            TextColor="WhiteSmoke"
-            Clicked="OnSettingsClicked" />
+                AbsoluteLayout.LayoutBounds="0.5,1"
+                AbsoluteLayout.LayoutFlags="PositionProportional"
+                Margin="10"
+                BorderColor="WhiteSmoke"
+                TextColor="WhiteSmoke"
+                Clicked="OnSettingsClicked" />
         <Button Text="Přátelé"
-            Grid.Row="2"                 
-            AbsoluteLayout.LayoutBounds="1,1"
-            AbsoluteLayout.LayoutFlags="PositionProportional" 
-            Margin="10"
-            BorderColor="WhiteSmoke"
-            TextColor="WhiteSmoke"
-            Clicked="OnSettingsClicked" />
+                AbsoluteLayout.LayoutBounds="1,1"
+                AbsoluteLayout.LayoutFlags="PositionProportional"
+                Margin="10"
+                BorderColor="WhiteSmoke"
+                TextColor="WhiteSmoke"
+                Clicked="OnFriendsClicked" />
     </AbsoluteLayout>
 </ContentPage>

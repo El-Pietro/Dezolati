@@ -46,5 +46,13 @@
                 <Button Text="Odhlásit se" Clicked="OnLogoutClicked" BackgroundColor="Red" TextColor="White" />
             </VerticalStackLayout>
         </Frame>
+        <Button Text="Zpět"
+            Grid.Row="2"                 
+            AbsoluteLayout.LayoutBounds="0,0"
+            AbsoluteLayout.LayoutFlags="PositionProportional" 
+            Margin="10"
+            BorderColor="WhiteSmoke"
+            TextColor="WhiteSmoke"
+            Clicked="OnZpetClicked" />
     </AbsoluteLayout>
 </ContentPage>

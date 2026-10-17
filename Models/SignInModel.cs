@@ -1,12 +1,7 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Dezolati.Services;
 using Firebase.Auth;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using static Google.Apis.Auth.OAuth2.Web.AuthorizationCodeWebApp;
 
 namespace Dezolati.Models
 {
@@ -15,42 +10,80 @@ namespace Dezolati.Models
         private readonly FirebaseAuthClient _authClient;
 
         [ObservableProperty]
-        private string _email;
+        private string _email = "";
 
         [ObservableProperty]
-        private string _password;
-        public static string ID { get; private set; }
-        public static string Username { get; private set; }
-        //public static FirebaseAuthClient AuthClient { get; private set; }
+        private string _password = "";
 
+        [ObservableProperty]
+        private string _error = "";
+
+        [ObservableProperty]
+        private bool _isBusy;
 
         public SignInModel(FirebaseAuthClient authClient)
         {
             _authClient = authClient;
 
             Email = Preferences.Get("LastEmail", string.Empty);
-            Password = Preferences.Get("LastPassword", string.Empty);
+            // dřívější verze ukládala heslo v čitelné podobě – uklidit
+            Preferences.Remove("LastPassword");
         }
 
         [RelayCommand]
         private async Task SignIn()
         {
-            await _authClient.SignInWithEmailAndPasswordAsync(Email, Password);
+            if (IsBusy) return;
+            Error = "";
 
-            ID = _authClient.User.Info.Uid;
-            Username = _authClient.User.Info.DisplayName;
-            //AuthClient = _authClient;
+            if (string.IsNullOrWhiteSpace(Email) || string.IsNullOrEmpty(Password))
+            {
+                Error = "Vyplň e-mail i heslo.";
+                return;
+            }
 
-            Preferences.Set("LastEmail", Email);
-            Preferences.Set("LastPassword", Password);
+            try
+            {
+                IsBusy = true;
+                await _authClient.SignInWithEmailAndPasswordAsync(Email.Trim(), Password);
+                Preferences.Set("LastEmail", Email.Trim());
+                Password = "";
 
+                // starší účty nemusí mít profil v Users (pak by je nikdo nenašel)
+                try
+                {
+                    await new FirestoreService().EnsureUserDoc(AuthSession.Uid!, AuthSession.Email, AuthSession.DisplayName);
+                }
+                catch { /* není kritické, hlavní stránka případně ukáže chybu */ }
 
-            await Shell.Current.GoToAsync("//MainPage");
+                await Shell.Current.GoToAsync("//MainPage");
+            }
+            catch (FirebaseAuthException ex)
+            {
+                Error = ex.Reason switch
+                {
+                    AuthErrorReason.WrongPassword or
+                    AuthErrorReason.UnknownEmailAddress or
+                    AuthErrorReason.InvalidEmailAddress => "Špatný e-mail nebo heslo.",
+                    AuthErrorReason.TooManyAttemptsTryLater => "Moc pokusů. Dej si pauzu (a vodu).",
+                    AuthErrorReason.UserDisabled => "Účet je zablokovaný.",
+                    _ => "Přihlášení se nepovedlo. Zkontroluj e-mail a heslo."
+                };
+            }
+            catch (Exception ex)
+            {
+                Error = "Přihlášení se nepovedlo: " + ex.Message;
+            }
+            finally
+            {
+                IsBusy = false;
+            }
         }
 
         [RelayCommand]
         private async Task NavigateSignUp()
         {
+            Error = "";
             await Shell.Current.GoToAsync("//SignUp");
         }
     }

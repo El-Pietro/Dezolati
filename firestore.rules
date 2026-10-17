@@ -1,0 +1,41 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function me() { return request.auth.uid; }
+
+    // Profily: číst může každý přihlášený (hledání kámošů), zapisovat jen svůj.
+    match /Users/{uid} {
+      allow read: if signedIn();
+      allow write: if signedIn() && me() == uid;
+    }
+
+    // Jednotlivé zápisy: jen vlastní.
+    match /Drinks/{id} {
+      allow read: if signedIn() && resource.data.UserId == me();
+      allow create: if signedIn() && request.resource.data.UserId == me();
+    }
+
+    // Denní součty: číst může každý přihlášený (statistiky kámošů), zapisovat jen do svých.
+    match /DailyDrinks/{id} {
+      allow read: if signedIn();
+      allow write: if signedIn()
+                   && request.resource.data.UserId == me()
+                   && id.matches(me() + '_.*');
+    }
+
+    // Přátelství: vidí jen ti dva, žádost zakládá žadatel, přijímá/odmítá adresát.
+    match /Friends/{id} {
+      allow read: if signedIn()
+                  && (resource.data.UserId == me() || resource.data.FriendId == me());
+      allow create: if signedIn()
+                    && request.resource.data.UserId == me()
+                    && request.resource.data.Status == 'Pending';
+      allow update: if signedIn()
+                    && resource.data.FriendId == me()
+                    && request.resource.data.UserId == resource.data.UserId
+                    && request.resource.data.FriendId == resource.data.FriendId;
+    }
+  }
+}

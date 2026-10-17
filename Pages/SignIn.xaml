@@ -1,3 +1,4 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="Dezolati.Pages.SignIn"
@@ -12,16 +13,22 @@
 
         <!-- Lístek -->
         <Frame BackgroundColor="Beige"
-                CornerRadius="1"
-                Padding="20"
-                AbsoluteLayout.LayoutBounds="0.5, 0.5, 0.8, 0.8"
-                AbsoluteLayout.LayoutFlags="All">
+               CornerRadius="1"
+               Padding="20"
+               AbsoluteLayout.LayoutBounds="0.5, 0.5, 0.8, 0.8"
+               AbsoluteLayout.LayoutFlags="All">
 
-            <VerticalStackLayout>
-                <Entry Text="{Binding Email}" />
-                <Entry IsPassword="True" Text="{Binding Password}" />
+            <VerticalStackLayout Spacing="12" VerticalOptions="Center">
+                <Label Text="Dezoláti!" FontFamily="Caveat" FontSize="46" FontAttributes="Bold"
+                       HorizontalOptions="Center" TextColor="Black" />
+                <Entry Text="{Binding Email}" Placeholder="E-mail" Keyboard="Email" TextColor="Black" />
+                <Entry Text="{Binding Password}" Placeholder="Heslo" IsPassword="True" TextColor="Black"
+                       ReturnCommand="{Binding SignInCommand}" />
+                <Label Text="{Binding Error}" TextColor="DarkRed" HorizontalOptions="Center"
+                       HorizontalTextAlignment="Center" />
+                <ActivityIndicator IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" Color="Black" />
                 <Button Command="{Binding SignInCommand}" Text="Přihlásit se" />
-                <Button Command="{Binding NavigateSignUpCommand}" Text="Ty ještě nemáš účet?! Zaregistruj se!"/>
+                <Button Command="{Binding NavigateSignUpCommand}" Text="Ty ještě nemáš účet?! Zaregistruj se!" />
             </VerticalStackLayout>
         </Frame>
     </AbsoluteLayout>

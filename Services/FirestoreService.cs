@@ -1,229 +1,251 @@
 ﻿using Dezolati.Models;
-using Google.Cloud.Firestore;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Dezolati.Services
 {
+    /// <summary>
+    /// Doménové operace nad Firestore. Kolekce:
+    ///   Users/{uid}                   – profil (přezdívka atd.)
+    ///   Drinks/{auto}                 – každý jednotlivý zápis
+    ///   DailyDrinks/{uid}_{yyyyMMdd}  – denní součet (hospodský den, viz PubDay)
+    ///   Friends/{auto}                – žádosti/přátelství (UserId = žadatel, FriendId = adresát)
+    /// </summary>
     public class FirestoreService
     {
-        private FirestoreDb db;
+        // ================= Uživatelé =================
 
-        private async Task SetupFirestore()
+        public async Task<UserModel?> GetUserData(string userId)
         {
-            if (db == null)
-            {
-                var stream = await FileSystem.OpenAppPackageFileAsync("dezolati-firebase-adminsdk-s46cq-76d411c057.json");
-                var reader = new StreamReader(stream);
-                {
-                    var contents = reader.ReadToEnd();
-
-                    db = new FirestoreDbBuilder
-                    {
-                        ProjectId = "dezolati",
-                        ConverterRegistry = new ConverterRegistry
-                    {
-                        new DateTimeToTimestampConverter(),
-                    },
-                        JsonCredentials = contents
-                    }.Build();
-                }
-            }
+            var doc = await FirestoreRest.GetAsync($"Users/{userId}");
+            return doc == null ? null : ToUser(doc);
         }
 
-        public async Task<DateTime?> GetLastDrinkTime(string userId)
-        {
-            await SetupFirestore();
-
-            var query = db.Collection("Drinks")
-                          .WhereEqualTo("UserId", userId)
-                          .OrderByDescending("DrinkAt")
-                          .Limit(1);
-
-            var snapshot = await query.GetSnapshotAsync();
-
-            if (snapshot.Count > 0)
+        public Task UpdateUserData(string userId, UserModel user) =>
+            FirestoreRest.PatchAsync($"Users/{userId}", new()
             {
-                var lastDrink = snapshot.Documents[0].ConvertTo<DrinkModel>();
-                return lastDrink.DrinkAt;
-            }
+                ["UserId"] = userId,
+                ["Name"] = user.Name,
+                ["Nickname"] = user.Nickname,
+                ["Gender"] = user.Gender,
+                ["DrinkerType"] = user.DrinkerType,
+                ["Email"] = user.Email
+            });
 
-            return null; // Nebyly nalezeny žádné drinky
+        /// <summary>Založí profil v Users, pokud ještě neexistuje (bez něj tě kámoši nenajdou).</summary>
+        public async Task EnsureUserDoc(string userId, string? email, string? nickname)
+        {
+            if (await FirestoreRest.GetAsync($"Users/{userId}") != null)
+                return;
+
+            await FirestoreRest.PatchAsync($"Users/{userId}", new()
+            {
+                ["UserId"] = userId,
+                ["Email"] = email,
+                ["Nickname"] = nickname,
+                ["Name"] = nickname
+            });
         }
 
-
-        public async Task<DailyDrinksModel> GetDailyDrinks(string userId, DateTime currentDate)
+        public async Task<UserModel?> FindUserByNickname(string nickname)
         {
-            await SetupFirestore();
-
-            // Získej čas posledního drinku
-            var lastDrinkTime = await GetLastDrinkTime(userId);
-            // Pokud nebyl žádný drink, použij standardní definici dne
-            if (lastDrinkTime == null || lastDrinkTime.Value.Date != currentDate.Date)
-            {
-                return null;
-            }
-            // Pokud byl poslední drink mezi půlnocí a 9:00 a přes 3 hodiny zpět, začne nový den
-            if (lastDrinkTime.Value.Hour >= 0 && lastDrinkTime.Value.Hour < 9)
-            {
-                if (DateTime.UtcNow - lastDrinkTime.Value > TimeSpan.FromHours(3))
-                {
-                    return null; // Den skončil, začíná nový
-                }
-            }
-            //Načti záznam pro aktuální den
-            var currentDateString = currentDate.ToString("dd-MM-yyyy");
-
-            var query = db.Collection("DailyDrinks")
-                                    .WhereEqualTo("UserId", userId)
-                                    .WhereEqualTo("Date", currentDateString);
-            var snapshot = await query.GetSnapshotAsync();
-
-            if (snapshot.Count > 0)
-            {
-                var document = snapshot.Documents[0];
-                var dailyDrink = document.ConvertTo<DailyDrinksModel>();
-
-                // Nastavení ID dokumentu z Firestore
-                dailyDrink.Id = document.Id;
-
-                return dailyDrink;
-            }
-
-            return null; // Záznam pro dnešní den neexistuje
+            var docs = await FirestoreRest.QueryAsync("Users", 1, ("Nickname", nickname.Trim()));
+            return docs.Count > 0 ? ToUser(docs[0]) : null;
         }
 
-        public async Task AddDrink(DrinkModel drink)
+        // ================= Pití =================
+
+        private static string DailyId(string userId, DateTime day) => $"{userId}_{day:yyyyMMdd}";
+
+        /// <summary>Denní součet pro daný hospodský den (null = čistý lístek).</summary>
+        public async Task<DailyDrinksModel?> GetDailyDrinks(string userId, DateTime day)
         {
-            await SetupFirestore();
-            try
-            {
-                await db.Collection("Drinks").AddAsync(drink);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Chyba při zápisu drinku: {ex.Message}");
-            }
+            var doc = await FirestoreRest.GetAsync($"DailyDrinks/{DailyId(userId, day)}");
+            return doc == null ? null : ToDaily(doc);
         }
 
-        public async Task UpdateOrCreateDailyDrinks(string userId, DrinkModel drink)
+        /// <summary>
+        /// Ke kterému dni patří zápis udělaný teď – podle posledního drinku (viz PubDay).
+        /// Poslední drink si pamatujeme v Users/{uid} (LastDrinkAt, LastDrinkDay).
+        /// </summary>
+        public async Task<DateTime> GetCurrentPubDay(string userId)
         {
-            // Načti existující denní záznam
-            var currentDate = DateTime.UtcNow.Date;
-            var dailyDrinks = await GetDailyDrinks(userId, currentDate);
+            var user = await FirestoreRest.GetAsync($"Users/{userId}");
+            var lastAt = user?.Time("LastDrinkAt")?.ToLocalTime();
+            var lastDay = PubDay.Parse(user?.Str("LastDrinkDay"));
+            return PubDay.Resolve(DateTime.Now, lastAt, lastDay);
+        }
 
-            if (dailyDrinks != null)
-            {
-                // Aktualizace existujícího záznamu
-                var updates = new Dictionary<string, object>
-                {
-                    { "Pivo", FieldValue.Increment(drink.Pivo) },
-                    { "Vino", FieldValue.Increment(drink.Vino) },
-                    { "Panaky", FieldValue.Increment(drink.Panaky) },
-                    { "UpdateAt", DateTime.UtcNow }
-                };
+        public async Task RecordDrink(string userId, string? name, int pivo, int vino, int panaky)
+        {
+            var now = DateTime.UtcNow;
+            var day = await GetCurrentPubDay(userId);
+            var key = PubDay.Key(day);
 
-                var docRef = db.Collection("DailyDrinks").Document(dailyDrinks.Id);
-                await docRef.UpdateAsync(updates);
-            }
-            else
+            // 1) jednotlivý zápis
+            await FirestoreRest.CreateAsync("Drinks", new()
             {
-                // Vytvoření nového záznamu
-                var newDailyDrinks = new DailyDrinksModel
+                ["UserId"] = userId,
+                ["Name"] = name,
+                ["Pivo"] = pivo,
+                ["Vino"] = vino,
+                ["Panaky"] = panaky,
+                ["DrinkAt"] = now,
+                ["Date"] = key
+            });
+
+            // 2) denní součet – atomicky přičíst, dokument se případně založí
+            await FirestoreRest.UpsertWithIncrementAsync(
+                $"DailyDrinks/{DailyId(userId, day)}",
+                set: new()
                 {
+                    ["UserId"] = userId,
+                    ["Date"] = key,
+                    ["UpdateAt"] = now
+                },
+                increment: new()
+                {
+                    ["Pivo"] = pivo,
+                    ["Vino"] = vino,
+                    ["Panaky"] = panaky
+                });
+
+            // 3) zapamatovat poslední drink kvůli 3h pauze
+            await FirestoreRest.PatchAsync($"Users/{userId}", new()
+            {
+                ["LastDrinkAt"] = now,
+                ["LastDrinkDay"] = key
+            });
+        }
+
+        /// <summary>Všechny dny uživatele, nejnovější první. Staré záznamy se stejným datem se sečtou.</summary>
+        public async Task<List<DailyDrinksModel>> GetDailyHistory(string userId)
+        {
+            var docs = await FirestoreRest.QueryAsync("DailyDrinks", 0, ("UserId", userId));
+
+            return docs
+                .Select(ToDaily)
+                .Where(d => d.Day != DateTime.MinValue)
+                .GroupBy(d => d.Day)
+                .Select(g => new DailyDrinksModel
+                {
+                    Id = g.First().Id,
                     UserId = userId,
-                    Date = currentDate.ToString("dd-MM-yyyy"),
-                    CreatedAt = DateTime.UtcNow,
-                    UpdateAt = DateTime.UtcNow,
-                    Pivo = drink.Pivo,
-                    Vino = drink.Vino,
-                    Panaky = drink.Panaky
-                };
-
-                await db.Collection("DailyDrinks").AddAsync(newDailyDrinks);
-            }
+                    Date = g.First().Date,
+                    Day = g.Key,
+                    UpdateAt = g.Max(x => x.UpdateAt),
+                    Pivo = g.Sum(x => x.Pivo),
+                    Vino = g.Sum(x => x.Vino),
+                    Panaky = g.Sum(x => x.Panaky)
+                })
+                .OrderByDescending(d => d.Day)
+                .ToList();
         }
-        public async Task RecordDrink(string userId, string name, int pivo, int vino, int panaky)
+
+        // ================= Přátelé =================
+
+        /// <summary>Pošle žádost. Vrací null při úspěchu, jinak text, proč to nešlo.</summary>
+        public async Task<string?> SendFriendRequest(string fromUserId, string toUserId)
         {
-            // 1. Vytvoření záznamu do tabulky Drinks
-            var newDrink = new DrinkModel
+            if (fromUserId == toUserId)
+                return "Sám se sebou se kamarádit nemůžeš. Tedy můžeš, ale ne tady.";
+
+            var mine = await FirestoreRest.QueryAsync("Friends", 0, ("UserId", fromUserId), ("FriendId", toUserId));
+            var theirs = await FirestoreRest.QueryAsync("Friends", 0, ("UserId", toUserId), ("FriendId", fromUserId));
+
+            var existing = mine.Concat(theirs).FirstOrDefault(d => d.Str("Status") is "Pending" or "Accepted");
+            if (existing != null)
             {
-                Id = Guid.NewGuid().ToString(),
-                UserId = userId,
-                Name = name,
-                Pivo = pivo,
-                Vino = vino,
-                Panaky = panaky,
-                DrinkAt = DateTime.UtcNow
-            };
+                if (existing.Str("Status") == "Accepted")
+                    return "Už jste přátelé.";
+                return existing.Str("UserId") == fromUserId
+                    ? "Žádost už jsi poslal, čeká se na něj."
+                    : "On už poslal žádost tobě – přijmi ji nahoře v seznamu.";
+            }
 
-            await AddDrink(newDrink);
-
-            // 2. Aktualizace nebo vytvoření denního součtu
-            await UpdateOrCreateDailyDrinks(userId, newDrink);
+            await FirestoreRest.CreateAsync("Friends", new()
+            {
+                ["UserId"] = fromUserId,
+                ["FriendId"] = toUserId,
+                ["Status"] = "Pending",
+                ["CreatedAt"] = DateTime.UtcNow
+            });
+            return null;
         }
 
-
-        public async Task InsertDrinkModel(DrinkModel sample)
+        /// <summary>Žádosti, které čekají na MĚ.</summary>
+        public async Task<List<FriendsModel>> GetPendingFriendRequests(string userId)
         {
-            try
+            var docs = await FirestoreRest.QueryAsync("Friends", 0, ("FriendId", userId), ("Status", "Pending"));
+
+            var result = new List<FriendsModel>();
+            foreach (var d in docs)
             {
-                await SetupFirestore();
-                await db.Collection("Drinks").AddAsync(sample);
+                var fromId = d.Str("UserId") ?? "";
+                var from = string.IsNullOrEmpty(fromId) ? null : await GetUserData(fromId);
+                result.Add(new FriendsModel
+                {
+                    RequestId = d.Id,
+                    UserId = fromId,
+                    FriendId = userId,
+                    Status = "Pending",
+                    CreatedAt = d.Time("CreatedAt"),
+                    FromNickname = from?.Nickname
+                });
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Chyba při zápisu do Firestore: {ex.Message}");
-            }
+            return result;
         }
-        public async Task <List<DrinkModel>> GetDrinkModels()
+
+        public Task UpdateFriendRequest(string requestId, string newStatus) =>
+            FirestoreRest.PatchAsync($"Friends/{requestId}", new()
+            {
+                ["Status"] = newStatus,
+                ["UpdatedAt"] = DateTime.UtcNow
+            });
+
+        /// <summary>Přátelé oběma směry (ať jsem žádost poslal já, nebo on).</summary>
+        public async Task<List<UserModel>> GetFriendsList(string userId)
         {
-            try
+            var sent = await FirestoreRest.QueryAsync("Friends", 0, ("UserId", userId), ("Status", "Accepted"));
+            var received = await FirestoreRest.QueryAsync("Friends", 0, ("FriendId", userId), ("Status", "Accepted"));
+
+            var friendIds = sent.Select(d => d.Str("FriendId"))
+                .Concat(received.Select(d => d.Str("UserId")))
+                .Where(id => !string.IsNullOrEmpty(id))
+                .Distinct()
+                .ToList();
+
+            var friends = new List<UserModel>();
+            foreach (var id in friendIds)
             {
-                await SetupFirestore();
-                var data = await db
-                                    .Collection("DrinkModels")
-                                    .GetSnapshotAsync();
-                var DrinkModels = data.Documents
-                    .Select(doc =>
-                    {
-                        var DrinkModel = doc.ConvertTo<DrinkModel>();
-                        DrinkModel.Id = doc.Id;
-                        return DrinkModel;
-                    })
-                    .ToList();
-                return DrinkModels;
+                var user = await GetUserData(id!);
+                friends.Add(user ?? new UserModel { Id = id!, UserId = id! });
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Chyba při načítání dat z Firestore: {ex.Message}");
-                return new List<DrinkModel>();
-            }
+
+            return friends.OrderBy(f => f.Display, StringComparer.CurrentCultureIgnoreCase).ToList();
         }
 
-        public async Task<UserModel> GetUserData(string userId)
+        // ================= mapování =================
+
+        private static UserModel ToUser(FsDoc d) => new()
         {
-            await SetupFirestore();
+            Id = d.Id,
+            UserId = d.Str("UserId") ?? d.Id,
+            Name = d.Str("Name"),
+            Nickname = d.Str("Nickname"),
+            Gender = d.Str("Gender"),
+            DrinkerType = d.Str("DrinkerType"),
+            Email = d.Str("Email")
+        };
 
-            var docRef = db.Collection("Users").Document(userId);
-            var snapshot = await docRef.GetSnapshotAsync();
-            if (snapshot.Exists)
-            {
-                return snapshot.ConvertTo<UserModel>();
-            }
-            return null; // TF? Uživatel neexistuje
-        }
-
-        public async Task UpdateUserData(string userId, UserModel user)
+        private static DailyDrinksModel ToDaily(FsDoc d) => new()
         {
-            await SetupFirestore();
-
-            var docRef = db.Collection("Users").Document(userId);
-            await docRef.SetAsync(user, SetOptions.MergeAll);
-        }
-
+            Id = d.Id,
+            UserId = d.Str("UserId") ?? "",
+            Date = d.Str("Date") ?? "",
+            Day = PubDay.Parse(d.Str("Date")) ?? DateTime.MinValue,
+            UpdateAt = d.Time("UpdateAt"),
+            Pivo = (int)d.Int("Pivo"),
+            Vino = (int)d.Int("Vino"),
+            Panaky = (int)d.Int("Panaky")
+        };
     }
 }
