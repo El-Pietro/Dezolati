@@ -5,6 +5,7 @@ using Firebase.Auth;
 using Firebase.Auth.Providers;
 using Firebase.Auth.Repository;
 using Microsoft.Extensions.Logging;
+using SkiaSharp.Views.Maui.Controls.Hosting;
 #if ANDROID
 using Plugin.LocalNotification;
 using Plugin.LocalNotification.AndroidOption;
@@ -19,6 +20,7 @@ namespace Dezolati
             var builder = MauiApp.CreateBuilder();
             builder
                 .UseMauiApp<App>()
+                .UseSkiaSharp()   // mapa (Mapsui) kreslí přes SkiaSharp
                 .ConfigureFonts(fonts =>
                 {
                     fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");

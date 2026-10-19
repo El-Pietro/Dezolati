@@ -56,5 +56,37 @@ service cloud.firestore {
       // odmítnutí / zrušení = smazání, může kterýkoli z dvojice
       allow delete: if signedIn() && isMember(resource.data);
     }
+
+    // Profily hospod (id = OSM id, např. n123456): upravit může každý přihlášený,
+    // ale jen spolu se záznamem v historii (PubEdits/{EditId} ve stejné dávce).
+    match /Pubs/{pubId} {
+      function textOk(d, f) { return !(f in d) || (d[f] is string && d[f].size() <= 300); }
+
+      allow read: if signedIn();
+      allow create, update: if signedIn()
+                            && request.resource.data.keys().hasOnly(
+                                 ['PubId', 'Name', 'Taps', 'Prices', 'Hours', 'Note',
+                                  'UpdatedAt', 'UpdatedBy', 'UpdatedByNick', 'EditId'])
+                            && request.resource.data.PubId == pubId
+                            && request.resource.data.UpdatedBy == me()
+                            && textOk(request.resource.data, 'Taps')
+                            && textOk(request.resource.data, 'Prices')
+                            && textOk(request.resource.data, 'Hours')
+                            && textOk(request.resource.data, 'Note')
+                            && getAfter(/databases/$(database)/documents/PubEdits/$(request.resource.data.EditId)).data.PubId == pubId
+                            && getAfter(/databases/$(database)/documents/PubEdits/$(request.resource.data.EditId)).data.By == me();
+      allow delete: if false;
+    }
+
+    // Historie úprav: jen přidávat, nikdo nemaže ani nepřepisuje.
+    match /PubEdits/{editId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+                    && request.resource.data.keys().hasOnly(
+                         ['PubId', 'By', 'ByNick', 'At', 'Taps', 'Prices', 'Hours', 'Note'])
+                    && request.resource.data.By == me()
+                    && request.resource.data.At is timestamp;
+      allow update, delete: if false;
+    }
   }
 }

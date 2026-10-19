@@ -201,6 +201,11 @@ namespace Dezolati.Pages
             await Shell.Current.GoToAsync("//Settings");
         }
 
+        private async void OnPubsClicked(object sender, EventArgs e)
+        {
+            await Shell.Current.GoToAsync("//Hospody");
+        }
+
         // Zpět na lístku: zavřít případnou hlášku, jinak normálně z appky ven
         protected override bool OnBackButtonPressed() =>
             Listek.DismissActive() || base.OnBackButtonPressed();

@@ -19,6 +19,14 @@
                                Margin="{DynamicResource TopBarMargin}"
                                Clicked="OnSettingsClicked" />
 
+        <!-- Horní lišta: Hospody vlevo -->
+        <controls:PencilButton Grid.Row="0"
+                               Variant="Outline"
+                               Text="Hospody"
+                               HorizontalOptions="Start"
+                               Margin="{DynamicResource TopBarMargin}"
+                               Clicked="OnPubsClicked" />
+
         <!-- Lístek -->
         <Border Grid.Row="1" Style="{StaticResource Listek}" Margin="16,0,16,12">
             <Grid RowDefinitions="Auto, Auto, *">

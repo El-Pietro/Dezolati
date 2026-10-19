@@ -34,5 +34,13 @@
         Title="Statistiky Přítele"
         ContentTemplate="{DataTemplate pages:StatsFriend}"
         Route="StatsFriend" />
+    <ShellContent
+        Title="Hospody"
+        ContentTemplate="{DataTemplate pages:Hospody}"
+        Route="Hospody" />
+    <ShellContent
+        Title="Hospoda"
+        ContentTemplate="{DataTemplate pages:Hospoda}"
+        Route="Hospoda" />
 
 </Shell>
