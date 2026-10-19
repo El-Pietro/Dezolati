@@ -80,6 +80,8 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
             if (drinkingDays > 0)
                 AddRow("Průměr / tah", (celkem.Total / (double)drinkingDays).ToString("0.0", Cs));
 
+            DrawCharts(history, today, celkem);
+
             var last = history.Where(h => h.Total > 0).Take(14).ToList();
             if (last.Count == 0)
             {
@@ -104,6 +106,90 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
         }
     }
 
+    // ---------------- grafy ----------------
+
+    private static readonly string[] WeekShort = { "Po", "Út", "St", "Čt", "Pá", "So", "Ne" };
+    private static readonly string[] WeekLong = { "pondělí", "úterý", "středa", "čtvrtek", "pátek", "sobota", "neděle" };
+
+    private void DrawCharts(List<DailyDrinksModel> history, DateTime today, DailyDrinksModel celkem)
+    {
+        ChartsBox.IsVisible = celkem.Total > 0 || history.Any(h => h.Total > 0);
+        if (!ChartsBox.IsVisible) return;
+
+        static int[] Parts(DailyDrinksModel? d) => d == null ? new[] { 0, 0, 0 } : new[] { d.Pivo, d.Vino, d.Panaky };
+
+        // legenda
+        Legend.Clear();
+        foreach (var (name, color) in new[] { ("pivo", Pastelky.Pivo), ("víno", Pastelky.Vino), ("panáky", Pastelky.Panak) })
+        {
+            Legend.Add(new HorizontalStackLayout
+            {
+                Spacing = 6,
+                Children =
+                {
+                    new BoxView { Color = color, WidthRequest = 14, HeightRequest = 14, CornerRadius = 3, VerticalOptions = LayoutOptions.Center },
+                    new Label { Text = name, Style = AppStyle("Small"), VerticalOptions = LayoutOptions.Center }
+                }
+            });
+        }
+
+        // 30 dní: index 0 = před 29 dny, 29 = dnes (jeden hospodský den = jeden dokument, ale radši sečíst)
+        var byDay = history.GroupBy(h => h.Day.Date).ToDictionary(g => g.Key, g => new[]
+        {
+            g.Sum(d => d.Pivo), g.Sum(d => d.Vino), g.Sum(d => d.Panaky)
+        });
+        var days = Enumerable.Range(0, 30)
+            .Select(i => byDay.TryGetValue(today.Date.AddDays(i - 29), out var v) ? v : new[] { 0, 0, 0 })
+            .ToList();
+        var max = days.Max(d => d.Sum());
+        DaysMaxLabel.Text = max > 0 ? $"nejvíc {Cz.Plural(max, "kousek", "kousky", "kousků")} za den" : "čistý měsíc";
+        DaysFromLabel.Text = today.AddDays(-29).ToString("d. M.", Cs);
+        DaysChart.Drawable = new SketchChart { Values = days, Seed = 3 };
+        DaysChart.Invalidate();
+
+        // dny v týdnu (z posledních 30 dní; hospodský den, takže sobota 1:00 je pořád pátek)
+        var week = Enumerable.Range(0, 7).Select(_ => new[] { 0, 0, 0 }).ToList();
+        foreach (var d in history)
+        {
+            var i = ((int)d.Day.DayOfWeek + 6) % 7; // pondělí = 0
+            week[i][0] += d.Pivo;
+            week[i][1] += d.Vino;
+            week[i][2] += d.Panaky;
+        }
+        WeekChart.Drawable = new SketchChart { Values = week, Seed = 11 };
+        WeekChart.Invalidate();
+
+        WeekLabels.Clear();
+        for (var i = 0; i < 7; i++)
+            WeekLabels.Add(new Label { Text = WeekShort[i], Style = AppStyle("Small"), HorizontalOptions = LayoutOptions.Center }, i, 0);
+
+        var best = week.Select((v, i) => (Sum: v.Sum(), i)).MaxBy(x => x.Sum);
+        WeekCaption.Text = best.Sum > 0
+            ? $"Nejvíc to jede: {WeekLong[best.i]} ({Cz.Plural(best.Sum, "kousek", "kousky", "kousků")})"
+            : "Za posledních 30 dní nic.";
+
+        // poměr za celou historii
+        var parts = Parts(celkem);
+        RatioChart.Drawable = new SketchChart { Mode = SketchMode.Ratio, Values = new[] { parts }, Seed = 5 };
+        RatioChart.Invalidate();
+
+        RatioLabels.Clear();
+        var total = parts.Sum();
+        var names = new[] { "pivo", "víno", "panáky" };
+        var aligns = new[] { LayoutOptions.Start, LayoutOptions.Center, LayoutOptions.End };
+        for (var i = 0; i < 3; i++)
+        {
+            var pct = total > 0 ? (int)Math.Round(100.0 * parts[i] / total) : 0;
+            RatioLabels.Add(new Label
+            {
+                Text = $"{names[i]} {pct} %",
+                Style = AppStyle("Small"),
+                TextColor = Pastelky.Druhy[i],
+                HorizontalOptions = aligns[i]
+            }, i, 0);
+        }
+    }
+
     private void AddRow(string label, string value)
     {
         var row = SummaryGrid.RowDefinitions.Count;
@@ -114,6 +200,8 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
 
     private static Style? AppStyle(string key) =>
         Application.Current?.Resources.TryGetValue(key, out var s) == true ? s as Style : null;
+
+    private void OnZpetClicked(object sender, EventArgs e) => OnBackButtonPressed();
 
     // systémové tlačítko Zpět: nejdřív zavřít případný lístek s hláškou, pak o stránku zpátky
     protected override bool OnBackButtonPressed()

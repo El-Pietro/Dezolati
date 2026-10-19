@@ -7,10 +7,13 @@
     <Grid RowDefinitions="Auto, *">
         <Image Grid.RowSpan="2" Source="{AppThemeBinding Light=woodlight.jpg, Dark=wooddark.jpg}" Aspect="AspectFill" />
 
-        <!-- místo tlačítka Zpět jen odsazení pod stavovou lištou (zpět = systémové tlačítko) -->
+        <!-- Android: místo tlačítka Zpět jen odsazení pod stavovou lištou (zpět = systémové tlačítko) -->
         <BoxView Grid.Row="0" HeightRequest="0" Color="Transparent" InputTransparent="True" Margin="{DynamicResource TopBarMargin}" />
+        <!-- Windows a spol. systémové Zpět nemají → tam tlačítko zůstává -->
+        <controls:PencilButton Grid.Row="0" Variant="Outline" Text="Zpět" IsVisible="{OnPlatform Default=True, Android=False}"
+                               HorizontalOptions="Start" Margin="{DynamicResource TopBarMargin}" Clicked="OnZpetClicked" />
 
-        <Frame Grid.Row="1" Style="{StaticResource Listek}">
+        <Border Grid.Row="1" Style="{StaticResource Listek}">
             <Grid RowDefinitions="Auto, Auto, Auto, *, Auto, Auto" RowSpacing="8">
 
                 <Label Grid.Row="0" Text="Kámoši" Style="{StaticResource Title}" />
@@ -61,6 +64,6 @@
                 <controls:PencilButton Grid.Row="5" x:Name="AddButton" Text="Poslat žádost" Variant="Primary"
                                        Clicked="OnAddFriendClicked" />
             </Grid>
-        </Frame>
+        </Border>
     </Grid>
 </ContentPage>

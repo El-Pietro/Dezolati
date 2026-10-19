@@ -26,7 +26,8 @@ namespace Dezolati.Controls
     {
         private const double MinFontSize = 13;
 
-        private readonly Image _background = new() { Aspect = Aspect.Fill };
+        // textura jen zlehka, ať je text čitelný (barva pastelky pořád poznat)
+        private readonly Image _background = new() { Aspect = Aspect.Fill, Opacity = 0.6 };
         private readonly Border _outline = new()
         {
             StrokeShape = new RoundRectangle { CornerRadius = 10 },
@@ -37,14 +38,14 @@ namespace Dezolati.Controls
         };
         private readonly Label _label = new()
         {
-            FontFamily = "Caveat",
+            FontFamily = "CaveatBold",   // tučná Caveat – na čmáranici je regular špatně čitelná
             HorizontalOptions = LayoutOptions.Center,
             VerticalOptions = LayoutOptions.Center,
             HorizontalTextAlignment = TextAlignment.Center,
             VerticalTextAlignment = TextAlignment.Center,
             LineBreakMode = LineBreakMode.NoWrap,
             MaxLines = 1,
-            Padding = new Thickness(3, 0, 8, 0),   // Caveat přesahuje svůj box – ať se konec neuřízne
+            Padding = new Thickness(4, 0, 14, 0),  // Caveat přesahuje svůj box (Android měří úzce) – ať se konec neuřízne
             Margin = new Thickness(12, 0)
         };
 
@@ -142,10 +143,10 @@ namespace Dezolati.Controls
 
             (string? texture, string text) = Variant switch
             {
-                PencilVariant.Secondary => ("skrabanec.png", "#1E1E1E"),
-                PencilVariant.Danger => ("skrabanec_cerveny.png", "#2A0808"),
-                PencilVariant.Outline => (null, "#F5F5F5"),
-                _ => ("skrabanec_hnedy.png", "#2B1608")
+                PencilVariant.Secondary => ("skrabanec.png", "#151515"),
+                PencilVariant.Danger => ("skrabanec_cerveny.png", "#220404"),
+                PencilVariant.Outline => (null, "#FAFAFA"),
+                _ => ("skrabanec_hnedy.png", "#1F0F04")
             };
             if (texture != null) _background.Source = texture;
             _label.TextColor = Color.FromArgb(text);

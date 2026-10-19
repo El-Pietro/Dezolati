@@ -13,5 +13,12 @@ namespace Dezolati
 
             MainPage = new AppShell();
         }
+
+        // návrat do appky (třeba po zápisu z notifikace nebo ráno po 6:00) → obnovit lístek
+        protected override void OnResume()
+        {
+            base.OnResume();
+            Services.UserSession.RaiseDrinksChanged();
+        }
     }
 }

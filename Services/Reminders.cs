@@ -108,6 +108,7 @@ namespace Dezolati.Services
                     await new FirestoreService().RecordDrink(uid, null,
                         kind == Kind.Pivo ? 1 : 0, kind == Kind.Vino ? 1 : 0, kind == Kind.Panak ? 1 : 0,
                         fromReminder: true);
+                    UserSession.RaiseDrinksChanged(); // otevřený lístek se hned překreslí
                 }
                 catch (Exception ex)
                 {

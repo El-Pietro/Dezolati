@@ -20,7 +20,7 @@
                                Clicked="OnSettingsClicked" />
 
         <!-- Lístek -->
-        <Frame Grid.Row="1" Style="{StaticResource Listek}" Margin="16,0,16,12">
+        <Border Grid.Row="1" Style="{StaticResource Listek}" Margin="16,0,16,12">
             <Grid RowDefinitions="Auto, Auto, *">
                 <Label Grid.Row="0" Text="Dezoláti!" Style="{StaticResource Title}" />
 
@@ -73,7 +73,7 @@
                     </VerticalStackLayout>
                 </ScrollView>
             </Grid>
-        </Frame>
+        </Border>
 
         <!-- Spodní lišta: Statistiky | tácek | Přátelé -->
         <Grid Grid.Row="2"

@@ -98,6 +98,11 @@ namespace Dezolati.Services
             }
         }
 
+        /// <summary>Lístek se změnil mimo obrazovku lístku (zápis z notifikace, návrat do appky) → překreslit.</summary>
+        public static event Action? DrinksChanged;
+
+        public static void RaiseDrinksChanged() => DrinksChanged?.Invoke();
+
         public static void OnDrinkRecorded(DateTime utcNow, DateTime day)
         {
             LastDrinkAt = utcNow;

@@ -85,10 +85,17 @@
             </Style>
 
             <!-- ===== Lístek (papír na stole) ===== -->
-            <Style x:Key="Listek" TargetType="Frame">
+            <!-- Border, ne Frame: Frame (hlavně na Windows) při MaximumWidthRequest
+                 nepočítal s vlastním Padding a obsah přetékal vpravo -->
+            <Style x:Key="Listek" TargetType="Border">
                 <Setter Property="BackgroundColor" Value="{StaticResource Paper}" />
-                <Setter Property="CornerRadius" Value="1" />
-                <Setter Property="HasShadow" Value="True" />
+                <Setter Property="StrokeThickness" Value="0" />
+                <Setter Property="StrokeShape" Value="RoundRectangle 1" />
+                <Setter Property="Shadow">
+                    <Setter.Value>
+                        <Shadow Brush="Black" Offset="3,5" Radius="10" Opacity="0.5" />
+                    </Setter.Value>
+                </Setter>
                 <Setter Property="Padding" Value="18,16" />
                 <Setter Property="Margin" Value="16,4,16,20" />
                 <Setter Property="MaximumWidthRequest" Value="640" />

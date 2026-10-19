@@ -24,6 +24,7 @@ namespace Dezolati
                     fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
                     fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
                     fonts.AddFont("Caveat-Regular.ttf", "Caveat");
+                    fonts.AddFont("Caveat-Bold.ttf", "CaveatBold");   // statická tučná instance z Google Fonts (OFL)
                 });
 
 #if DEBUG

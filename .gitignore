@@ -362,4 +362,9 @@ MigrationBackup/
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
 
+# Firebase admin klíče – nikdy do gitu ani do appky
 *firebase-adminsdk*.json
+
+# podpisový klíč Androidu – nikdy do gitu
+*.keystore
+*.jks

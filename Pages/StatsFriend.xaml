@@ -7,10 +7,13 @@
     <Grid RowDefinitions="Auto, *">
         <Image Grid.RowSpan="2" Source="{AppThemeBinding Light=woodlight.jpg, Dark=wooddark.jpg}" Aspect="AspectFill" />
 
-        <!-- místo tlačítka Zpět jen odsazení pod stavovou lištou (zpět = systémové tlačítko) -->
+        <!-- Android: místo tlačítka Zpět jen odsazení pod stavovou lištou (zpět = systémové tlačítko) -->
         <BoxView Grid.Row="0" HeightRequest="0" Color="Transparent" InputTransparent="True" Margin="{DynamicResource TopBarMargin}" />
+        <!-- Windows a spol. systémové Zpět nemají → tam tlačítko zůstává -->
+        <controls:PencilButton Grid.Row="0" Variant="Outline" Text="Zpět" IsVisible="{OnPlatform Default=True, Android=False}"
+                               HorizontalOptions="Start" Margin="{DynamicResource TopBarMargin}" Clicked="OnZpetClicked" />
 
-        <Frame Grid.Row="1" Style="{StaticResource Listek}">
+        <Border Grid.Row="1" Style="{StaticResource Listek}">
             <ScrollView>
                 <VerticalStackLayout Spacing="6">
                     <Label x:Name="TitleLabel" Text="Statistiky" Style="{StaticResource Title}" />
@@ -18,10 +21,32 @@
 
                     <Grid x:Name="SummaryGrid" ColumnDefinitions="Auto, *" ColumnSpacing="12" RowSpacing="6" />
 
+                    <!-- Grafy vyčmárané pastelkou (Controls/SketchChart.cs); popisky jsou obyčejné Labely -->
+                    <VerticalStackLayout x:Name="ChartsBox" Spacing="4" IsVisible="False">
+                        <HorizontalStackLayout x:Name="Legend" Spacing="16" Margin="0,12,0,0" HorizontalOptions="Center" />
+
+                        <Label Text="Posledních 30 dní" Style="{StaticResource Heading}" Margin="0,8,0,0" />
+                        <Label x:Name="DaysMaxLabel" Style="{StaticResource Small}" />
+                        <GraphicsView x:Name="DaysChart" HeightRequest="150" />
+                        <Grid ColumnDefinitions="*, *">
+                            <Label x:Name="DaysFromLabel" Grid.Column="0" Style="{StaticResource Small}" />
+                            <Label Grid.Column="1" Text="dnes" Style="{StaticResource Small}" HorizontalOptions="End" />
+                        </Grid>
+
+                        <Label Text="Dny v týdnu" Style="{StaticResource Heading}" Margin="0,12,0,0" />
+                        <Label x:Name="WeekCaption" Style="{StaticResource Small}" />
+                        <GraphicsView x:Name="WeekChart" HeightRequest="110" />
+                        <Grid x:Name="WeekLabels" ColumnDefinitions="*, *, *, *, *, *, *" />
+
+                        <Label Text="Poměr pití (celkově)" Style="{StaticResource Heading}" Margin="0,12,0,0" />
+                        <GraphicsView x:Name="RatioChart" HeightRequest="38" />
+                        <Grid x:Name="RatioLabels" ColumnDefinitions="*, *, *" />
+                    </VerticalStackLayout>
+
                     <Label Text="Poslední tahy" Style="{StaticResource Heading}" Margin="0,16,0,0" />
                     <VerticalStackLayout x:Name="HistoryList" Spacing="4" />
                 </VerticalStackLayout>
             </ScrollView>
-        </Frame>
+        </Border>
     </Grid>
 </ContentPage>

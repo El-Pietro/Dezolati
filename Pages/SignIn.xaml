@@ -9,7 +9,7 @@
         <Image Source="{AppThemeBinding Light=woodlight.jpg, Dark=wooddark.jpg}" Aspect="AspectFill" />
 
         <!-- Lístek -->
-        <Frame Style="{StaticResource Listek}" VerticalOptions="Center" Margin="16,40">
+        <Border Style="{StaticResource Listek}" VerticalOptions="Center" Margin="16,40">
             <ScrollView>
                 <VerticalStackLayout Spacing="12">
                     <Label Text="Dezoláti!" Style="{StaticResource Title}" />
@@ -25,6 +25,6 @@
                                            HeightRequest="{DynamicResource ButtonHeightSmall}" />
                 </VerticalStackLayout>
             </ScrollView>
-        </Frame>
+        </Border>
     </Grid>
 </ContentPage>

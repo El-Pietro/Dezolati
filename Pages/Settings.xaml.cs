@@ -157,6 +157,8 @@ public partial class Settings : ContentPage
         await Shell.Current.GoToAsync("//SignIn");
     }
 
+    private void OnZpetClicked(object sender, EventArgs e) => OnBackButtonPressed();
+
     // systémové tlačítko Zpět: nejdřív zavřít případný lístek s hláškou, pak o stránku zpátky
     protected override bool OnBackButtonPressed()
     {

@@ -27,8 +27,20 @@ namespace Dezolati.Pages
         protected override async void OnAppearing()
         {
             base.OnAppearing();
+            UserSession.DrinksChanged -= OnDrinksChanged;
+            UserSession.DrinksChanged += OnDrinksChanged;
             await LoadData();
         }
+
+        protected override void OnDisappearing()
+        {
+            base.OnDisappearing();
+            UserSession.DrinksChanged -= OnDrinksChanged;
+        }
+
+        // zápis z notifikace / návrat do appky – může přijít z jiného vlákna
+        private void OnDrinksChanged() =>
+            MainThread.BeginInvokeOnMainThread(async () => await LoadData());
 
         private async Task LoadData()
         {
