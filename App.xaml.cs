@@ -1,7 +1,4 @@
-﻿using Dezolati.Models;
-using Dezolati.Pages;
-using Dezolati.Services;
-using Firebase.Auth;
+﻿using Dezolati.Controls;
 
 namespace Dezolati
 {
@@ -10,6 +7,9 @@ namespace Dezolati
         public App()
         {
             InitializeComponent();
+
+            // velikosti písma a tlačítek podle displeje
+            Typo.Apply(Resources);
 
             MainPage = new AppShell();
         }

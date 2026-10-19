@@ -1,4 +1,5 @@
-﻿using Dezolati.Models;
+﻿using Dezolati.Controls;
+using Dezolati.Models;
 using Dezolati.Services;
 
 namespace Dezolati.Pages;
@@ -29,15 +30,15 @@ public partial class Friends : ContentPage
 
         try
         {
-            var requests = await firestoreService.GetPendingFriendRequests(userId);
+            // jeden dotaz na žádosti i přátele
+            var (requests, friends) = await firestoreService.GetFriendsOverview(userId);
             PendingRequestsList.ItemsSource = requests;
             PendingHeader.IsVisible = PendingRequestsList.IsVisible = requests.Count > 0;
-
-            FriendsList.ItemsSource = await firestoreService.GetFriendsList(userId);
+            FriendsList.ItemsSource = friends;
         }
         catch (Exception ex)
         {
-            await DisplayAlert("Chyba", $"Nepodařilo se načíst přátele: {ex.Message}", "OK");
+            await Listek.AlertAsync(this, "Chyba", $"Nepodařilo se načíst přátele: {ex.Message}");
         }
     }
 
@@ -48,7 +49,7 @@ public partial class Friends : ContentPage
 
         if (string.IsNullOrEmpty(nickname) || userId == null)
         {
-            await DisplayAlert("Chyba", "Zadej přezdívku.", "OK");
+            await Listek.AlertAsync(this, "Chyba", "Zadej přezdívku.");
             return;
         }
 
@@ -59,23 +60,23 @@ public partial class Friends : ContentPage
             var friend = await firestoreService.FindUserByNickname(nickname);
             if (friend == null)
             {
-                await DisplayAlert("Nic", $"Žádný dezolát „{nickname}“ tu není. Pozor na velká/malá písmena.", "OK");
+                await Listek.AlertAsync(this, "Nic", $"Žádný dezolát „{nickname}“ tu není. Pozor na velká/malá písmena.");
                 return;
             }
 
-            var problem = await firestoreService.SendFriendRequest(userId, friend.UserId);
+            var problem = await firestoreService.SendFriendRequest(userId, friend);
             if (problem != null)
             {
-                await DisplayAlert("Hmm", problem, "OK");
+                await Listek.AlertAsync(this, "Hmm", problem);
                 return;
             }
 
             NicknameEntry.Text = "";
-            await DisplayAlert("Hotovo", "Žádost odeslána.", "OK");
+            await Listek.AlertAsync(this, "Hotovo", "Žádost odeslána.");
         }
         catch (Exception ex)
         {
-            await DisplayAlert("Chyba", ex.Message, "OK");
+            await Listek.AlertAsync(this, "Chyba", ex.Message);
         }
         finally
         {
@@ -91,7 +92,7 @@ public partial class Friends : ContentPage
 
     private async Task AnswerRequest(object sender, string status)
     {
-        if (((Button)sender).CommandParameter is not string requestId || requestId.Length == 0)
+        if (((PencilButton)sender).CommandParameter is not string requestId || requestId.Length == 0)
             return;
 
         try
@@ -101,13 +102,13 @@ public partial class Friends : ContentPage
         }
         catch (Exception ex)
         {
-            await DisplayAlert("Chyba", ex.Message, "OK");
+            await Listek.AlertAsync(this, "Chyba", ex.Message);
         }
     }
 
     private async void OnViewStatsClicked(object sender, EventArgs e)
     {
-        if (((Button)sender).CommandParameter is not UserModel friend)
+        if (((PencilButton)sender).CommandParameter is not UserModel friend)
             return;
 
         await Shell.Current.GoToAsync("//StatsFriend", new Dictionary<string, object>
@@ -118,8 +119,11 @@ public partial class Friends : ContentPage
         });
     }
 
-    private async void OnZpetClicked(object sender, EventArgs e)
+    // systémové tlačítko Zpět: nejdřív zavřít případný lístek s hláškou, pak o stránku zpátky
+    protected override bool OnBackButtonPressed()
     {
-        await Shell.Current.GoToAsync("//MainPage");
+        if (Listek.DismissActive()) return true;
+        Dispatcher.Dispatch(async () => await Shell.Current.GoToAsync("//MainPage"));
+        return true;
     }
 }

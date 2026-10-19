@@ -52,7 +52,7 @@ namespace Dezolati.Models
                 // starší účty nemusí mít profil v Users (pak by je nikdo nenašel)
                 try
                 {
-                    await new FirestoreService().EnsureUserDoc(AuthSession.Uid!, AuthSession.Email, AuthSession.DisplayName);
+                    await UserSession.EnsureReadyAsync(); // načte profil (a případně zmigruje data)
                 }
                 catch { /* není kritické, hlavní stránka případně ukáže chybu */ }
 

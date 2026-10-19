@@ -1,58 +1,64 @@
-<?xml version="1.0" encoding="utf-8" ?>
+﻿<?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:controls="clr-namespace:Dezolati.Controls"
              x:Class="Dezolati.Pages.Settings">
-    <AbsoluteLayout VerticalOptions="FillAndExpand" HorizontalOptions="FillAndExpand">
-        <Image Source="{AppThemeBinding Light=woodlight.jpg, Dark=wooddark.jpg}"
-               Aspect="AspectFill"
-               AbsoluteLayout.LayoutBounds="0, 0, 1, 1"
-               AbsoluteLayout.LayoutFlags="All" />
+    <Grid RowDefinitions="Auto, *">
+        <Image Grid.RowSpan="2" Source="{AppThemeBinding Light=woodlight.jpg, Dark=wooddark.jpg}" Aspect="AspectFill" />
 
-        <Frame BackgroundColor="Beige"
-           CornerRadius="1"
-           Padding="20"
-           AbsoluteLayout.LayoutBounds="0.5, 0.5, 0.8, 0.8"
-           AbsoluteLayout.LayoutFlags="All">
-            <VerticalStackLayout>
-                <Label Text="Nastavení píče" FontSize="Large" HorizontalOptions="Center"/>
-                <Label Text="Jméno:"/>
-                <Entry x:Name="NameEntry" Placeholder="Vaše jméno"/>
+        <!-- místo tlačítka Zpět jen odsazení pod stavovou lištou (zpět = systémové tlačítko) -->
+        <BoxView Grid.Row="0" HeightRequest="0" Color="Transparent" InputTransparent="True" Margin="{DynamicResource TopBarMargin}" />
 
-                <Label Text="Přezdívka:" />
-                <Entry x:Name="NicknameEntry" Placeholder="Vaše přezdívka" />
+        <Frame Grid.Row="1" Style="{StaticResource Listek}">
+            <ScrollView>
+                <VerticalStackLayout Spacing="4">
+                    <Label Text="Nastavení píče" Style="{StaticResource Title}" />
 
-                <Label Text="Pohlaví:" />
-                <Picker x:Name="GenderPicker">
-                    <Picker.ItemsSource>
-                        <x:Array Type="{x:Type x:String}">
-                            <x:String>Píč</x:String>
-                            <x:String>Píčka</x:String>
-                        </x:Array>
-                    </Picker.ItemsSource>
-                </Picker>
+                    <Label Text="Jméno:" Style="{StaticResource FieldLabel}" />
+                    <Entry x:Name="NameEntry" Placeholder="Tvoje jméno" />
 
-                <Label Text="Typ píče:" />
-                <Picker x:Name="DrinkerTypePicker">
-                    <Picker.ItemsSource>
-                        <x:Array Type="{x:Type x:String}">
-                            <x:String>Pivopíč/ka</x:String>
-                            <x:String>Vínopíč/ka</x:String>
-                        </x:Array>
-                    </Picker.ItemsSource>
-                </Picker>
+                    <Label Text="Přezdívka:" Style="{StaticResource FieldLabel}" />
+                    <Entry x:Name="NicknameEntry" Placeholder="Podle ní tě najdou kámoši" />
 
-                <Button Text="Uložit změny" Clicked="OnSaveClicked" />
+                    <!-- Volby: vybraná = hnědá pastelka, nevybraná = bledá tužka (přepíná code-behind) -->
+                    <Label Text="Pohlaví:" Style="{StaticResource FieldLabel}" />
+                    <Grid ColumnDefinitions="*, *" ColumnSpacing="10">
+                        <controls:PencilButton x:Name="GenderPic" Grid.Column="0" Text="Píč"
+                                               Variant="Secondary" CommandParameter="Píč" Clicked="OnGenderClicked" />
+                        <controls:PencilButton x:Name="GenderPicka" Grid.Column="1" Text="Píčka"
+                                               Variant="Secondary" CommandParameter="Píčka" Clicked="OnGenderClicked" />
+                    </Grid>
 
-                <Button Text="Odhlásit se" Clicked="OnLogoutClicked" BackgroundColor="Red" TextColor="White" />
-            </VerticalStackLayout>
+                    <Label Text="Typ píče:" Style="{StaticResource FieldLabel}" />
+                    <Grid ColumnDefinitions="*, *" ColumnSpacing="10">
+                        <controls:PencilButton x:Name="TypePivo" Grid.Column="0" Text="Pivopíč/ka"
+                                               Variant="Secondary" CommandParameter="Pivopíč/ka" Clicked="OnTypeClicked" />
+                        <controls:PencilButton x:Name="TypeVino" Grid.Column="1" Text="Vínopíč/ka"
+                                               Variant="Secondary" CommandParameter="Vínopíč/ka" Clicked="OnTypeClicked" />
+                    </Grid>
+
+                    <!-- připomínka po X minutách bez zápisu (ukládá se hned, jen v tomhle telefonu) -->
+                    <Label Text="Připomínat, když nic nezapíšu:" Style="{StaticResource FieldLabel}" />
+                    <Grid ColumnDefinitions="*, *, *, *" ColumnSpacing="6">
+                        <controls:PencilButton x:Name="Rem0" Grid.Column="0" Text="Vyp" Variant="Secondary"
+                                               FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                               CommandParameter="0" Clicked="OnReminderClicked" />
+                        <controls:PencilButton x:Name="Rem20" Grid.Column="1" Text="20 min" Variant="Secondary"
+                                               FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                               CommandParameter="20" Clicked="OnReminderClicked" />
+                        <controls:PencilButton x:Name="Rem30" Grid.Column="2" Text="30 min" Variant="Secondary"
+                                               FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                               CommandParameter="30" Clicked="OnReminderClicked" />
+                        <controls:PencilButton x:Name="Rem60" Grid.Column="3" Text="60 min" Variant="Secondary"
+                                               FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                               CommandParameter="60" Clicked="OnReminderClicked" />
+                    </Grid>
+
+                    <controls:PencilButton Text="Uložit změny" Variant="Primary" Clicked="OnSaveClicked" Margin="0,24,0,0" />
+                    <controls:PencilButton x:Name="LogoutButton" Text="Odhlásit se" Variant="Danger"
+                                           Margin="0,10,0,0" Clicked="OnLogoutClicked" />
+                </VerticalStackLayout>
+            </ScrollView>
         </Frame>
-        <Button Text="Zpět"
-            Grid.Row="2"                 
-            AbsoluteLayout.LayoutBounds="0,0"
-            AbsoluteLayout.LayoutFlags="PositionProportional" 
-            Margin="10"
-            BorderColor="WhiteSmoke"
-            TextColor="WhiteSmoke"
-            Clicked="OnZpetClicked" />
-    </AbsoluteLayout>
+    </Grid>
 </ContentPage>

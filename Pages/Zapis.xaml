@@ -1,49 +1,39 @@
 ﻿<?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:controls="clr-namespace:Dezolati.Controls"
              x:Class="Dezolati.Pages.Zapis"
              Title="Zápis">
-    <AbsoluteLayout VerticalOptions="FillAndExpand" HorizontalOptions="FillAndExpand">
-
+    <Grid RowDefinitions="Auto, *">
         <!-- Pozadí stolu -->
-        <Image Source="{AppThemeBinding Light=woodlight.jpg, Dark=wooddark.jpg}"
-               Aspect="AspectFill"
-               AbsoluteLayout.LayoutBounds="0, 0, 1, 1"
-               AbsoluteLayout.LayoutFlags="All" />
+        <Image Grid.RowSpan="2" Source="{AppThemeBinding Light=woodlight.jpg, Dark=wooddark.jpg}" Aspect="AspectFill" />
+
+        <!-- místo tlačítka Zpět jen odsazení pod stavovou lištou (zpět = systémové tlačítko) -->
+        <BoxView Grid.Row="0" HeightRequest="0" Color="Transparent" InputTransparent="True" Margin="{DynamicResource TopBarMargin}" />
 
         <!-- Lístek -->
-        <Frame BackgroundColor="Beige"
-               CornerRadius="1"
-               Padding="20"
-               AbsoluteLayout.LayoutBounds="0.5, 0.5, 0.8, 0.8"
-               AbsoluteLayout.LayoutFlags="All">
+        <Frame Grid.Row="1" Style="{StaticResource Listek}">
+            <ScrollView>
+                <VerticalStackLayout Spacing="4">
+                    <Label Text="Co to bude?" Style="{StaticResource Title}" />
 
-            <VerticalStackLayout Padding="20" Spacing="16">
-                <Label Text="Co to bude?" FontFamily="Caveat" FontSize="36" TextColor="Black" HorizontalOptions="Center" />
+                    <Label Text="Piva:" Style="{StaticResource FieldLabel}" />
+                    <Slider x:Name="PivaSlider" Minimum="0" Maximum="10" Value="1" ValueChanged="OnSliderValueChanged" />
+                    <Label x:Name="PivaLabel" Text="1" Style="{StaticResource Heading}" HorizontalOptions="Center" />
 
-                <Label Text="Piva:" FontSize="18" TextColor="Black" />
-                <Slider x:Name="PivaSlider" Minimum="0" Maximum="10" Value="1" ValueChanged="OnSliderValueChanged" />
-                <Label x:Name="PivaLabel" Text="1" FontSize="16" TextColor="Black" HorizontalOptions="Center" />
+                    <Label Text="Víno:" Style="{StaticResource FieldLabel}" />
+                    <Slider x:Name="VinoSlider" Minimum="0" Maximum="10" Value="0" ValueChanged="OnSliderValueChanged" />
+                    <Label x:Name="VinoLabel" Text="0" Style="{StaticResource Heading}" HorizontalOptions="Center" />
 
-                <Label Text="Víno:" FontSize="18" TextColor="Black" />
-                <Slider x:Name="VinoSlider" Minimum="0" Maximum="10" Value="0" ValueChanged="OnSliderValueChanged" />
-                <Label x:Name="VinoLabel" Text="0" FontSize="16" TextColor="Black" HorizontalOptions="Center" />
+                    <Label Text="Panáky:" Style="{StaticResource FieldLabel}" />
+                    <Slider x:Name="PanakySlider" Minimum="0" Maximum="10" Value="0" ValueChanged="OnSliderValueChanged" />
+                    <Label x:Name="PanakyLabel" Text="0" Style="{StaticResource Heading}" HorizontalOptions="Center" />
 
-                <Label Text="Panáky:" FontSize="18" TextColor="Black" />
-                <Slider x:Name="PanakySlider" Minimum="0" Maximum="10" Value="0" ValueChanged="OnSliderValueChanged" />
-                <Label x:Name="PanakyLabel" Text="0" FontSize="16" TextColor="Black" HorizontalOptions="Center" />
-
-                <Button x:Name="ZapsatButton" Text="Zapsat" Clicked="OnZapsatClicked"
-                        BackgroundColor="Green" TextColor="White" HorizontalOptions="Center" />
-                <ActivityIndicator x:Name="Busy" IsRunning="False" IsVisible="False" Color="Black" />
-            </VerticalStackLayout>
+                    <controls:PencilButton x:Name="ZapsatButton" Text="Zapsat" Variant="Primary"
+                                           Margin="0,12,0,0" Clicked="OnZapsatClicked" />
+                    <ActivityIndicator x:Name="Busy" IsRunning="False" IsVisible="False" Color="{StaticResource Pencil}" />
+                </VerticalStackLayout>
+            </ScrollView>
         </Frame>
-        <Button Text="Zpět"
-                AbsoluteLayout.LayoutBounds="0,0"
-                AbsoluteLayout.LayoutFlags="PositionProportional"
-                Margin="10"
-                BorderColor="WhiteSmoke"
-                TextColor="WhiteSmoke"
-                Clicked="OnZpetClicked" />
-    </AbsoluteLayout>
+    </Grid>
 </ContentPage>

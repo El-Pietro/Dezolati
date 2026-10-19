@@ -1,34 +1,30 @@
 ﻿<?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:controls="clr-namespace:Dezolati.Controls"
              x:Class="Dezolati.Pages.SignUp"
              Title="Registrace">
-    <AbsoluteLayout VerticalOptions="FillAndExpand" HorizontalOptions="FillAndExpand">
-
+    <Grid>
         <!-- Pozadí stolu -->
-        <Image Source="{AppThemeBinding Light=woodlight.jpg, Dark=wooddark.jpg}"
-               Aspect="AspectFill"
-               AbsoluteLayout.LayoutBounds="0, 0, 1, 1"
-               AbsoluteLayout.LayoutFlags="All" />
+        <Image Source="{AppThemeBinding Light=woodlight.jpg, Dark=wooddark.jpg}" Aspect="AspectFill" />
 
         <!-- Lístek -->
-        <Frame BackgroundColor="Beige"
-               CornerRadius="1"
-               Padding="20"
-               AbsoluteLayout.LayoutBounds="0.5, 0.5, 0.8, 0.8"
-               AbsoluteLayout.LayoutFlags="All">
-            <VerticalStackLayout Spacing="12" VerticalOptions="Center">
-                <Label Text="Nový dezolát" FontFamily="Caveat" FontSize="40" FontAttributes="Bold"
-                       HorizontalOptions="Center" TextColor="Black" />
-                <Entry Text="{Binding Email}" Placeholder="E-mail" Keyboard="Email" TextColor="Black" />
-                <Entry Text="{Binding Username}" Placeholder="Přezdívka (podle ní tě najdou kámoši)" TextColor="Black" />
-                <Entry Text="{Binding Password}" Placeholder="Heslo (min. 6 znaků)" IsPassword="True" TextColor="Black" />
-                <Label Text="{Binding Error}" TextColor="DarkRed" HorizontalOptions="Center"
-                       HorizontalTextAlignment="Center" />
-                <ActivityIndicator IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" Color="Black" />
-                <Button Command="{Binding SignUpCommand}" Text="Registrace" />
-                <Button Command="{Binding NavigateSignInCommand}" Text="Už máš účet? Přihlaš se!" />
-            </VerticalStackLayout>
+        <Frame Style="{StaticResource Listek}" VerticalOptions="Center" Margin="16,40">
+            <ScrollView>
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="Nový dezolát" Style="{StaticResource Title}" />
+                    <Entry Text="{Binding Email}" Placeholder="E-mail" Keyboard="Email" />
+                    <Entry Text="{Binding Username}" Placeholder="Přezdívka (podle ní tě najdou)" />
+                    <Entry Text="{Binding Password}" Placeholder="Heslo (min. 6 znaků)" IsPassword="True" />
+                    <Label Text="{Binding Error}" Style="{StaticResource Error}" />
+                    <ActivityIndicator IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" Color="{StaticResource Pencil}" />
+                    <controls:PencilButton Command="{Binding SignUpCommand}" Text="Registrace" Variant="Primary" />
+                    <controls:PencilButton Command="{Binding NavigateSignInCommand}" Text="Už máš účet? Přihlaš se!"
+                                           Variant="Secondary"
+                                           FontSize="{DynamicResource FontButtonSmall}"
+                                           HeightRequest="{DynamicResource ButtonHeightSmall}" />
+                </VerticalStackLayout>
+            </ScrollView>
         </Frame>
-    </AbsoluteLayout>
+    </Grid>
 </ContentPage>

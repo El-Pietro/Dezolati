@@ -1,4 +1,5 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
+﻿using Dezolati.Controls;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Dezolati.Services;
 using Firebase.Auth;
@@ -70,8 +71,8 @@ namespace Dezolati.Models
                 await fs.EnsureUserDoc(uid, email, finalNickname);
 
                 if (finalNickname != nickname)
-                    await Shell.Current.DisplayAlert("Přezdívka zabraná",
-                        $"„{nickname}“ už někdo má, dostal jsi „{finalNickname}“. Změnit si ji můžeš v Nastavení.", "OK");
+                    await Listek.AlertAsync(Shell.Current?.CurrentPage, "Přezdívka zabraná",
+                        $"„{nickname}“ už někdo má, dostal jsi „{finalNickname}“. Změnit si ji můžeš v Nastavení.");
 
                 await Shell.Current.GoToAsync("//MainPage");
             }

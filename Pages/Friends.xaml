@@ -1,37 +1,35 @@
 ﻿<?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:controls="clr-namespace:Dezolati.Controls"
              xmlns:models="clr-namespace:Dezolati.Models"
              x:Class="Dezolati.Pages.Friends">
-    <AbsoluteLayout VerticalOptions="FillAndExpand" HorizontalOptions="FillAndExpand">
-        <Image Source="{AppThemeBinding Light=woodlight.jpg, Dark=wooddark.jpg}"
-               Aspect="AspectFill"
-               AbsoluteLayout.LayoutBounds="0, 0, 1, 1"
-               AbsoluteLayout.LayoutFlags="All" />
+    <Grid RowDefinitions="Auto, *">
+        <Image Grid.RowSpan="2" Source="{AppThemeBinding Light=woodlight.jpg, Dark=wooddark.jpg}" Aspect="AspectFill" />
 
-        <Frame BackgroundColor="Beige"
-               CornerRadius="1"
-               Padding="16"
-               AbsoluteLayout.LayoutBounds="0.5, 0.5, 0.85, 0.8"
-               AbsoluteLayout.LayoutFlags="All">
+        <!-- místo tlačítka Zpět jen odsazení pod stavovou lištou (zpět = systémové tlačítko) -->
+        <BoxView Grid.Row="0" HeightRequest="0" Color="Transparent" InputTransparent="True" Margin="{DynamicResource TopBarMargin}" />
+
+        <Frame Grid.Row="1" Style="{StaticResource Listek}">
             <Grid RowDefinitions="Auto, Auto, Auto, *, Auto, Auto" RowSpacing="8">
 
-                <Label Grid.Row="0" Text="Kámoši" FontFamily="Caveat" FontSize="40"
-                       TextColor="Black" HorizontalOptions="Center" />
+                <Label Grid.Row="0" Text="Kámoši" Style="{StaticResource Title}" />
 
                 <!-- Žádosti, které čekají na mě -->
                 <Label Grid.Row="1" x:Name="PendingHeader" Text="Chtějí se s tebou kamarádit:"
-                       FontSize="16" TextColor="Black" IsVisible="False" />
+                       Style="{StaticResource FieldLabel}" IsVisible="False" />
                 <CollectionView Grid.Row="2" x:Name="PendingRequestsList" SelectionMode="None"
-                                IsVisible="False" MaximumHeightRequest="160">
+                                IsVisible="False" MaximumHeightRequest="180">
                     <CollectionView.ItemTemplate>
                         <DataTemplate x:DataType="models:FriendsModel">
                             <Grid ColumnDefinitions="*, Auto, Auto" ColumnSpacing="6" Padding="0,4">
-                                <Label Text="{Binding Display}" FontSize="18" TextColor="Black" VerticalOptions="Center" />
-                                <Button Grid.Column="1" Text="✔" Clicked="OnAcceptRequestClicked"
-                                        CommandParameter="{Binding RequestId}" BackgroundColor="Green" TextColor="White" />
-                                <Button Grid.Column="2" Text="✖" Clicked="OnRejectRequestClicked"
-                                        CommandParameter="{Binding RequestId}" BackgroundColor="DarkRed" TextColor="White" />
+                                <Label Text="{Binding Display}" VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                                <controls:PencilButton Grid.Column="1" Text="✔" Variant="Primary"
+                                                       WidthRequest="56" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                                       Clicked="OnAcceptRequestClicked" CommandParameter="{Binding RequestId}" />
+                                <controls:PencilButton Grid.Column="2" Text="✖" Variant="Danger"
+                                                       WidthRequest="56" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                                       Clicked="OnRejectRequestClicked" CommandParameter="{Binding RequestId}" />
                             </Grid>
                         </DataTemplate>
                     </CollectionView.ItemTemplate>
@@ -40,32 +38,29 @@
                 <!-- Seznam přátel -->
                 <CollectionView Grid.Row="3" x:Name="FriendsList" SelectionMode="None">
                     <CollectionView.EmptyView>
-                        <Label Text="Zatím nikdo. Piješ sám?" FontFamily="Caveat" FontSize="24"
-                               TextColor="Black" HorizontalOptions="Center" Margin="0,20" />
+                        <Label Text="Zatím nikdo. Piješ sám?" Style="{StaticResource Heading}"
+                               HorizontalOptions="Center" Margin="0,20" />
                     </CollectionView.EmptyView>
                     <CollectionView.ItemTemplate>
                         <DataTemplate x:DataType="models:UserModel">
-                            <Grid ColumnDefinitions="*, Auto" Padding="0,4">
-                                <Label Text="{Binding Display}" FontFamily="Caveat" FontSize="26"
-                                       TextColor="Black" VerticalOptions="Center" />
-                                <Button Grid.Column="1" Text="Statistiky" Clicked="OnViewStatsClicked"
-                                        CommandParameter="{Binding .}" />
+                            <Grid ColumnDefinitions="*, Auto" ColumnSpacing="8" Padding="0,4">
+                                <Label Text="{Binding Display}" Style="{StaticResource Heading}"
+                                       VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                                <controls:PencilButton Grid.Column="1" Text="Statistiky" Variant="Secondary"
+                                                       FontSize="{DynamicResource FontButtonSmall}"
+                                                       HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                                       WidthRequest="130"
+                                                       Clicked="OnViewStatsClicked" CommandParameter="{Binding .}" />
                             </Grid>
                         </DataTemplate>
                     </CollectionView.ItemTemplate>
                 </CollectionView>
 
                 <!-- Přidání přítele -->
-                <Entry Grid.Row="4" x:Name="NicknameEntry" Placeholder="Přezdívka kámoše" TextColor="Black" />
-                <Button Grid.Row="5" x:Name="AddButton" Text="Poslat žádost" Clicked="OnAddFriendClicked" />
+                <Entry Grid.Row="4" x:Name="NicknameEntry" Placeholder="Přezdívka kámoše" />
+                <controls:PencilButton Grid.Row="5" x:Name="AddButton" Text="Poslat žádost" Variant="Primary"
+                                       Clicked="OnAddFriendClicked" />
             </Grid>
         </Frame>
-        <Button Text="Zpět"
-                AbsoluteLayout.LayoutBounds="0,0"
-                AbsoluteLayout.LayoutFlags="PositionProportional"
-                Margin="10"
-                BorderColor="WhiteSmoke"
-                TextColor="WhiteSmoke"
-                Clicked="OnZpetClicked" />
-    </AbsoluteLayout>
+    </Grid>
 </ContentPage>

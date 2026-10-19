@@ -1,91 +1,124 @@
 ﻿<?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:controls="clr-namespace:Dezolati.Controls"
              x:Class="Dezolati.Pages.MainPage">
 
-    <AbsoluteLayout VerticalOptions="FillAndExpand" HorizontalOptions="FillAndExpand">
+    <Grid RowDefinitions="Auto, *, Auto">
 
-        <!-- Pozadí stolu -->
-        <Image Source="{AppThemeBinding Light=woodlight.jpg, Dark=wooddark.jpg}"
-               Aspect="AspectFill"
-               AbsoluteLayout.LayoutBounds="0, 0, 1, 1"
-               AbsoluteLayout.LayoutFlags="All" />
+        <!-- Pozadí stolu přes celou stránku -->
+        <Image Grid.RowSpan="3"
+               Source="{AppThemeBinding Light=woodlight.jpg, Dark=wooddark.jpg}"
+               Aspect="AspectFill" />
+
+        <!-- Horní lišta: Nastavení vpravo -->
+        <controls:PencilButton Grid.Row="0"
+                               Variant="Outline"
+                               Text="Nastavení"
+                               HorizontalOptions="End"
+                               Margin="{DynamicResource TopBarMargin}"
+                               Clicked="OnSettingsClicked" />
 
         <!-- Lístek -->
-        <Frame BackgroundColor="Beige"
-               CornerRadius="1"
-               Padding="20"
-               AbsoluteLayout.LayoutBounds="0.5, 0.4, 0.8, 0.75"
-               AbsoluteLayout.LayoutFlags="All">
-
+        <Frame Grid.Row="1" Style="{StaticResource Listek}" Margin="16,0,16,12">
             <Grid RowDefinitions="Auto, Auto, *">
-                <Label Text="Dezoláti!"
-                       Grid.Row="0"
-                       FontSize="46"
-                       FontFamily="Caveat"
-                       TextColor="Black"
-                       HorizontalOptions="Center"
-                       FontAttributes="Bold" />
+                <Label Grid.Row="0" Text="Dezoláti!" Style="{StaticResource Title}" />
 
                 <Label x:Name="SouhrnLabel"
                        Grid.Row="1"
                        Text="Načítám lístek…"
-                       FontFamily="Caveat"
-                       FontSize="24"
-                       TextColor="Black"
-                       HorizontalOptions="Center"
+                       HorizontalOptions="Fill"
                        HorizontalTextAlignment="Center" />
 
-                <ScrollView Grid.Row="2">
-                    <VerticalStackLayout Spacing="6">
-                        <Label Text="Pívo:" FontFamily="Caveat" FontSize="28" TextColor="Black" />
+                <ScrollView Grid.Row="2" Margin="0,8,0,0">
+                    <VerticalStackLayout Spacing="2">
+                        <Label Text="Pívo:" Style="{StaticResource Heading}">
+                            <Label.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnRowTapped" CommandParameter="Pivo" />
+                            </Label.GestureRecognizers>
+                        </Label>
                         <FlexLayout x:Name="Pivo" Direction="Row" Wrap="Wrap" JustifyContent="Start"
-                                    AlignItems="Start" Margin="5" Padding="5" />
+                                    AlignItems="Start" Margin="5" Padding="5" MinimumHeightRequest="30">
+                            <FlexLayout.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnRowTapped" CommandParameter="Pivo" />
+                            </FlexLayout.GestureRecognizers>
+                        </FlexLayout>
 
-                        <Label Text="Víno:" FontFamily="Caveat" FontSize="28" TextColor="Black" />
+                        <Label Text="Víno:" Style="{StaticResource Heading}">
+                            <Label.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnRowTapped" CommandParameter="Vino" />
+                            </Label.GestureRecognizers>
+                        </Label>
                         <FlexLayout x:Name="Vino" Direction="Row" Wrap="Wrap" JustifyContent="Start"
-                                    AlignItems="Start" Margin="5" Padding="5" />
+                                    AlignItems="Start" Margin="5" Padding="5" MinimumHeightRequest="30">
+                            <FlexLayout.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnRowTapped" CommandParameter="Vino" />
+                            </FlexLayout.GestureRecognizers>
+                        </FlexLayout>
 
-                        <Label Text="Panáky:" FontFamily="Caveat" FontSize="28" TextColor="Black" />
+                        <Label Text="Panáky:" Style="{StaticResource Heading}">
+                            <Label.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnRowTapped" CommandParameter="Panaky" />
+                            </Label.GestureRecognizers>
+                        </Label>
                         <FlexLayout x:Name="Panaky" Direction="Row" Wrap="Wrap" JustifyContent="Start"
-                                    AlignItems="Start" Margin="5" Padding="5" />
+                                    AlignItems="Start" Margin="5" Padding="5" MinimumHeightRequest="30">
+                            <FlexLayout.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnRowTapped" CommandParameter="Panaky" />
+                            </FlexLayout.GestureRecognizers>
+                        </FlexLayout>
+
+                        <Label Text="(ťukni na řádek a škrtni čárku)" Style="{StaticResource Small}"
+                               TextColor="{StaticResource InkSoft}" HorizontalOptions="Center" Margin="0,12,0,0" />
                     </VerticalStackLayout>
                 </ScrollView>
             </Grid>
         </Frame>
 
-        <!-- Velké plus pod lístkem -->
-        <Button Text="+"
-                FontSize="40"
-                FontAttributes="Bold"
-                WidthRequest="80"
-                HeightRequest="80"
-                CornerRadius="40"
-                Padding="0"
-                AbsoluteLayout.LayoutBounds="0.5, 0.88, 80, 80"
-                AbsoluteLayout.LayoutFlags="PositionProportional"
-                Clicked="OnPridatClicked" />
+        <!-- Spodní lišta: Statistiky | tácek | Přátelé -->
+        <Grid Grid.Row="2"
+              ColumnDefinitions="*, Auto, *"
+              ColumnSpacing="8"
+              Padding="12,0,12,14">
 
-        <Button Text="Statistiky"
-                AbsoluteLayout.LayoutBounds="0,1"
-                AbsoluteLayout.LayoutFlags="PositionProportional"
-                Margin="10"
-                BorderColor="WhiteSmoke"
-                TextColor="WhiteSmoke"
-                Clicked="OnStatsClicked" />
-        <Button Text="Nastavení"
-                AbsoluteLayout.LayoutBounds="0.5,1"
-                AbsoluteLayout.LayoutFlags="PositionProportional"
-                Margin="10"
-                BorderColor="WhiteSmoke"
-                TextColor="WhiteSmoke"
-                Clicked="OnSettingsClicked" />
-        <Button Text="Přátelé"
-                AbsoluteLayout.LayoutBounds="1,1"
-                AbsoluteLayout.LayoutFlags="PositionProportional"
-                Margin="10"
-                BorderColor="WhiteSmoke"
-                TextColor="WhiteSmoke"
-                Clicked="OnFriendsClicked" />
-    </AbsoluteLayout>
+            <controls:PencilButton Grid.Column="0"
+                                   Variant="Outline"
+                                   Text="Statistiky"
+                                   HorizontalOptions="Start"
+                                   VerticalOptions="Center"
+                                   Clicked="OnStatsClicked" />
+
+            <!-- Plus jako pivní tácek -->
+            <Border x:Name="PlusButton"
+                    Grid.Column="1"
+                    WidthRequest="88"
+                    HeightRequest="88"
+                    BackgroundColor="#F4E7C5"
+                    Stroke="{StaticResource Pencil}"
+                    StrokeThickness="4"
+                    StrokeShape="Ellipse">
+                <Border.Shadow>
+                    <Shadow Brush="Black" Offset="3,5" Radius="10" Opacity="0.55" />
+                </Border.Shadow>
+                <Border.GestureRecognizers>
+                    <TapGestureRecognizer Tapped="OnPlusTapped" />
+                </Border.GestureRecognizers>
+                <Grid>
+                    <Ellipse Stroke="{StaticResource Pencil}" StrokeThickness="1.5" StrokeDashArray="3,3" Margin="7" />
+                    <!-- plus ze dvou čar = vždy přesně uprostřed -->
+                    <BoxView Color="{StaticResource Pencil}" WidthRequest="32" HeightRequest="5" CornerRadius="3"
+                             HorizontalOptions="Center" VerticalOptions="Center" />
+                    <BoxView Color="{StaticResource Pencil}" WidthRequest="5" HeightRequest="32" CornerRadius="3"
+                             HorizontalOptions="Center" VerticalOptions="Center" />
+                </Grid>
+            </Border>
+
+            <controls:PencilButton Grid.Column="2"
+                                   Variant="Outline"
+                                   Text="Přátelé"
+                                   HorizontalOptions="End"
+                                   VerticalOptions="Center"
+                                   Clicked="OnFriendsClicked" />
+        </Grid>
+    </Grid>
 </ContentPage>

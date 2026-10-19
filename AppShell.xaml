@@ -6,7 +6,7 @@
     xmlns:pages="clr-namespace:Dezolati.Pages"
     Shell.FlyoutBehavior="Disabled"
     Shell.NavBarIsVisible="False"
-    Title="Dezolati">
+    Title="Dezoláti">
     <ShellContent
         Title="Přihlášení"
         ContentTemplate="{DataTemplate pages:SignIn}"

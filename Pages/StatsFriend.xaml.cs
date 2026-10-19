@@ -1,4 +1,5 @@
-﻿using System.Globalization;
+﻿using Dezolati.Controls;
+using System.Globalization;
 using Dezolati.Models;
 using Dezolati.Services;
 
@@ -44,8 +45,10 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
         {
             Busy.IsRunning = Busy.IsVisible = true;
 
-            var history = await firestoreService.GetDailyHistory(userId);
-            var today = await firestoreService.GetCurrentPubDay(userId);
+            // ~33 čtení bez ohledu na to, jak dlouho už dotyčný chlastá
+            var stats = await firestoreService.GetStats(userId);
+            var history = stats.Last30;
+            var today = stats.Today;
 
             DailyDrinksModel Sum(IEnumerable<DailyDrinksModel> days) => new()
             {
@@ -57,9 +60,9 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
             var dnes = Sum(history.Where(h => h.Day == today));
             var tyden = Sum(history.Where(h => h.Day > today.AddDays(-7)));
             var mesic = Sum(history.Where(h => h.Day > today.AddDays(-30)));
-            var celkem = Sum(history);
-            var drinkingDays = history.Count(h => h.Total > 0);
-            var record = history.Where(h => h.Total > 0).MaxBy(h => h.Total);
+            var celkem = stats.Totals;
+            var drinkingDays = stats.Days;
+            var record = stats.Record;
 
             string fav = celkem.Total == 0 ? "—"
                 : celkem.Pivo >= celkem.Vino && celkem.Pivo >= celkem.Panaky ? "pivo"
@@ -80,21 +83,20 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
             var last = history.Where(h => h.Total > 0).Take(14).ToList();
             if (last.Count == 0)
             {
-                HistoryList.Add(new Label { Text = "Zatím nic. Abstinent, nebo lhář?", TextColor = Colors.Black });
+                HistoryList.Add(new Label { Text = "Zatím nic. Abstinent, nebo lhář?", Style = AppStyle("Body") });
             }
             foreach (var day in last)
             {
                 HistoryList.Add(new Label
                 {
                     Text = $"{day.Day.ToString("ddd d. M.", Cs)} – {Cz.Souhrn(day.Pivo, day.Vino, day.Panaky)}",
-                    TextColor = Colors.Black,
-                    FontSize = 15
+                    Style = AppStyle("Body")
                 });
             }
         }
         catch (Exception ex)
         {
-            await DisplayAlert("Chyba", $"Statistiky se nepodařilo načíst: {ex.Message}", "OK");
+            await Listek.AlertAsync(this, "Chyba", $"Statistiky se nepodařilo načíst: {ex.Message}");
         }
         finally
         {
@@ -106,12 +108,18 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
     {
         var row = SummaryGrid.RowDefinitions.Count;
         SummaryGrid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
-        SummaryGrid.Add(new Label { Text = label, FontAttributes = FontAttributes.Bold, TextColor = Colors.Black }, 0, row);
-        SummaryGrid.Add(new Label { Text = value, TextColor = Colors.Black }, 1, row);
+        SummaryGrid.Add(new Label { Text = label, Style = AppStyle("FieldLabel"), Margin = 0 }, 0, row);
+        SummaryGrid.Add(new Label { Text = value, Style = AppStyle("Body") }, 1, row);
     }
 
-    private async void OnZpetClicked(object sender, EventArgs e)
+    private static Style? AppStyle(string key) =>
+        Application.Current?.Resources.TryGetValue(key, out var s) == true ? s as Style : null;
+
+    // systémové tlačítko Zpět: nejdřív zavřít případný lístek s hláškou, pak o stránku zpátky
+    protected override bool OnBackButtonPressed()
     {
-        await Shell.Current.GoToAsync(back);
+        if (Listek.DismissActive()) return true;
+        Dispatcher.Dispatch(async () => await Shell.Current.GoToAsync(back));
+        return true;
     }
 }

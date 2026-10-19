@@ -1,4 +1,5 @@
-﻿using Dezolati.Models;
+﻿using Dezolati.Controls;
+using Dezolati.Models;
 using Dezolati.Services;
 
 namespace Dezolati.Pages;
@@ -6,6 +7,9 @@ namespace Dezolati.Pages;
 public partial class Settings : ContentPage
 {
     private readonly FirestoreService firestoreService = new();
+
+    private string? gender;
+    private string? drinkerType;
 
     public Settings()
     {
@@ -29,19 +33,64 @@ public partial class Settings : ContentPage
 
         try
         {
-            var user = await firestoreService.GetUserData(userId);
+            await UserSession.EnsureReadyAsync(); // z paměti
+            var user = UserSession.Profile;
             if (user != null)
             {
                 NameEntry.Text = user.Name;
                 NicknameEntry.Text = user.Nickname;
-                GenderPicker.SelectedItem = user.Gender;
-                DrinkerTypePicker.SelectedItem = user.DrinkerType;
+                gender = user.Gender;
+                drinkerType = user.DrinkerType;
             }
         }
         catch (Exception ex)
         {
-            await DisplayAlert("Chyba", $"Nepodařilo se načíst profil: {ex.Message}", "OK");
+            await Listek.AlertAsync(this, "Chyba", $"Nepodařilo se načíst profil: {ex.Message}");
         }
+        finally
+        {
+            UpdateChips();
+        }
+    }
+
+    private void OnGenderClicked(object sender, EventArgs e)
+    {
+        gender = ((PencilButton)sender).CommandParameter as string;
+        UpdateChips();
+    }
+
+    private void OnTypeClicked(object sender, EventArgs e)
+    {
+        drinkerType = ((PencilButton)sender).CommandParameter as string;
+        UpdateChips();
+    }
+
+    private void OnReminderClicked(object sender, EventArgs e)
+    {
+        if (((PencilButton)sender).CommandParameter is string s && int.TryParse(s, out var minutes))
+            Reminders.Minutes = minutes;
+        UpdateChips();
+    }
+
+    private void UpdateChips()
+    {
+        var rem = Reminders.Minutes;
+        SetChip(Rem0, rem == 0);
+        SetChip(Rem20, rem == 20);
+        SetChip(Rem30, rem == 30);
+        SetChip(Rem60, rem == 60);
+
+        SetChip(GenderPic, gender == "Píč");
+        SetChip(GenderPicka, gender == "Píčka");
+        SetChip(TypePivo, drinkerType == "Pivopíč/ka");
+        SetChip(TypeVino, drinkerType == "Vínopíč/ka");
+    }
+
+    /// <summary>Vybraná volba = vyčmáraná hnědou pastelkou, nevybraná = bledá tužka.</summary>
+    private static void SetChip(PencilButton chip, bool selected)
+    {
+        chip.Variant = selected ? PencilVariant.Primary : PencilVariant.Secondary;
+        chip.Opacity = selected ? 1.0 : 0.45;
     }
 
     private async void OnSaveClicked(object sender, EventArgs e)
@@ -56,35 +105,48 @@ public partial class Settings : ContentPage
         var nickname = NicknameEntry.Text?.Trim();
         if (string.IsNullOrEmpty(nickname))
         {
-            await DisplayAlert("Chyba", "Přezdívka je povinná, podle ní tě najdou kámoši.", "OK");
+            await Listek.AlertAsync(this, "Chyba", "Přezdívka je povinná, podle ní tě najdou kámoši.");
             return;
         }
 
         try
         {
-            var taken = await firestoreService.FindUserByNickname(nickname);
-            if (taken != null && taken.UserId != userId)
+            var oldNickname = UserSession.Profile?.Nickname;
+            var nicknameChanged = !string.Equals(oldNickname, nickname, StringComparison.Ordinal);
+
+            if (nicknameChanged)
             {
-                await DisplayAlert("Zabráno", $"Přezdívku „{nickname}“ už má někdo jiný.", "OK");
-                return;
+                var taken = await firestoreService.FindUserByNickname(nickname);
+                if (taken != null && taken.UserId != userId)
+                {
+                    await Listek.AlertAsync(this, "Zabráno", $"Přezdívku „{nickname}“ už má někdo jiný.");
+                    return;
+                }
             }
 
-            await firestoreService.UpdateUserData(userId, new UserModel
+            var profile = new UserModel
             {
+                Id = userId,
                 UserId = userId,
                 Name = NameEntry.Text?.Trim(),
                 Nickname = nickname,
-                Gender = GenderPicker.SelectedItem as string,
-                DrinkerType = DrinkerTypePicker.SelectedItem as string,
+                Gender = gender,
+                DrinkerType = drinkerType,
                 Email = AuthSession.Email
-            });
+            };
+            await firestoreService.UpdateUserData(userId, profile);
+            UserSession.SetProfile(profile);
 
-            await DisplayAlert("Hotovo", "Změny byly uloženy.", "OK");
+            // přezdívka je uložená i v přátelstvích, ať se kámošům nečtou profily
+            if (nicknameChanged)
+                await firestoreService.PropagateNickname(userId, nickname);
+
+            await Listek.AlertAsync(this, "Hotovo", "Změny byly uloženy.");
             await Shell.Current.GoToAsync("//MainPage");
         }
         catch (Exception ex)
         {
-            await DisplayAlert("Chyba", $"Uložení se nepovedlo: {ex.Message}", "OK");
+            await Listek.AlertAsync(this, "Chyba", $"Uložení se nepovedlo: {ex.Message}");
         }
     }
 
@@ -95,8 +157,11 @@ public partial class Settings : ContentPage
         await Shell.Current.GoToAsync("//SignIn");
     }
 
-    private async void OnZpetClicked(object sender, EventArgs e)
+    // systémové tlačítko Zpět: nejdřív zavřít případný lístek s hláškou, pak o stránku zpátky
+    protected override bool OnBackButtonPressed()
     {
-        await Shell.Current.GoToAsync("//MainPage");
+        if (Listek.DismissActive()) return true;
+        Dispatcher.Dispatch(async () => await Shell.Current.GoToAsync("//MainPage"));
+        return true;
     }
 }

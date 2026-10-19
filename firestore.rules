@@ -5,13 +5,13 @@ service cloud.firestore {
     function signedIn() { return request.auth != null; }
     function me() { return request.auth.uid; }
 
-    // Profily: číst může každý přihlášený (hledání kámošů), zapisovat jen svůj.
+    // Profily: číst může každý přihlášený (hledání kámošů, jejich hospodský den), zapisovat jen svůj.
     match /Users/{uid} {
       allow read: if signedIn();
       allow write: if signedIn() && me() == uid;
     }
 
-    // Jednotlivé zápisy: jen vlastní.
+    // Jednotlivé zápisy (log): jen vlastní, jen vytvořit.
     match /Drinks/{id} {
       allow read: if signedIn() && resource.data.UserId == me();
       allow create: if signedIn() && request.resource.data.UserId == me();
@@ -20,22 +20,41 @@ service cloud.firestore {
     // Denní součty: číst může každý přihlášený (statistiky kámošů), zapisovat jen do svých.
     match /DailyDrinks/{id} {
       allow read: if signedIn();
-      allow write: if signedIn()
-                   && request.resource.data.UserId == me()
-                   && id.matches(me() + '_.*');
+      allow create, update: if signedIn()
+                            && request.resource.data.UserId == me()
+                            && id.matches(me() + '_.*');
+      allow delete: if signedIn() && resource.data.UserId == me();
     }
 
-    // Přátelství: vidí jen ti dva, žádost zakládá žadatel, přijímá/odmítá adresát.
+    // Přátelství: UserId = žadatel, FriendId = adresát, Members = [UserId, FriendId].
     match /Friends/{id} {
-      allow read: if signedIn()
-                  && (resource.data.UserId == me() || resource.data.FriendId == me());
+      function isMember(data) {
+        return me() in data.get('Members', []) || data.UserId == me() || data.FriendId == me();
+      }
+      function membersOk(data) {
+        return data.Members == [data.UserId, data.FriendId];
+      }
+
+      allow read: if signedIn() && isMember(resource.data);
+
+      // žádost zakládá žadatel, vždy jako Pending
       allow create: if signedIn()
                     && request.resource.data.UserId == me()
-                    && request.resource.data.Status == 'Pending';
+                    && request.resource.data.Status == 'Pending'
+                    && membersOk(request.resource.data);
+
+      // oba můžou upravovat (přezdívky, migrace), ale nikdo nemění účastníky;
+      // stav (přijetí) mění jen adresát
       allow update: if signedIn()
-                    && resource.data.FriendId == me()
+                    && isMember(resource.data)
                     && request.resource.data.UserId == resource.data.UserId
-                    && request.resource.data.FriendId == resource.data.FriendId;
+                    && request.resource.data.FriendId == resource.data.FriendId
+                    && membersOk(request.resource.data)
+                    && (request.resource.data.Status == resource.data.Status
+                        || resource.data.FriendId == me());
+
+      // odmítnutí / zrušení = smazání, může kterýkoli z dvojice
+      allow delete: if signedIn() && isMember(resource.data);
     }
   }
 }

@@ -1,38 +1,27 @@
 ﻿<?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:controls="clr-namespace:Dezolati.Controls"
              x:Class="Dezolati.Pages.StatsFriend"
              Title="Statistiky">
-    <AbsoluteLayout VerticalOptions="FillAndExpand" HorizontalOptions="FillAndExpand">
-        <Image Source="{AppThemeBinding Light=woodlight.jpg, Dark=wooddark.jpg}"
-               Aspect="AspectFill"
-               AbsoluteLayout.LayoutBounds="0, 0, 1, 1"
-               AbsoluteLayout.LayoutFlags="All" />
+    <Grid RowDefinitions="Auto, *">
+        <Image Grid.RowSpan="2" Source="{AppThemeBinding Light=woodlight.jpg, Dark=wooddark.jpg}" Aspect="AspectFill" />
 
-        <Frame BackgroundColor="Beige"
-               CornerRadius="1"
-               Padding="20"
-               AbsoluteLayout.LayoutBounds="0.5, 0.5, 0.85, 0.8"
-               AbsoluteLayout.LayoutFlags="All">
+        <!-- místo tlačítka Zpět jen odsazení pod stavovou lištou (zpět = systémové tlačítko) -->
+        <BoxView Grid.Row="0" HeightRequest="0" Color="Transparent" InputTransparent="True" Margin="{DynamicResource TopBarMargin}" />
+
+        <Frame Grid.Row="1" Style="{StaticResource Listek}">
             <ScrollView>
                 <VerticalStackLayout Spacing="6">
-                    <Label x:Name="TitleLabel" Text="Statistiky" FontFamily="Caveat" FontSize="40"
-                           TextColor="Black" HorizontalOptions="Center" HorizontalTextAlignment="Center" />
-                    <ActivityIndicator x:Name="Busy" IsRunning="False" IsVisible="False" Color="Black" />
+                    <Label x:Name="TitleLabel" Text="Statistiky" Style="{StaticResource Title}" />
+                    <ActivityIndicator x:Name="Busy" IsRunning="False" IsVisible="False" Color="{StaticResource Pencil}" />
 
                     <Grid x:Name="SummaryGrid" ColumnDefinitions="Auto, *" ColumnSpacing="12" RowSpacing="6" />
 
-                    <Label Text="Poslední tahy" FontFamily="Caveat" FontSize="30" TextColor="Black" Margin="0,16,0,0" />
+                    <Label Text="Poslední tahy" Style="{StaticResource Heading}" Margin="0,16,0,0" />
                     <VerticalStackLayout x:Name="HistoryList" Spacing="4" />
                 </VerticalStackLayout>
             </ScrollView>
         </Frame>
-        <Button Text="Zpět"
-                AbsoluteLayout.LayoutBounds="0,0"
-                AbsoluteLayout.LayoutFlags="PositionProportional"
-                Margin="10"
-                BorderColor="WhiteSmoke"
-                TextColor="WhiteSmoke"
-                Clicked="OnZpetClicked" />
-    </AbsoluteLayout>
+    </Grid>
 </ContentPage>

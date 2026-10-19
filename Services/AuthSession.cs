@@ -26,6 +26,7 @@ namespace Dezolati.Services
         public static void SignOut()
         {
             Client?.SignOut();
+            UserSession.Reset();
         }
     }
 }

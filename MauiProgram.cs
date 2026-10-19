@@ -5,6 +5,10 @@ using Firebase.Auth;
 using Firebase.Auth.Providers;
 using Firebase.Auth.Repository;
 using Microsoft.Extensions.Logging;
+#if ANDROID
+using Plugin.LocalNotification;
+using Plugin.LocalNotification.AndroidOption;
+#endif
 
 namespace Dezolati
 {
@@ -24,6 +28,44 @@ namespace Dezolati
 
 #if DEBUG
             builder.Logging.AddDebug();
+#endif
+
+#if ANDROID
+            // připomínky: každý druh pití má svou kategorii s tlačítky „+1 …“ a „Dneska končím“
+            builder.UseLocalNotification(config =>
+            {
+                foreach (var (kind, label) in new[]
+                         {
+                             (Reminders.Kind.Pivo, "+1 pivo"),
+                             (Reminders.Kind.Vino, "+1 víno"),
+                             (Reminders.Kind.Panak, "+1 panák")
+                         })
+                {
+                    config.AddCategory(new NotificationCategory(Reminders.CategoryFor(kind))
+                    {
+                        ActionList = new HashSet<NotificationAction>
+                        {
+                            new(Reminders.ActionPlusOne)
+                            {
+                                Title = label,
+                                Android = { LaunchAppWhenTapped = false }
+                            },
+                            new(Reminders.ActionDone)
+                            {
+                                Title = "Dneska končím",
+                                Android = { LaunchAppWhenTapped = false }
+                            }
+                        }
+                    });
+                }
+            });
+
+            // tlačítka v notifikaci (funguje i bez otevřené appky)
+            LocalNotificationCenter.Current.NotificationActionTapped += e =>
+            {
+                if (e.IsDismissed || e.IsTapped) return;   // ťuknutí na samotnou notifikaci jen otevře appku
+                _ = Reminders.HandleActionAsync(e.ActionId, e.Request?.ReturningData);
+            };
 #endif
 
             // Firebase Auth – API key je veřejný identifikátor projektu, ne tajemství.
