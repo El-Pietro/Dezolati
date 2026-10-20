@@ -32,6 +32,15 @@ public partial class Hospody : ContentPage
         Outline = new Pen(new MColor(59, 35, 20), 2)
     };
 
+    // restaurace tlumeněji, ať hospody vyčnívají
+    private static readonly IStyle RestaurantSymbol = new SymbolStyle
+    {
+        SymbolType = SymbolType.Ellipse,
+        SymbolScale = 0.4,
+        Fill = new MBrush(new MColor(222, 196, 150)),
+        Outline = new Pen(new MColor(107, 90, 58), 2)
+    };
+
     private static readonly IStyle PubLabel = new LabelStyle
     {
         LabelColumn = "name",
@@ -66,6 +75,12 @@ public partial class Hospody : ContentPage
         base.OnAppearing();
         if (mapControl == null) CreateMap();
         if (!loaded) await LoadPubsAsync();
+        else
+        {
+            // návrat z profilu hospody – mohl se změnit název
+            ShowPubs(await PubCatalog.GetAsync());
+            if (selected != null && PubCard.IsVisible) CardName.Text = PubService.NameOf(selected);
+        }
     }
 
     private void CreateMap()
@@ -82,7 +97,13 @@ public partial class Hospody : ContentPage
         var (x, y) = SphericalMercator.FromLonLat(16.6068, 49.1951);
         map.Home = n => n.CenterOnAndZoomTo(new MPoint(x, y), ResolutionOverview);
 
-        mapControl = new MapControl { Map = map };
+        mapControl = new MapControl
+        {
+            Map = map,
+            // sever drží nahoře: otáčet se začne až po 35° kroucení, pod 12° se vrátí zpátky
+            UnSnapRotationDegrees = 35,
+            ReSnapRotationDegrees = 12
+        };
         mapControl.Info += OnMapInfo;
         MapHost.Content = mapControl;
     }
@@ -99,6 +120,7 @@ public partial class Hospody : ContentPage
         try
         {
             var pubs = await PubCatalog.GetAsync(force);
+            await PubService.LoadRenamedAsync();   // opravené názvy (čtení jen za přejmenované)
             ShowPubs(pubs);
             loaded = true;
             LoadingBox.IsVisible = false;
@@ -123,8 +145,8 @@ public partial class Hospody : ContentPage
             var (x, y) = SphericalMercator.FromLonLat(p.Lon, p.Lat);
             var f = new PointFeature(x, y);
             f["id"] = p.Id;
-            f["name"] = p.Name;
-            f.Styles.Add(PubSymbol);
+            f["name"] = PubService.NameOf(p);
+            f.Styles.Add(p.Kind == "restaurant" ? RestaurantSymbol : PubSymbol);
             f.Styles.Add(PubLabel);
             features.Add(f);
         }
@@ -143,7 +165,7 @@ public partial class Hospody : ContentPage
     private void ShowCard(PubInfo pub, double? distanceMeters)
     {
         selected = pub;
-        CardName.Text = pub.Name;
+        CardName.Text = PubService.NameOf(pub);
         var info = pub.KindText;
         if (!string.IsNullOrEmpty(pub.Address)) info += " · " + pub.Address;
         if (distanceMeters is double d) info += $" · {Math.Round(d)} m";

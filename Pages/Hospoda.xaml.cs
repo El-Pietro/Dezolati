@@ -49,10 +49,12 @@ public partial class Hospoda : ContentPage, IQueryAttributable
                 return;
             }
 
-            NameLabel.Text = pub.Name;
+            await PubService.LoadRenamedAsync();
+            NameLabel.Text = PubService.NameOf(pub);
             InfoLabel.Text = string.IsNullOrEmpty(pub.Address) ? pub.KindText : $"{pub.KindText} · {pub.Address}";
 
             var osm = new List<string>();
+            if (PubService.NameOf(pub) != pub.Name) osm.Add($"název: {pub.Name}");
             if (!string.IsNullOrEmpty(pub.Brewery)) osm.Add($"pivovar: {pub.Brewery}");
             if (!string.IsNullOrEmpty(pub.Hours)) osm.Add($"otvíračka: {pub.Hours}");
             OsmLabel.Text = "Podle OpenStreetMap – " + string.Join(", ", osm);
@@ -60,6 +62,7 @@ public partial class Hospoda : ContentPage, IQueryAttributable
 
             RenderProfile(); // prázdné, než dorazí Firestore
             profile = await PubService.GetProfileAsync(pub.Id) ?? new PubProfile();
+            NameLabel.Text = PubService.NameOf(pub);
             RenderProfile();
         }
         catch (Exception ex)
@@ -95,6 +98,7 @@ public partial class Hospoda : ContentPage, IQueryAttributable
     private void OnEditClicked(object sender, EventArgs e)
     {
         if (pub == null) return;
+        NameEntry.Text = PubService.NameOf(pub);
         TapsEntry.Text = profile.Taps;
         PricesEntry.Text = profile.Prices;
         // když nikdo nic nezadal, nabídnout otvíračku z OpenStreetMap
@@ -111,6 +115,7 @@ public partial class Hospoda : ContentPage, IQueryAttributable
 
         var updated = new PubProfile
         {
+            DisplayName = NameEntry.Text,
             Taps = TapsEntry.Text,
             Prices = PricesEntry.Text,
             Hours = HoursEntry.Text,
@@ -122,6 +127,7 @@ public partial class Hospoda : ContentPage, IQueryAttributable
             SaveButton.IsEnabled = false;
             await PubService.SaveAsync(pub, updated);
             profile = await PubService.GetProfileAsync(pub.Id) ?? updated;
+            NameLabel.Text = PubService.NameOf(pub);
             RenderProfile();
             HistoryList.Clear();
             HistoryButton.IsVisible = true;
@@ -159,6 +165,7 @@ public partial class Hospoda : ContentPage, IQueryAttributable
                 {
                     $"{ed.At?.ToString("d. M. yyyy H:mm", Cs) ?? "?"} – {ed.ByNick ?? "?"}"
                 };
+                if (!string.IsNullOrWhiteSpace(ed.DisplayName)) lines.Add($"název: {ed.DisplayName}");
                 if (!string.IsNullOrWhiteSpace(ed.Taps)) lines.Add($"točí: {ed.Taps}");
                 if (!string.IsNullOrWhiteSpace(ed.Prices)) lines.Add($"ceny: {ed.Prices}");
                 if (!string.IsNullOrWhiteSpace(ed.Hours)) lines.Add($"otvíračka: {ed.Hours}");

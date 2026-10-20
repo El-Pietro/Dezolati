@@ -40,6 +40,8 @@
 
                     <!-- úprava -->
                     <VerticalStackLayout x:Name="EditBox" Spacing="2" Margin="0,10,0,0" IsVisible="False">
+                        <Label Text="Název:" Style="{StaticResource FieldLabel}" />
+                        <Entry x:Name="NameEntry" MaxLength="80" />
                         <Label Text="Co točí:" Style="{StaticResource FieldLabel}" />
                         <Editor x:Name="TapsEntry" Placeholder="Plzeň 12°, Kozel 11°…" AutoSize="TextChanges" MaxLength="300" />
                         <Label Text="Ceny:" Style="{StaticResource FieldLabel}" />

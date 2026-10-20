@@ -30,6 +30,9 @@ namespace Dezolati.Pages
             UserSession.DrinksChanged -= OnDrinksChanged;
             UserSession.DrinksChanged += OnDrinksChanged;
             await LoadData();
+
+            // nová verze na GitHubu? (max. jednou za 6 h, chyby potichu)
+            await UpdatePrompt.CheckAndOfferAsync(this);
         }
 
         protected override void OnDisappearing()

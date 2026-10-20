@@ -19,6 +19,7 @@ public partial class Settings : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
+        VersionLabel.Text = $"Dezoláti {AppUpdater.CurrentVersionText}";
         await LoadUserData();
     }
 
@@ -147,6 +148,27 @@ public partial class Settings : ContentPage
         catch (Exception ex)
         {
             await Listek.AlertAsync(this, "Chyba", $"Uložení se nepovedlo: {ex.Message}");
+        }
+    }
+
+    private async void OnCheckUpdateClicked(object sender, EventArgs e)
+    {
+        try
+        {
+            UpdateButton.IsEnabled = false;
+            var release = await AppUpdater.CheckAsync(manual: true);
+            if (release == null)
+                await Listek.AlertAsync(this, "Nic nového", $"Verze {AppUpdater.CurrentVersionText} je nejnovější.");
+            else
+                await UpdatePrompt.OfferAsync(this, release);
+        }
+        catch (Exception ex)
+        {
+            await Listek.AlertAsync(this, "Chyba", $"Aktualizaci se nepodařilo zjistit: {ex.Message}");
+        }
+        finally
+        {
+            UpdateButton.IsEnabled = true;
         }
     }
 

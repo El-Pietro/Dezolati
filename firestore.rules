@@ -65,10 +65,12 @@ service cloud.firestore {
       allow read: if signedIn();
       allow create, update: if signedIn()
                             && request.resource.data.keys().hasOnly(
-                                 ['PubId', 'Name', 'Taps', 'Prices', 'Hours', 'Note',
+                                 ['PubId', 'Name', 'DisplayName', 'Renamed', 'Taps', 'Prices', 'Hours', 'Note',
                                   'UpdatedAt', 'UpdatedBy', 'UpdatedByNick', 'EditId'])
                             && request.resource.data.PubId == pubId
                             && request.resource.data.UpdatedBy == me()
+                            && textOk(request.resource.data, 'DisplayName')
+                            && (!('Renamed' in request.resource.data) || request.resource.data.Renamed is bool)
                             && textOk(request.resource.data, 'Taps')
                             && textOk(request.resource.data, 'Prices')
                             && textOk(request.resource.data, 'Hours')
@@ -83,7 +85,7 @@ service cloud.firestore {
       allow read: if signedIn();
       allow create: if signedIn()
                     && request.resource.data.keys().hasOnly(
-                         ['PubId', 'By', 'ByNick', 'At', 'Taps', 'Prices', 'Hours', 'Note'])
+                         ['PubId', 'By', 'ByNick', 'At', 'DisplayName', 'Taps', 'Prices', 'Hours', 'Note'])
                     && request.resource.data.By == me()
                     && request.resource.data.At is timestamp;
       allow update, delete: if false;

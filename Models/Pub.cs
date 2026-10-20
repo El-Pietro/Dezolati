@@ -18,6 +18,7 @@ namespace Dezolati.Models
         {
             "bar" => "bar",
             "biergarten" => "pivní zahrádka",
+            "restaurant" => "restaurace",
             _ => "hospoda"
         };
     }
@@ -25,6 +26,8 @@ namespace Dezolati.Models
     /// <summary>Profil hospody, který vyplňují uživatelé (Firestore Pubs/{id}).</summary>
     public class PubProfile
     {
+        /// <summary>Opravený název (null/prázdné = platí název z OpenStreetMap).</summary>
+        public string? DisplayName { get; set; }
         public string? Taps { get; set; }
         public string? Prices { get; set; }
         public string? Hours { get; set; }
@@ -40,6 +43,7 @@ namespace Dezolati.Models
     /// <summary>Jedna úprava profilu (Firestore PubEdits/{id}) – historie proti trollům.</summary>
     public class PubEdit
     {
+        public string? DisplayName { get; set; }
         public DateTime? At { get; set; }
         public string? ByNick { get; set; }
         public string? Taps { get; set; }

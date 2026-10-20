@@ -17,6 +17,79 @@ namespace Dezolati.Controls
         private static readonly Color Paper = Color.FromArgb("#F5F5DC");   // stejná "Beige" jako lístky
         private static readonly Color Ink = Color.FromArgb("#6B3E1E");
 
+        /// <summary>Lístek „pracuju…“ bez tlačítek (stahování apod.). Zavře se přes Dispose.</summary>
+        public sealed class BusyNote : IDisposable
+        {
+            private readonly Label _text;
+            private readonly Action _close;
+            private bool _closed;
+
+            internal BusyNote(Label text, Action close)
+            {
+                _text = text;
+                _close = close;
+            }
+
+            public void SetText(string text) =>
+                MainThread.BeginInvokeOnMainThread(() => _text.Text = text);
+
+            public void Dispose()
+            {
+                if (_closed) return;
+                _closed = true;
+                MainThread.BeginInvokeOnMainThread(_close);
+            }
+        }
+
+        public static BusyNote? ShowBusy(Page? page, string title, string text)
+        {
+            var host = page as ContentPage ?? Shell.Current?.CurrentPage as ContentPage;
+            if (host?.Content is not View original) return null;
+
+            var titleLabel = new Label { Text = title, HorizontalOptions = LayoutOptions.Fill, HorizontalTextAlignment = TextAlignment.Center };
+            titleLabel.SetDynamicResource(Label.FontSizeProperty, "FontHeading");
+            var textLabel = new Label { Text = text, HorizontalOptions = LayoutOptions.Fill, HorizontalTextAlignment = TextAlignment.Center };
+            textLabel.SetDynamicResource(Label.FontSizeProperty, "FontBody");
+
+            var card = new Border
+            {
+                BackgroundColor = Paper,
+                Stroke = Ink.WithAlpha(0.35f),
+                StrokeThickness = 1,
+                StrokeShape = new RoundRectangle { CornerRadius = 2 },
+                Padding = new Thickness(22, 18),
+                Margin = new Thickness(32),
+                MaximumWidthRequest = 420,
+                HorizontalOptions = LayoutOptions.Center,
+                VerticalOptions = LayoutOptions.Center,
+                Rotation = -1.5,
+                Shadow = new Shadow { Brush = Colors.Black, Offset = new Point(4, 6), Radius = 12, Opacity = 0.6f },
+                Content = new VerticalStackLayout
+                {
+                    Spacing = 10,
+                    Children = { titleLabel, new ActivityIndicator { IsRunning = true, Color = Ink }, textLabel }
+                }
+            };
+
+            // ztmavení zároveň blokuje ťukání do stránky pod ním
+            var dim = new BoxView { Color = Colors.Black, Opacity = 0.55 };
+            dim.GestureRecognizers.Add(new TapGestureRecognizer());
+
+            var root = new Grid();
+            host.Content = null;
+            root.Add(original);
+            root.Add(dim);
+            root.Add(card);
+            host.Content = root;
+
+            return new BusyNote(textLabel, () =>
+            {
+                host.Content = null;
+                root.Clear();
+                host.Content = original;
+            });
+        }
+
         /// <summary>Hláška s jedním tlačítkem.</summary>
         public static Task AlertAsync(Page? page, string title, string? message, string ok = "OK") =>
             ShowAsync(page, title, message, (ok, PencilVariant.Primary));

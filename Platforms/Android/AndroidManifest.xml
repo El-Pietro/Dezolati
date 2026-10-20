@@ -12,6 +12,9 @@
 	<uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" android:maxSdkVersion="32" />
 	<uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 
+	<!-- aktualizace z GitHubu: appka spustí instalátor se staženým APK -->
+	<uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
 	<!-- mapa hospod: „Kde jsem?“ (jen když je appka otevřená) -->
 	<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 	<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />

@@ -14,7 +14,7 @@ namespace Dezolati.Services
         /// <summary>Oblast podle ISO 3166-2 (CZ-64 = Jihomoravský kraj).</summary>
         public const string Area = "CZ-64";
 
-        private const string FileName = "hospody_cz64.json";
+        private const string FileName = "hospody_cz64_v2.json"; // v2 = i restaurace
         private static readonly TimeSpan MaxAge = TimeSpan.FromDays(30);
 
         private static readonly string[] Endpoints =
@@ -166,7 +166,7 @@ namespace Dezolati.Services
             var query =
                 $"[out:csv({Columns})][timeout:90];" +
                 $"area[\"ISO3166-2\"=\"{Area}\"]->.k;" +
-                "nwr[\"amenity\"~\"^(pub|bar|biergarten)$\"](area.k);" +
+                "nwr[\"amenity\"~\"^(pub|bar|biergarten|restaurant)$\"](area.k);" +
                 "out center;";
 
             var errors = new List<string>();

@@ -19,6 +19,7 @@ namespace Dezolati
         {
             base.OnResume();
             Services.UserSession.RaiseDrinksChanged();
+            _ = Controls.UpdatePrompt.ResumeIfPendingAsync(); // po povolení instalace v nastavení
         }
     }
 }
