@@ -12,7 +12,9 @@ namespace Dezolati.Models
         double Lon,
         string? Address,
         string? Brewery,
-        string? Hours)
+        string? Hours,
+        string? Website = null,
+        string? Phone = null)
     {
         public string KindText => Kind switch
         {
@@ -32,6 +34,10 @@ namespace Dezolati.Models
         public string? Prices { get; set; }
         public string? Hours { get; set; }
         public string? Note { get; set; }
+        /// <summary>Podnik je natrvalo zavřený (na mapě šedě).</summary>
+        public bool Closed { get; set; }
+        /// <summary>Kdo podnik přidal (jen u podniků, které v OSM chyběly).</summary>
+        public string? CreatedByNick { get; set; }
         public DateTime? UpdatedAt { get; set; }
         public string? UpdatedByNick { get; set; }
 
@@ -43,6 +49,9 @@ namespace Dezolati.Models
     /// <summary>Jedna úprava profilu (Firestore PubEdits/{id}) – historie proti trollům.</summary>
     public class PubEdit
     {
+        /// <summary>null = úprava; "created" / "deleted" = přidání / smazání podniku.</summary>
+        public string? Action { get; set; }
+        public bool Closed { get; set; }
         public string? DisplayName { get; set; }
         public DateTime? At { get; set; }
         public string? ByNick { get; set; }

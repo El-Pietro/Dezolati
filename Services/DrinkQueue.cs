@@ -12,7 +12,10 @@ namespace Dezolati.Services
         int Vino,
         int Panaky,
         bool Correction,        // škrtnutí → neposouvá poslední drink
-        string? Name);
+        string? Name,
+        string? PubId = null,   // ve které hospodě (když je zapnuté poznávání hospody)
+        string? PubName = null,
+        bool SharePub = false); // hlásit kámošům (oznámení + „teď sedí“ v profilu)
 
     /// <summary>
     /// Fronta zápisů v telefonu. Každý zápis jde nejdřív sem a hned se zkusí odeslat.
@@ -122,13 +125,17 @@ namespace Dezolati.Services
                     {
                         // už to na serveru je (odpověď se minule ztratila) → hotovo
                     }
-                    catch (Exception ex) when (Net.IsNetworkError(ex))
+                    catch (FirestoreException ex) when (!Net.IsNetworkError(ex))
                     {
-                        return false;
+                        // databáze zápis odmítla (pravidla, špatná data) → opakování nepomůže, zahodit
+                        System.Diagnostics.Debug.WriteLine($"Zápis {item.Id} zahozen: {ex.Message}");
                     }
                     catch (Exception ex)
                     {
-                        System.Diagnostics.Debug.WriteLine($"Zápis {item.Id} zahozen: {ex.Message}");
+                        // výpadek sítě nebo cokoli neznámého → nechat ve frontě, zkusí se příště
+                        // (dřív se neznámá chyba = zahození → první pivo po ztrátě signálu zmizelo)
+                        System.Diagnostics.Debug.WriteLine($"Zápis {item.Id} čeká: {ex.Message}");
+                        return false;
                     }
 
                     Remove(uid, item.Id);
@@ -160,7 +167,10 @@ namespace Dezolati.Services
                     ["DrinkAt"] = d.At,
                     ["Date"] = key,
                     ["Day"] = iso,
-                    ["Correction"] = d.Correction
+                    ["Correction"] = d.Correction,
+                    ["PubId"] = d.PubId,       // kde se pilo (statistiky)
+                    ["PubName"] = d.PubName,
+                    ["SharePub"] = d.SharePub  // Cloud Function pošle kámošům „sedí v hospodě“ jen při true
                 }, mustNotExist: true),
 
                 // 2) denní součet – atomicky přičíst (u škrtnutí odečíst)
@@ -183,10 +193,21 @@ namespace Dezolati.Services
             };
 
             // 3) poslední drink kvůli 3h pauze (škrtnutí ho neposouvá)
+            //    + hospoda pro kámoše („teď sedí v …“) – jen když ji hlásí, jinak se smaže
             if (!d.Correction)
+            {
+                var shared = d.SharePub && d.PubId != null;
                 writes.Add(FirestoreRest.SetWrite($"Users/{uid}",
-                    new() { ["LastDrinkAt"] = d.At, ["LastDrinkDay"] = key },
-                    mask: new[] { "LastDrinkAt", "LastDrinkDay" }));
+                    new()
+                    {
+                        ["LastDrinkAt"] = d.At,
+                        ["LastDrinkDay"] = key,
+                        ["CurrentPubId"] = shared ? d.PubId : null,
+                        ["CurrentPubName"] = shared ? d.PubName : null,
+                        ["CurrentPubAt"] = shared ? d.At : null
+                    },
+                    mask: new[] { "LastDrinkAt", "LastDrinkDay", "CurrentPubId", "CurrentPubName", "CurrentPubAt" }));
+            }
 
             return writes;
         }

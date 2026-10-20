@@ -78,6 +78,16 @@
                 <Setter Property="MinimumHeightRequest" Value="44" />
             </Style>
 
+            <!-- víceřádkové pole (úprava hospody) – stejně jako Entry, jinak v tmavém režimu bílé písmo na papíře -->
+            <Style TargetType="Editor">
+                <Setter Property="FontFamily" Value="Caveat" />
+                <Setter Property="FontSize" Value="{DynamicResource FontBody}" />
+                <Setter Property="TextColor" Value="{StaticResource Ink}" />
+                <Setter Property="PlaceholderColor" Value="#9A8F78" />
+                <Setter Property="BackgroundColor" Value="Transparent" />
+                <Setter Property="MinimumHeightRequest" Value="44" />
+            </Style>
+
             <Style TargetType="Slider">
                 <Setter Property="MinimumTrackColor" Value="{StaticResource Pencil}" />
                 <Setter Property="MaximumTrackColor" Value="{StaticResource PencilFaint}" />

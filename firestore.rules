@@ -1,0 +1,128 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function me() { return request.auth.uid; }
+
+    // Profily: číst může každý přihlášený (hledání kámošů, jejich hospodský den), zapisovat jen svůj.
+    match /Users/{uid} {
+      allow read: if signedIn();
+      allow write: if signedIn() && me() == uid;
+    }
+
+    // Jednotlivé zápisy (log): jen vlastní, jen vytvořit.
+    match /Drinks/{id} {
+      allow read: if signedIn() && resource.data.UserId == me();
+      allow create: if signedIn() && request.resource.data.UserId == me();
+    }
+
+    // Denní součty: číst může každý přihlášený (statistiky kámošů), zapisovat jen do svých.
+    match /DailyDrinks/{id} {
+      allow read: if signedIn();
+      allow create, update: if signedIn()
+                            && request.resource.data.UserId == me()
+                            && id.matches(me() + '_.*');
+      allow delete: if signedIn() && resource.data.UserId == me();
+    }
+
+    // Přátelství: UserId = žadatel, FriendId = adresát, Members = [UserId, FriendId].
+    match /Friends/{id} {
+      function isMember(data) {
+        return me() in data.get('Members', []) || data.UserId == me() || data.FriendId == me();
+      }
+      function membersOk(data) {
+        return data.Members == [data.UserId, data.FriendId];
+      }
+
+      allow read: if signedIn() && isMember(resource.data);
+
+      // žádost zakládá žadatel, vždy jako Pending
+      allow create: if signedIn()
+                    && request.resource.data.UserId == me()
+                    && request.resource.data.Status == 'Pending'
+                    && membersOk(request.resource.data);
+
+      // oba můžou upravovat (přezdívky, migrace), ale nikdo nemění účastníky;
+      // stav (přijetí) mění jen adresát
+      allow update: if signedIn()
+                    && isMember(resource.data)
+                    && request.resource.data.UserId == resource.data.UserId
+                    && request.resource.data.FriendId == resource.data.FriendId
+                    && membersOk(request.resource.data)
+                    && (request.resource.data.Status == resource.data.Status
+                        || resource.data.FriendId == me());
+
+      // odmítnutí / zrušení = smazání, může kterýkoli z dvojice
+      allow delete: if signedIn() && isMember(resource.data);
+    }
+
+    // Profily hospod. Id = OSM id (n123, w456) nebo vlastní podnik (c_…), který v OSM chyběl.
+    // Upravit může každý přihlášený, ale jen spolu se záznamem v historii (PubEdits/{EditId} ve stejné dávce).
+    match /Pubs/{pubId} {
+      function d() { return request.resource.data; }
+      function textOk(f) { return !(f in d()) || (d()[f] is string && d()[f].size() <= 300); }
+      function boolOk(f) { return !(f in d()) || d()[f] is bool; }
+      function isCustomId() { return pubId.matches('c_[a-f0-9]{16}'); }
+      function editOk() {
+        return getAfter(/databases/$(database)/documents/PubEdits/$(d().EditId)).data.PubId == pubId
+            && getAfter(/databases/$(database)/documents/PubEdits/$(d().EditId)).data.By == me();
+      }
+      function common() {
+        return signedIn()
+            && d().keys().hasOnly(
+                 ['PubId', 'Name', 'DisplayName', 'Renamed', 'Closed', 'Flagged', 'Taps', 'Prices', 'Hours', 'Note',
+                  'Custom', 'Kind', 'Lat', 'Lon', 'CreatedBy', 'CreatedByNick',
+                  'UpdatedAt', 'UpdatedBy', 'UpdatedByNick', 'EditId'])
+            && d().PubId == pubId
+            && d().UpdatedBy == me()
+            && textOk('DisplayName') && textOk('Taps') && textOk('Prices') && textOk('Hours') && textOk('Note')
+            && boolOk('Renamed') && boolOk('Closed') && boolOk('Flagged')
+            && editOk();
+      }
+
+      allow read: if signedIn();
+
+      // nový: buď profil podniku z OSM, nebo vlastní podnik s polohou a autorem
+      allow create: if common()
+                    && (isCustomId()
+                        ? (d().Custom == true && d().CreatedBy == me()
+                           && d().Name is string && d().Name.size() > 0 && d().Name.size() <= 80
+                           && d().Kind in ['pub', 'bar', 'restaurant', 'biergarten']
+                           && d().Lat is number && d().Lon is number)
+                        : !('Custom' in d()) || d().Custom == false);
+
+      // úprava: nikdo nemění, kdo podnik přidal, kde je a jestli je vlastní
+      allow update: if common()
+                    && d().get('Custom', false) == resource.data.get('Custom', false)
+                    && d().get('CreatedBy', '') == resource.data.get('CreatedBy', '')
+                    && d().get('Lat', 0) == resource.data.get('Lat', 0)
+                    && d().get('Lon', 0) == resource.data.get('Lon', 0);
+
+      // smazat jde jen vlastní podnik a jen jeho autor (ostatní ho můžou označit jako zavřený)
+      allow delete: if signedIn() && resource.data.get('Custom', false) == true && resource.data.CreatedBy == me();
+    }
+
+    // Tokeny telefonů pro oznámení (FCM). Číst je smí jen server (Cloud Functions obchází pravidla).
+    match /PushTokens/{id} {
+      allow read: if false;
+      allow create, update: if signedIn()
+                            && request.resource.data.Uid == me()
+                            && request.resource.data.keys().hasOnly(['Uid', 'Token', 'Platform', 'UpdatedAt']);
+      allow delete: if signedIn() && resource.data.Uid == me();
+    }
+
+    // PubPresence (kdo už dnes v které hospodě oznámil, že sedí) zapisuje jen server – z appky nic.
+
+    // Historie úprav: jen přidávat, nikdo nemaže ani nepřepisuje.
+    match /PubEdits/{editId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+                    && request.resource.data.keys().hasOnly(
+                         ['PubId', 'By', 'ByNick', 'At', 'Action', 'Closed', 'DisplayName', 'Taps', 'Prices', 'Hours', 'Note'])
+                    && request.resource.data.By == me()
+                    && request.resource.data.At is timestamp;
+      allow update, delete: if false;
+    }
+  }
+}

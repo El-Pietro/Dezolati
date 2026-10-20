@@ -45,7 +45,7 @@ namespace Dezolati.Controls
             VerticalTextAlignment = TextAlignment.Center,
             LineBreakMode = LineBreakMode.NoWrap,
             MaxLines = 1,
-            Padding = new Thickness(4, 0, 14, 0),  // Caveat přesahuje svůj box (Android měří úzce) – ať se konec neuřízne
+            Padding = new Thickness(0),          // přesah písma řeší šířka štítku navíc (viz FitText)
             Margin = new Thickness(12, 0)
         };
 
@@ -60,7 +60,7 @@ namespace Dezolati.Controls
             propertyChanged: (b, _, n) =>
             {
                 var pb = (PencilButton)b;
-                pb._label.Text = n as string;
+                pb._label.Text = n as string ?? "";
                 pb.FitText();
             });
 
@@ -124,6 +124,7 @@ namespace Dezolati.Controls
             GestureRecognizers.Add(tap);
 
             SizeChanged += (_, _) => FitText();
+            _label.HandlerChanged += (_, _) => { _fitKey = null; FitText(); };
             ApplyVariant();
         }
 
@@ -153,28 +154,47 @@ namespace Dezolati.Controls
             FitText();
         }
 
-        /// <summary>Zmenší písmo tak, aby se text vešel do šířky tlačítka.</summary>
+        // Caveat kreslí poslední písmeno (čárky, háčky) až o 0,2 em za šířku, kterou o sobě hlásí,
+        // a Android TextView ořízne text přesně na tu šířku (padding ani mezery na konci nepomáhají).
+        // Proto má štítek pevnou šířku = změřený text + kus navíc a text je v něm na středu.
+        private const double OverhangEm = 0.5;   // 0,25 em na každou stranu
+
+        private string? _fitKey;
+
+        /// <summary>Nastaví písmo (zmenší, když se nevejde) a šířku štítku i s rezervou na přesah.</summary>
         private void FitText()
         {
             var max = FontSize > 0 ? FontSize : 24;
-            _label.FontSize = max;
-
-            // Outline se přizpůsobuje textu, šířku nemá danou
-            if (Variant == PencilVariant.Outline || Width <= 0 || string.IsNullOrEmpty(_label.Text))
+            var text = _label.Text ?? "";
+            if (text.Length == 0 || _label.Handler == null)
+            {
+                _label.FontSize = max;
                 return;
+            }
 
-            var available = Width - _label.Margin.HorizontalThickness - 4;
-            if (available <= 0) return;
+            var outline = Variant == PencilVariant.Outline;
+            // Outline se přizpůsobuje textu; ostatní mají šířku danou zvenku
+            var available = outline ? double.PositiveInfinity : Width - _label.Margin.HorizontalThickness;
+            if (!outline && Width <= 0) return;
 
+            var key = $"{text}|{max}|{(outline ? -1 : Math.Round(available))}";
+            if (key == _fitKey) return;   // nic se nezměnilo → neměřit znovu (SizeChanged chodí často)
+
+            _label.WidthRequest = -1;
             var size = max;
-            while (size > MinFontSize)
+            double width;
+            while (true)
             {
                 _label.FontSize = size;
                 var desired = ((IView)_label).Measure(double.PositiveInfinity, double.PositiveInfinity);
-                if (desired.Width <= available) break;
+                if (desired.Width <= 0) return;   // ještě nejde měřit, zkusí se při dalším SizeChanged
+                width = desired.Width + size * OverhangEm;
+                if (width <= available || size <= MinFontSize) break;
                 size -= 1;
             }
-            _label.FontSize = size;
+
+            _label.WidthRequest = Math.Min(width, available);
+            _fitKey = key;
         }
 
         private async void OnTapped(object? sender, TappedEventArgs e)

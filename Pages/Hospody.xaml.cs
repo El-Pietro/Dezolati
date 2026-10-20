@@ -41,6 +41,24 @@ public partial class Hospody : ContentPage
         Outline = new Pen(new MColor(107, 90, 58), 2)
     };
 
+    // zavřené podniky šedě a menší
+    private static readonly IStyle ClosedSymbol = new SymbolStyle
+    {
+        SymbolType = SymbolType.Ellipse,
+        SymbolScale = 0.35,
+        Fill = new MBrush(new MColor(170, 170, 170)),
+        Outline = new Pen(new MColor(110, 110, 110), 2)
+    };
+
+    // podniky přidané uživateli: hospodská barva, ale hranatě
+    private static readonly IStyle CustomSymbol = new SymbolStyle
+    {
+        SymbolType = SymbolType.Rectangle,
+        SymbolScale = 0.45,
+        Fill = new MBrush(new MColor(194, 122, 18)),
+        Outline = new Pen(new MColor(59, 35, 20), 2)
+    };
+
     private static readonly IStyle PubLabel = new LabelStyle
     {
         LabelColumn = "name",
@@ -64,6 +82,7 @@ public partial class Hospody : ContentPage
     private MemoryLayer? meLayer;
     private PubInfo? selected;
     private bool loaded;
+    private string addKind = "pub";
 
     public Hospody()
     {
@@ -77,9 +96,13 @@ public partial class Hospody : ContentPage
         if (!loaded) await LoadPubsAsync();
         else
         {
-            // návrat z profilu hospody – mohl se změnit název
+            // návrat z profilu hospody – mohl se změnit název, zavřít nebo smazat
             ShowPubs(await PubCatalog.GetAsync());
-            if (selected != null && PubCard.IsVisible) CardName.Text = PubService.NameOf(selected);
+            if (selected != null && PubCard.IsVisible)
+            {
+                if (PubService.Find(selected.Id) == null) HideCard();
+                else ShowCard(selected, null);
+            }
         }
     }
 
@@ -120,7 +143,7 @@ public partial class Hospody : ContentPage
         try
         {
             var pubs = await PubCatalog.GetAsync(force);
-            await PubService.LoadRenamedAsync();   // opravené názvy (čtení jen za přejmenované)
+            await PubService.LoadOverlayAsync();   // opravené názvy, zavřené a přidané podniky
             ShowPubs(pubs);
             loaded = true;
             LoadingBox.IsVisible = false;
@@ -140,13 +163,17 @@ public partial class Hospody : ContentPage
         if (pubLayer == null) return;
 
         var features = new List<IFeature>(pubs.Count);
-        foreach (var p in pubs)
+        foreach (var p in PubService.AllPubs(pubs))
         {
             var (x, y) = SphericalMercator.FromLonLat(p.Lon, p.Lat);
             var f = new PointFeature(x, y);
             f["id"] = p.Id;
-            f["name"] = PubService.NameOf(p);
-            f.Styles.Add(p.Kind == "restaurant" ? RestaurantSymbol : PubSymbol);
+            var closed = PubService.IsClosed(p);
+            f["name"] = closed ? PubService.NameOf(p) + " (zavřeno)" : PubService.NameOf(p);
+            f.Styles.Add(closed ? ClosedSymbol
+                : PubService.IsCustom(p) ? CustomSymbol
+                : p.Kind == "restaurant" ? RestaurantSymbol
+                : PubSymbol);
             f.Styles.Add(PubLabel);
             features.Add(f);
         }
@@ -157,7 +184,8 @@ public partial class Hospody : ContentPage
     private void OnMapInfo(object? sender, MapInfoEventArgs e)
     {
         if (e.MapInfo?.Feature?["id"] is not string id) return;
-        var pub = PubCatalog.Find(id);
+        if (AddCard.IsVisible) return;   // při přidávání se ťuká jen na mapu
+        var pub = PubService.Find(id);
         if (pub == null) return;
         MainThread.BeginInvokeOnMainThread(() => ShowCard(pub, null));
     }
@@ -166,7 +194,7 @@ public partial class Hospody : ContentPage
     {
         selected = pub;
         CardName.Text = PubService.NameOf(pub);
-        var info = pub.KindText;
+        var info = PubService.IsClosed(pub) ? "zavřeno · " + pub.KindText : pub.KindText;
         if (!string.IsNullOrEmpty(pub.Address)) info += " · " + pub.Address;
         if (distanceMeters is double d) info += $" · {Math.Round(d)} m";
         CardInfo.Text = info;
@@ -212,13 +240,93 @@ public partial class Hospody : ContentPage
             mapControl?.Map.Navigator.CenterOnAndZoomTo(new MPoint(x, y), ResolutionStreet);
 
             // sedíš v hospodě? (do 60 m)
-            var near = PubCatalog.Nearest(loc.Latitude, loc.Longitude, 60);
+            var near = AddCard.IsVisible ? null : PubService.Nearest(loc.Latitude, loc.Longitude, 60);
             if (near != null)
                 ShowCard(near, PubCatalog.DistanceMeters(loc.Latitude, loc.Longitude, near.Lat, near.Lon));
         }
         catch (Exception ex)
         {
             if (!silent) await Listek.AlertAsync(this, "Chyba", $"Poloha: {ex.Message}");
+        }
+    }
+
+    private void HideCard()
+    {
+        PubCard.IsVisible = false;
+        selected = null;
+    }
+
+    // ---------------- přidání podniku ----------------
+
+    private void OnAddClicked(object sender, EventArgs e)
+    {
+        if (!loaded) return;
+        HideCard();
+        AddNameEntry.Text = "";
+        SetKind("pub");
+        Crosshair.IsVisible = true;
+        AddCard.IsVisible = true;
+        AddButton.IsVisible = false;
+    }
+
+    private void CloseAdd()
+    {
+        AddCard.IsVisible = false;
+        Crosshair.IsVisible = false;
+        AddButton.IsVisible = true;
+        AddNameEntry.Unfocus();
+    }
+
+    private void OnAddCancelClicked(object sender, EventArgs e) => CloseAdd();
+
+    private void OnKindClicked(object sender, EventArgs e) =>
+        SetKind(((PencilButton)sender).CommandParameter as string ?? "pub");
+
+    private void SetKind(string kind)
+    {
+        addKind = kind;
+        foreach (var chip in new[] { KindPub, KindBar, KindRestaurant, KindGarden })
+        {
+            var on = chip.CommandParameter as string == kind;
+            chip.Variant = on ? PencilVariant.Primary : PencilVariant.Secondary;
+            chip.Opacity = on ? 1.0 : 0.45;
+        }
+    }
+
+    private async void OnAddSaveClicked(object sender, EventArgs e)
+    {
+        if (mapControl == null) return;
+        var name = AddNameEntry.Text?.Trim();
+        if (string.IsNullOrEmpty(name))
+        {
+            await Listek.AlertAsync(this, "Jak se jmenuje?", "Napiš název podniku.");
+            return;
+        }
+
+        var vp = mapControl.Map.Navigator.Viewport;
+        var (lon, lat) = SphericalMercator.ToLonLat(vp.CenterX, vp.CenterY);
+
+        // nepřidávat podruhé, co už v mapě je
+        var near = PubService.Nearest(lat, lon, 25);
+        if (near != null && !await Listek.ConfirmAsync(this, "Už tu něco je",
+                $"Do 25 m je „{PubService.NameOf(near)}“. Opravdu přidat nový podnik?", "Přidat"))
+            return;
+
+        try
+        {
+            AddSaveButton.IsEnabled = false;
+            var pub = await PubService.CreateAsync(name, addKind, lat, lon);
+            CloseAdd();
+            ShowPubs(await PubCatalog.GetAsync());
+            ShowCard(pub, null);
+        }
+        catch (Exception ex)
+        {
+            await Listek.AlertAsync(this, "Chyba", $"Podnik se nepodařilo přidat: {ex.Message}");
+        }
+        finally
+        {
+            AddSaveButton.IsEnabled = true;
         }
     }
 
@@ -240,10 +348,14 @@ public partial class Hospody : ContentPage
     protected override bool OnBackButtonPressed()
     {
         if (Listek.DismissActive()) return true;
+        if (AddCard.IsVisible)
+        {
+            CloseAdd(); // Zpět při přidávání = zrušit
+            return true;
+        }
         if (PubCard.IsVisible)
         {
-            PubCard.IsVisible = false; // nejdřív zavřít kartičku
-            selected = null;
+            HideCard(); // nejdřív zavřít kartičku
             return true;
         }
         Dispatcher.Dispatch(async () => await Shell.Current.GoToAsync("//MainPage"));

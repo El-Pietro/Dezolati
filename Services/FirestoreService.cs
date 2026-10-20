@@ -30,6 +30,24 @@ namespace Dezolati.Services
             return doc == null ? null : ToUser(doc);
         }
 
+        /// <summary>Nastavení oznámení v profilu (čte je Cloud Function).</summary>
+        public Task UpdateNotificationPrefs(string userId, bool notifyFriends, bool sharePub)
+        {
+            var fields = new Dictionary<string, object?>
+            {
+                ["NotifyFriends"] = notifyFriends,
+                ["SharePub"] = sharePub
+            };
+            if (!sharePub)
+            {
+                // přestal hlásit → kámoši už nemají vidět, kde sedí
+                fields["CurrentPubId"] = null;
+                fields["CurrentPubName"] = null;
+                fields["CurrentPubAt"] = null;
+            }
+            return FirestoreRest.PatchAsync($"Users/{userId}", fields);
+        }
+
         public Task UpdateUserData(string userId, UserModel user) =>
             FirestoreRest.PatchAsync($"Users/{userId}", new()
             {
@@ -84,16 +102,23 @@ namespace Dezolati.Services
         }
 
         /// <summary>Hospodský den jiného uživatele (podle jeho posledního drinku). 1 čtení.</summary>
-        public async Task<DateTime> GetCurrentPubDayOf(string userId)
+        public async Task<DateTime> GetCurrentPubDayOf(string userId) => (await GetDayAndPubOf(userId)).Day;
+
+        /// <summary>
+        /// Hospodský den + hospoda, kde dotyčný naposledy zapisoval (jen když ji hlásí). 1 čtení (u sebe 0).
+        /// </summary>
+        private async Task<(DateTime Day, string? PubName, DateTime? PubAt)> GetDayAndPubOf(string userId)
         {
             if (userId == AuthSession.Uid)
             {
                 await UserSession.EnsureReadyAsync();
-                return UserSession.CurrentPubDay;
+                var day = UserSession.CurrentPubDay;
+                return (day, PushService.LastPubName(userId, day), UserSession.LastDrinkAt);
             }
 
             var user = await FirestoreRest.GetAsync($"Users/{userId}");
-            return PubDay.Resolve(DateTime.Now, user?.Time("LastDrinkAt")?.ToLocalTime(), PubDay.Parse(user?.Str("LastDrinkDay")));
+            var friendDay = PubDay.Resolve(DateTime.Now, user?.Time("LastDrinkAt")?.ToLocalTime(), PubDay.Parse(user?.Str("LastDrinkDay")));
+            return (friendDay, user?.Str("CurrentPubName"), user?.Time("CurrentPubAt"));
         }
 
         /// <summary>
@@ -109,8 +134,14 @@ namespace Dezolati.Services
             var now = DateTime.UtcNow;
             var day = UserSession.CurrentPubDay;   // den se určí teď, ne až při odeslání
 
+            // hospoda podle polohy (jen při ručním zápisu a se zapnutým poznáváním hospody)
+            var (pubId, pubName) = fromReminder ? (null, null) : await PushService.PubHereAsync();
+
             DrinkQueue.Enqueue(userId, new PendingDrink(Guid.NewGuid().ToString("N"), now, day,
-                pivo, vino, panaky, Correction: false, Name: name ?? UserSession.Profile?.Nickname));
+                pivo, vino, panaky, Correction: false, Name: name ?? UserSession.Profile?.Nickname,
+                PubId: pubId, PubName: pubName, SharePub: PushService.SharePub));
+            if (!fromReminder && PushService.DetectPub)
+                PushService.RememberPub(userId, day, pubId, pubName);   // pro lístek: „📍 U Peťky“
             UserSession.OnDrinkRecorded(now, day);
 
             // další připomínka za X minut (lokální notifikace)
@@ -138,7 +169,7 @@ namespace Dezolati.Services
         /// </summary>
         public async Task<UserStats> GetStats(string userId)
         {
-            var today = await GetCurrentPubDayOf(userId);
+            var (today, pubName, pubAt) = await GetDayAndPubOf(userId);
             var since = IsoDay(today.AddDays(-29));
             var byUser = new[] { Filter.Eq("UserId", userId) };
 
@@ -164,7 +195,9 @@ namespace Dezolati.Services
                 Totals = new DailyDrinksModel { Pivo = (int)Get("pivo"), Vino = (int)Get("vino"), Panaky = (int)Get("panaky") },
                 Days = (int)Get("days"),
                 Record = recordTask.Result.Select(ToDaily).FirstOrDefault(r => r.Total > 0),
-                Last30 = lastTask.Result.Select(ToDaily).OrderByDescending(d => d.Day).ToList()
+                Last30 = lastTask.Result.Select(ToDaily).OrderByDescending(d => d.Day).ToList(),
+                CurrentPubName = pubName,
+                CurrentPubAt = pubAt
             };
         }
 
@@ -258,6 +291,34 @@ namespace Dezolati.Services
                 })
                 : FirestoreRest.DeleteAsync($"Friends/{requestId}");
 
+        /// <summary>Kolik žádostí o přátelství čeká na mě (odznak na tlačítku Přátelé). Čtení = počet žádostí, min. 1.</summary>
+        public async Task<int> CountIncomingRequests(string userId)
+        {
+            try
+            {
+                var docs = await FirestoreRest.QueryAsync("Friends", new[]
+                {
+                    Filter.Eq("FriendId", userId),
+                    Filter.Eq("Status", "Pending")
+                });
+                return docs.Count;
+            }
+            catch (FirestoreException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Forbidden)
+            {
+                // kdyby pravidla dotaz podle FriendId nepustila → dražší cesta přes všechna přátelství
+                var (incoming, _) = await GetFriendsOverview(userId);
+                return incoming.Count;
+            }
+        }
+
+        /// <summary>Odebrat z kámošů = smazat přátelství (druhému nic nepřijde, jen zmizí ze seznamu).</summary>
+        public async Task RemoveFriend(string userId, string friendId)
+        {
+            var docs = await FirestoreRest.QueryAsync("Friends", new[] { Filter.ArrayContains("Members", userId) });
+            foreach (var d in docs.Where(d => d.StrArray("Members").Contains(friendId)))
+                await FirestoreRest.DeleteAsync($"Friends/{d.Id}");
+        }
+
         // ================= mapování =================
 
         internal static UserModel ToUser(FsDoc d) => new()
@@ -268,7 +329,9 @@ namespace Dezolati.Services
             Nickname = d.Str("Nickname"),
             Gender = d.Str("Gender"),
             DrinkerType = d.Str("DrinkerType"),
-            Email = d.Str("Email")
+            Email = d.Str("Email"),
+            NotifyFriends = d.Fields["NotifyFriends"]?["booleanValue"]?.GetValue<bool>() ?? true,
+            SharePub = d.Fields["SharePub"]?["booleanValue"]?.GetValue<bool>() ?? false
         };
 
         internal static DateTime? ParseIso(string? s) =>

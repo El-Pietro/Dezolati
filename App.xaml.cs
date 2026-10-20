@@ -19,6 +19,8 @@ namespace Dezolati
         {
             base.OnResume();
             Services.UserSession.RaiseDrinksChanged();
+            Services.FriendBadge.Invalidate();             // mezitím mohla přijít žádost o přátelství
+            _ = Services.FriendBadge.RefreshAsync();
             _ = Controls.UpdatePrompt.ResumeIfPendingAsync(); // po povolení instalace v nastavení
         }
     }

@@ -15,6 +15,7 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
     private readonly FirestoreService firestoreService = new();
 
     private string? userId;
+    private string? nick;
     private string back = "//Friends";
 
     public StatsFriend()
@@ -25,7 +26,7 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
     public void ApplyQueryAttributes(IDictionary<string, object> query)
     {
         userId = query.TryGetValue("userId", out var u) ? u as string : null;
-        var nick = query.TryGetValue("nick", out var n) ? n as string : null;
+        nick = query.TryGetValue("nick", out var n) ? n as string : null;
         back = query.TryGetValue("back", out var b) && b is string s ? s : "//Friends";
 
         TitleLabel.Text = nick == "Moje" ? "Moje statistiky" : $"Statistiky: {nick}";
@@ -37,6 +38,9 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
         SummaryGrid.Clear();
         SummaryGrid.RowDefinitions.Clear();
         HistoryList.Clear();
+        NowLabel.IsVisible = false;
+        var isMe = userId == AuthSession.Uid;
+        RemoveFriendButton.IsVisible = !string.IsNullOrEmpty(userId) && !isMe;
 
         if (string.IsNullOrEmpty(userId))
             return;
@@ -56,6 +60,8 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
                 Vino = days.Sum(d => d.Vino),
                 Panaky = days.Sum(d => d.Panaky)
             };
+
+            ShowNow(stats, isMe);
 
             var dnes = Sum(history.Where(h => h.Day == today));
             var tyden = Sum(history.Where(h => h.Day > today.AddDays(-7)));
@@ -103,6 +109,47 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
         finally
         {
             Busy.IsRunning = Busy.IsVisible = false;
+        }
+    }
+
+    /// <summary>„Teď sedí: U Peťky (před 40 min)“ – jen když tam zapisoval v posledních 3 hodinách.</summary>
+    private void ShowNow(UserStats stats, bool isMe)
+    {
+        if (string.IsNullOrWhiteSpace(stats.CurrentPubName) || stats.CurrentPubAt is not DateTime at) return;
+        var ago = DateTime.UtcNow - at.ToUniversalTime();
+        if (ago > TimeSpan.FromHours(3) || ago < TimeSpan.FromMinutes(-5)) return;
+
+        var when = ago.TotalMinutes < 2 ? "právě teď"
+            : ago.TotalMinutes < 60 ? $"před {(int)ago.TotalMinutes} min"
+            : (int)ago.TotalHours == 1 ? "před hodinou"
+            : $"před {(int)ago.TotalHours} hodinami";
+        NowLabel.Text = $"🍺 {(isMe ? "Teď sedíš" : "Teď sedí")}: {stats.CurrentPubName} ({when})";
+        NowLabel.IsVisible = true;
+    }
+
+    private async void OnRemoveFriendClicked(object sender, EventArgs e)
+    {
+        if (AuthSession.Uid is not string me || string.IsNullOrEmpty(userId) || userId == me) return;
+
+        var who = string.IsNullOrWhiteSpace(nick) ? "tohohle kámoše" : nick;
+        var ok = await Listek.ConfirmAsync(this, "Odebrat z kámošů?",
+            $"{who} ti zmizí ze seznamu a ty jemu. Nic mu nepřijde, jen si toho časem všimne.",
+            "Odebrat", "Nechat", danger: true);
+        if (!ok) return;
+
+        try
+        {
+            RemoveFriendButton.IsEnabled = false;
+            await firestoreService.RemoveFriend(me, userId);
+            await Shell.Current.GoToAsync("//Friends");
+        }
+        catch (Exception ex)
+        {
+            await Listek.AlertAsync(this, "Chyba", $"Odebrání se nepovedlo: {ex.Message}");
+        }
+        finally
+        {
+            RemoveFriendButton.IsEnabled = true;
         }
     }
 

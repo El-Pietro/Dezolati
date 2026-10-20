@@ -17,6 +17,8 @@
             <ScrollView>
                 <VerticalStackLayout Spacing="6">
                     <Label x:Name="TitleLabel" Text="Statistiky" Style="{StaticResource Title}" />
+                    <!-- kde teď sedí (jen když to hlásí kámošům) -->
+                    <Label x:Name="NowLabel" Style="{StaticResource Heading}" HorizontalTextAlignment="Center" IsVisible="False" />
                     <ActivityIndicator x:Name="Busy" IsRunning="False" IsVisible="False" Color="{StaticResource Pencil}" />
 
                     <Grid x:Name="SummaryGrid" ColumnDefinitions="Auto, *" ColumnSpacing="12" RowSpacing="6" />
@@ -45,6 +47,9 @@
 
                     <Label Text="Poslední tahy" Style="{StaticResource Heading}" Margin="0,16,0,0" />
                     <VerticalStackLayout x:Name="HistoryList" Spacing="4" />
+
+                    <controls:PencilButton x:Name="RemoveFriendButton" Text="Odebrat z kámošů" Variant="Danger"
+                                           Margin="0,24,0,0" IsVisible="False" Clicked="OnRemoveFriendClicked" />
                 </VerticalStackLayout>
             </ScrollView>
         </Border>

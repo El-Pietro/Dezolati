@@ -121,12 +121,33 @@
                 </Grid>
             </Border>
 
-            <controls:PencilButton Grid.Column="2"
-                                   Variant="Outline"
-                                   Text="Přátelé"
-                                   HorizontalOptions="End"
-                                   VerticalOptions="Center"
-                                   Clicked="OnFriendsClicked" />
+            <!-- Přátelé + odznak s počtem čekajících žádostí -->
+            <Grid Grid.Column="2" HorizontalOptions="End" VerticalOptions="Center">
+                <controls:PencilButton Variant="Outline"
+                                       Text="Přátelé"
+                                       Clicked="OnFriendsClicked" />
+                <Border x:Name="FriendBadgeView"
+                        IsVisible="False"
+                        InputTransparent="True"
+                        BackgroundColor="#C0392B"
+                        Stroke="#F4E7C5"
+                        StrokeThickness="2"
+                        StrokeShape="RoundRectangle 11"
+                        MinimumWidthRequest="22"
+                        HeightRequest="22"
+                        Padding="5,0"
+                        HorizontalOptions="End"
+                        VerticalOptions="Start"
+                        TranslationX="8"
+                        TranslationY="-8">
+                    <Label x:Name="FriendBadgeLabel"
+                           TextColor="White"
+                           FontFamily="OpenSansSemibold"
+                           FontSize="12"
+                           HorizontalTextAlignment="Center"
+                           VerticalTextAlignment="Center" />
+                </Border>
+            </Grid>
         </Grid>
     </Grid>
 </ContentPage>

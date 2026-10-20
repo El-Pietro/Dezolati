@@ -29,7 +29,19 @@ namespace Dezolati.Pages
             base.OnAppearing();
             UserSession.DrinksChanged -= OnDrinksChanged;
             UserSession.DrinksChanged += OnDrinksChanged;
+            FriendBadge.Changed -= OnBadgeChanged;
+            FriendBadge.Changed += OnBadgeChanged;
+            ShowBadge();
             await LoadData();
+
+            // oznámení od kámošů: povolení + token telefonu (jednou za spuštění)
+            _ = PushService.InitAsync();
+
+            // čekající žádosti o přátelství (jen při spuštění / návratu do appky / po oznámení)
+            _ = FriendBadge.RefreshAsync();
+
+            // po aktualizaci jednou: co je nového v téhle verzi
+            await ShowWhatsNewAsync();
 
             // nová verze na GitHubu? (max. jednou za 6 h, chyby potichu)
             await UpdatePrompt.CheckAndOfferAsync(this);
@@ -39,6 +51,41 @@ namespace Dezolati.Pages
         {
             base.OnDisappearing();
             UserSession.DrinksChanged -= OnDrinksChanged;
+            FriendBadge.Changed -= OnBadgeChanged;
+        }
+
+        private void OnBadgeChanged() => MainThread.BeginInvokeOnMainThread(ShowBadge);
+
+        private void ShowBadge()
+        {
+            var n = FriendBadge.Count;
+            FriendBadgeLabel.Text = n > 9 ? "9+" : n.ToString();
+            FriendBadgeView.IsVisible = n > 0;
+        }
+
+        private static bool _whatsNewChecked;
+
+        private async Task ShowWhatsNewAsync()
+        {
+            if (_whatsNewChecked) return;
+            _whatsNewChecked = true;
+            try
+            {
+                var note = await ReleaseNotes.PendingForCurrentAsync();
+                if (note == null) return;
+
+                var text = note.Text.Length > 700 ? note.Text[..700] + "…" : note.Text;
+                const string all = "Všechny novinky";
+                var choice = await Listek.ShowAsync(this, $"Co je nového ve verzi {AppInfo.Current.VersionString}", text,
+                    ("Super", PencilVariant.Primary),
+                    (all, PencilVariant.Secondary));
+                if (choice == all)
+                    await Shell.Current.GoToAsync("//Novinky", new Dictionary<string, object> { ["back"] = "//MainPage" });
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Novinky: {ex.Message}");
+            }
         }
 
         // zápis z notifikace / návrat do appky – může přijít z jiného vlákna
@@ -59,35 +106,65 @@ namespace Dezolati.Pages
                 await UserSession.EnsureReadyAsync(); // profil je v paměti, čte se jen poprvé
                 var day = UserSession.CurrentPubDay;
 
-                // nejdřív zkusit odeslat, co čeká ve frontě
+                // nejdřív zkusit odeslat, co čeká ve frontě (sítové chyby si řeší sama)
                 await DrinkQueue.FlushAsync(userId);
 
                 Models.DailyDrinksModel? today;
-                bool offline = false;
-                try
+                bool offline = !Net.IsOnline;
+                if (offline)
                 {
-                    today = await firestoreService.GetDailyDrinks(userId, day);
-                    LocalCache.SaveDaily(userId, day, today);
+                    // telefon hlásí, že je bez internetu → na server se ani nezkoušet
+                    today = LocalCache.LoadDaily(userId, day);
                 }
-                catch (Exception ex) when (Net.IsNetworkError(ex))
+                else
                 {
-                    today = LocalCache.LoadDaily(userId, day); // poslední známý stav
-                    offline = true;
+                    try
+                    {
+                        today = await firestoreService.GetDailyDrinks(userId, day);
+                        LocalCache.SaveDaily(userId, day, today);
+                    }
+                    catch (Exception ex) when (Net.IsNetworkError(ex))
+                    {
+                        today = LocalCache.LoadDaily(userId, day); // poslední známý stav
+                        offline = true;
+                    }
                 }
 
-                // + zápisy, které ještě nedorazily na server
-                var pending = DrinkQueue.PendingFor(userId, day);
-
-                shownDay = day;
-                Render(Math.Max(0, (today?.Pivo ?? 0) + pending.Pivo),
-                       Math.Max(0, (today?.Vino ?? 0) + pending.Vino),
-                       Math.Max(0, (today?.Panaky ?? 0) + pending.Panaky),
-                       pending.Count, offline);
+                RenderWithPending(userId, day, today, offline);
             }
             catch (Exception ex)
             {
-                SouhrnLabel.Text = "Lístek se nepodařilo načíst.";
-                await Listek.AlertAsync(this, "Chyba", "Chyba při načítání dat: " + ex.Message);
+                // i při chybě ukázat aspoň poslední známý stav + co čeká ve frontě
+                if (TryRenderFromCache(userId)) SouhrnLabel.Text += "\n(nepodařilo se načíst ze serveru)";
+                else SouhrnLabel.Text = "Lístek se nepodařilo načíst.";
+
+                if (!Net.IsNetworkError(ex))
+                    await Listek.AlertAsync(this, "Chyba", "Chyba při načítání dat: " + ex.Message);
+            }
+        }
+
+        /// <summary>Server/cache + zápisy, které ještě nedorazily na server.</summary>
+        private void RenderWithPending(string userId, DateTime day, Models.DailyDrinksModel? today, bool offline)
+        {
+            var pending = DrinkQueue.PendingFor(userId, day);
+            shownDay = day;
+            Render(Math.Max(0, (today?.Pivo ?? 0) + pending.Pivo),
+                   Math.Max(0, (today?.Vino ?? 0) + pending.Vino),
+                   Math.Max(0, (today?.Panaky ?? 0) + pending.Panaky),
+                   pending.Count, offline);
+        }
+
+        private bool TryRenderFromCache(string userId)
+        {
+            try
+            {
+                var day = UserSession.CurrentPubDay;
+                RenderWithPending(userId, day, LocalCache.LoadDaily(userId, day), offline: true);
+                return true;
+            }
+            catch
+            {
+                return false;
             }
         }
 
@@ -100,6 +177,10 @@ namespace Dezolati.Pages
             var text = pivo + vino + panaky == 0
                 ? "Zatím čistý lístek."
                 : "Dnes: " + Cz.Souhrn(pivo, vino, panaky);
+
+            // kde sedím (poslední zápis dneška, z telefonu)
+            if (AuthSession.Uid is string uid && PushService.LastPubName(uid, shownDay) is string pub)
+                text += $"\n📍 {pub}";
 
             if (pendingCount > 0)
                 text += $"\n({Cz.Plural(pendingCount, "zápis čeká", "zápisy čekají", "zápisů čeká")} na signál)";

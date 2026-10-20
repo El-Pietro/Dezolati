@@ -368,3 +368,7 @@ FodyWeavers.xsd
 # podpisový klíč Androidu – nikdy do gitu
 *.keystore
 *.jks
+# Cloud Functions
+functions/node_modules/
+firebase-debug.log
+.firebase/

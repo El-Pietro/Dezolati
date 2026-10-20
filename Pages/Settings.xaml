@@ -57,6 +57,41 @@
                                                CommandParameter="60" Clicked="OnReminderClicked" />
                     </Grid>
 
+                    <!-- oznámení od kámošů (posílá server) a „kde sedím“ – ukládá se hned do profilu -->
+                    <Label Text="Oznámení od kámošů:" Style="{StaticResource FieldLabel}" />
+                    <Grid ColumnDefinitions="*, *" ColumnSpacing="10">
+                        <controls:PencilButton x:Name="NotifyOn" Grid.Column="0" Text="Chci" Variant="Secondary"
+                                               FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                               CommandParameter="1" Clicked="OnNotifyClicked" />
+                        <controls:PencilButton x:Name="NotifyOff" Grid.Column="1" Text="Nechci" Variant="Secondary"
+                                               FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                               CommandParameter="0" Clicked="OnNotifyClicked" />
+                    </Grid>
+
+                    <Label Text="Poznávat hospodu podle polohy:" Style="{StaticResource FieldLabel}" />
+                    <Grid ColumnDefinitions="*, *" ColumnSpacing="10">
+                        <controls:PencilButton x:Name="DetectOn" Grid.Column="0" Text="Poznávat" Variant="Secondary"
+                                               FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                               CommandParameter="1" Clicked="OnDetectClicked" />
+                        <controls:PencilButton x:Name="DetectOff" Grid.Column="1" Text="Nepoznávat" Variant="Secondary"
+                                               FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                               CommandParameter="0" Clicked="OnDetectClicked" />
+                    </Grid>
+                    <Label Text="Při zápisu se podívá, jestli jsi do 60 m od hospody. Uvidíš ji na lístku a ve statistikách, kámoši ne."
+                           Style="{StaticResource Small}" />
+
+                    <Label Text="Hlásit kámošům, kde piju:" Style="{StaticResource FieldLabel}" />
+                    <Grid ColumnDefinitions="*, *" ColumnSpacing="10">
+                        <controls:PencilButton x:Name="ShareOn" Grid.Column="0" Text="Hlásit" Variant="Secondary"
+                                               FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                               CommandParameter="1" Clicked="OnShareClicked" />
+                        <controls:PencilButton x:Name="ShareOff" Grid.Column="1" Text="Nehlásit" Variant="Secondary"
+                                               FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                               CommandParameter="0" Clicked="OnShareClicked" />
+                    </Grid>
+                    <Label Text="Kámošům přijde „sedí v hospodě“ a uvidí, kde jsi. Ukládá se jen název hospody, poloha nikam."
+                           Style="{StaticResource Small}" />
+
                     <controls:PencilButton Text="Uložit změny" Variant="Primary" Clicked="OnSaveClicked" Margin="0,24,0,0" />
                     <!-- verze a ruční kontrola aktualizace (instalace jde jen na Androidu) -->
                     <Label x:Name="VersionLabel" Style="{StaticResource Small}" Margin="0,18,0,0"
@@ -64,6 +99,7 @@
                     <controls:PencilButton x:Name="UpdateButton" Text="Zkontrolovat aktualizace" Variant="Secondary"
                                            IsVisible="{OnPlatform Default=False, Android=True}"
                                            Clicked="OnCheckUpdateClicked" />
+                    <controls:PencilButton Text="Co je nového" Variant="Secondary" Clicked="OnNewsClicked" />
 
                     <controls:PencilButton x:Name="LogoutButton" Text="Odhlásit se" Variant="Danger"
                                            Margin="0,10,0,0" Clicked="OnLogoutClicked" />
