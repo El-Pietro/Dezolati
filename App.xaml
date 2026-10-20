@@ -9,8 +9,97 @@
                 <ResourceDictionary Source="Resources/Styles/Colors.xaml" />
                 <ResourceDictionary Source="Resources/Styles/Styles.xaml" />
             </ResourceDictionary.MergedDictionaries>
-            <Style TargetType="Label">
-                <Setter Property="TextColor" Value="DarkBlue" />
+
+            <!-- ===== Barvy lístku ===== -->
+            <Color x:Key="Ink">#1E1E2A</Color>          <!-- psací písmo -->
+            <Color x:Key="InkSoft">#6B5A3A</Color>      <!-- popisky, placeholdery -->
+            <Color x:Key="Pencil">#6B3E1E</Color>       <!-- hnědá pastelka -->
+            <Color x:Key="PencilFaint">#C9B98F</Color>
+            <Color x:Key="Paper">#F5F5DC</Color>
+
+            <!-- ===== Výchozí velikosti (přepíše Typo.Apply podle displeje) ===== -->
+            <x:Double x:Key="FontTitle">40</x:Double>
+            <x:Double x:Key="FontHeading">30</x:Double>
+            <x:Double x:Key="FontLabel">22</x:Double>
+            <x:Double x:Key="FontBody">22</x:Double>
+            <x:Double x:Key="FontSmall">18</x:Double>
+            <x:Double x:Key="FontButton">24</x:Double>
+            <x:Double x:Key="FontButtonSmall">20</x:Double>
+            <x:Double x:Key="ButtonHeight">50</x:Double>
+            <x:Double x:Key="ButtonHeightSmall">42</x:Double>
+            <!-- odsazení horní lišty; na Androidu se přičte výška průhledné stavové lišty (MainActivity) -->
+            <Thickness x:Key="TopBarMargin">12,10,12,10</Thickness>
+            <Thickness x:Key="TopInset">0</Thickness>
+
+            <!-- ===== Text =====
+                 Caveat má písmena přesahující svůj box → malý vnitřní okraj, jinak Android uřízne konec.
+                 Tučné NEpoužívat: Caveat-Bold v appce není a falešné tučné se ořezává. -->
+            <Style x:Key="BaseText" TargetType="Label">
+                <Setter Property="FontFamily" Value="Caveat" />
+                <Setter Property="TextColor" Value="{StaticResource Ink}" />
+                <Setter Property="FontSize" Value="{DynamicResource FontBody}" />
+                <Setter Property="Padding" Value="3,0,8,0" />
+                <Setter Property="LineBreakMode" Value="WordWrap" />
+            </Style>
+            <Style TargetType="Label" BasedOn="{StaticResource BaseText}" />
+
+            <Style x:Key="Title" TargetType="Label" BasedOn="{StaticResource BaseText}">
+                <Setter Property="FontSize" Value="{DynamicResource FontTitle}" />
+                <Setter Property="HorizontalOptions" Value="Fill" />
+                <Setter Property="HorizontalTextAlignment" Value="Center" />
+                <Setter Property="Margin" Value="0,0,0,6" />
+            </Style>
+            <Style x:Key="Heading" TargetType="Label" BasedOn="{StaticResource BaseText}">
+                <Setter Property="FontSize" Value="{DynamicResource FontHeading}" />
+            </Style>
+            <Style x:Key="FieldLabel" TargetType="Label" BasedOn="{StaticResource BaseText}">
+                <Setter Property="FontSize" Value="{DynamicResource FontLabel}" />
+                <Setter Property="TextColor" Value="{StaticResource InkSoft}" />
+                <Setter Property="Margin" Value="0,6,0,0" />
+            </Style>
+            <Style x:Key="Body" TargetType="Label" BasedOn="{StaticResource BaseText}" />
+            <Style x:Key="Small" TargetType="Label" BasedOn="{StaticResource BaseText}">
+                <Setter Property="FontSize" Value="{DynamicResource FontSmall}" />
+            </Style>
+            <Style x:Key="Error" TargetType="Label" BasedOn="{StaticResource BaseText}">
+                <Setter Property="FontSize" Value="{DynamicResource FontSmall}" />
+                <Setter Property="TextColor" Value="DarkRed" />
+                <Setter Property="HorizontalTextAlignment" Value="Center" />
+                <Setter Property="HorizontalOptions" Value="Fill" />
+            </Style>
+
+            <!-- ===== Vstupy ===== -->
+            <Style TargetType="Entry">
+                <Setter Property="FontFamily" Value="Caveat" />
+                <Setter Property="FontSize" Value="{DynamicResource FontBody}" />
+                <Setter Property="TextColor" Value="{StaticResource Ink}" />
+                <Setter Property="PlaceholderColor" Value="#9A8F78" />
+                <Setter Property="BackgroundColor" Value="Transparent" />
+                <Setter Property="MinimumHeightRequest" Value="44" />
+            </Style>
+
+            <Style TargetType="Slider">
+                <Setter Property="MinimumTrackColor" Value="{StaticResource Pencil}" />
+                <Setter Property="MaximumTrackColor" Value="{StaticResource PencilFaint}" />
+                <Setter Property="ThumbColor" Value="{StaticResource Pencil}" />
+            </Style>
+
+            <!-- ===== Lístek (papír na stole) ===== -->
+            <!-- Border, ne Frame: Frame (hlavně na Windows) při MaximumWidthRequest
+                 nepočítal s vlastním Padding a obsah přetékal vpravo -->
+            <Style x:Key="Listek" TargetType="Border">
+                <Setter Property="BackgroundColor" Value="{StaticResource Paper}" />
+                <Setter Property="StrokeThickness" Value="0" />
+                <Setter Property="StrokeShape" Value="RoundRectangle 1" />
+                <Setter Property="Shadow">
+                    <Setter.Value>
+                        <Shadow Brush="Black" Offset="3,5" Radius="10" Opacity="0.5" />
+                    </Setter.Value>
+                </Setter>
+                <Setter Property="Padding" Value="18,16" />
+                <Setter Property="Margin" Value="16,4,16,20" />
+                <Setter Property="MaximumWidthRequest" Value="640" />
+                <Setter Property="HorizontalOptions" Value="Fill" />
             </Style>
         </ResourceDictionary>
     </Application.Resources>

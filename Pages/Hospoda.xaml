@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:controls="clr-namespace:Dezolati.Controls"
+             x:Class="Dezolati.Pages.Hospoda"
+             Title="Hospoda">
+    <Grid RowDefinitions="Auto, *">
+        <Image Grid.RowSpan="2" Source="{AppThemeBinding Light=woodlight.jpg, Dark=wooddark.jpg}" Aspect="AspectFill" />
+
+        <BoxView Grid.Row="0" HeightRequest="0" Color="Transparent" InputTransparent="True" Margin="{DynamicResource TopBarMargin}" />
+        <controls:PencilButton Grid.Row="0" Variant="Outline" Text="Zpět" IsVisible="{OnPlatform Default=True, Android=False}"
+                               HorizontalOptions="Start" Margin="{DynamicResource TopBarMargin}" Clicked="OnZpetClicked" />
+
+        <Border Grid.Row="1" Style="{StaticResource Listek}">
+            <ScrollView>
+                <VerticalStackLayout Spacing="4">
+                    <Label x:Name="NameLabel" Style="{StaticResource Title}" />
+                    <Label x:Name="InfoLabel" Style="{StaticResource Small}" HorizontalTextAlignment="Center" />
+                    <Label x:Name="OsmLabel" Style="{StaticResource Small}" HorizontalTextAlignment="Center" IsVisible="False" />
+                    <ActivityIndicator x:Name="Busy" IsRunning="False" IsVisible="False" Color="{StaticResource Pencil}" />
+
+                    <!-- zobrazení -->
+                    <VerticalStackLayout x:Name="ViewBox" Spacing="2" Margin="0,10,0,0">
+                        <Label Text="Co točí:" Style="{StaticResource FieldLabel}" />
+                        <Label x:Name="TapsLabel" Style="{StaticResource Body}" />
+                        <Label Text="Ceny:" Style="{StaticResource FieldLabel}" />
+                        <Label x:Name="PricesLabel" Style="{StaticResource Body}" />
+                        <Label Text="Otvíračka:" Style="{StaticResource FieldLabel}" />
+                        <Label x:Name="HoursLabel" Style="{StaticResource Body}" />
+                        <Label Text="Poznámka:" Style="{StaticResource FieldLabel}" />
+                        <Label x:Name="NoteLabel" Style="{StaticResource Body}" />
+                        <Label x:Name="UpdatedLabel" Style="{StaticResource Small}" Margin="0,8,0,0" />
+
+                        <controls:PencilButton x:Name="EditButton" Text="Upravit" Variant="Primary"
+                                               Margin="0,12,0,0" Clicked="OnEditClicked" />
+                        <controls:PencilButton x:Name="HistoryButton" Text="Historie změn" Variant="Secondary"
+                                               Clicked="OnHistoryClicked" />
+                        <VerticalStackLayout x:Name="HistoryList" Spacing="8" Margin="0,8,0,0" />
+                    </VerticalStackLayout>
+
+                    <!-- úprava -->
+                    <VerticalStackLayout x:Name="EditBox" Spacing="2" Margin="0,10,0,0" IsVisible="False">
+                        <Label Text="Název:" Style="{StaticResource FieldLabel}" />
+                        <Entry x:Name="NameEntry" MaxLength="80" />
+                        <Label Text="Co točí:" Style="{StaticResource FieldLabel}" />
+                        <Editor x:Name="TapsEntry" Placeholder="Plzeň 12°, Kozel 11°…" AutoSize="TextChanges" MaxLength="300" />
+                        <Label Text="Ceny:" Style="{StaticResource FieldLabel}" />
+                        <Editor x:Name="PricesEntry" Placeholder="Plzeň 0,5 l = 62 Kč" AutoSize="TextChanges" MaxLength="300" />
+                        <Label Text="Otvíračka:" Style="{StaticResource FieldLabel}" />
+                        <Editor x:Name="HoursEntry" Placeholder="Po–Čt 15–23, Pá–So 15–02" AutoSize="TextChanges" MaxLength="300" />
+                        <Label Text="Poznámka:" Style="{StaticResource FieldLabel}" />
+                        <Editor x:Name="NoteEntry" Placeholder="Zahrádka, šipky, hospodský je morous…" AutoSize="TextChanges" MaxLength="300" />
+
+                        <controls:PencilButton x:Name="SaveButton" Text="Uložit" Variant="Primary"
+                                               Margin="0,12,0,0" Clicked="OnSaveClicked" />
+                        <controls:PencilButton Text="Zrušit" Variant="Secondary" Clicked="OnCancelEditClicked" />
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </ScrollView>
+        </Border>
+    </Grid>
+</ContentPage>

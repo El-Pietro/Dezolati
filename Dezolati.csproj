@@ -21,14 +21,14 @@
 		<Nullable>enable</Nullable>
 
 		<!-- Display name -->
-		<ApplicationTitle>Dezolati</ApplicationTitle>
+		<ApplicationTitle>Dezoláti</ApplicationTitle>
 
 		<!-- App Identifier -->
-		<ApplicationId>com.companyname.dezolati</ApplicationId>
+		<ApplicationId>cz.elpietro.dezolati</ApplicationId>
 
 		<!-- Versions -->
-		<ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
-		<ApplicationVersion>1</ApplicationVersion>
+		<ApplicationDisplayVersion>3.0</ApplicationDisplayVersion>
+		<ApplicationVersion>6</ApplicationVersion>
 
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">11.0</SupportedOSPlatformVersion>
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">13.1</SupportedOSPlatformVersion>
@@ -40,10 +40,10 @@
 
 	<ItemGroup>
 		<!-- App Icon -->
-		<MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#512BD4" />
+		<MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" ForegroundScale="0.7" Color="#F3E6C4" />
 
 		<!-- Splash Screen -->
-		<MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#512BD4" BaseSize="128,128" />
+		<MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#24160E" BaseSize="160,160" />
 
 		<!-- Images -->
 		<MauiImage Include="Resources\Images\*" />
@@ -57,16 +57,56 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <None Remove="Resources\Raw\dezolati-firebase-adminsdk-s46cq-e34ecf9d3b.json" />
-	</ItemGroup>
-
-	<ItemGroup>
 		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
 		<PackageReference Include="FirebaseAuthentication.net" Version="4.1.0" />
-		<PackageReference Include="Google.Cloud.Firestore" Version="3.9.0" />
 		<PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
 		<PackageReference Include="Microsoft.Maui.Controls.Compatibility" Version="$(MauiVersion)" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="8.0.1" />
+		<PackageReference Include="Mapsui.Maui" Version="4.1.7" />
+	</ItemGroup>
+
+	<!-- připomínky (lokální notifikace) – zatím jen Android -->
+	<ItemGroup Condition="$(TargetFramework.Contains('-android'))">
+		<PackageReference Include="Plugin.LocalNotification" Version="11.1.4" />
+		<!-- srovnání verzí androidx.collection: plugin tahá novou rozdělenou verzi (collection-jvm),
+		     MAUI starou nerozdělenou → stejné třídy 2× → chyba JAVA0000 "defined multiple times" -->
+		<PackageReference Include="Xamarin.AndroidX.Collection" Version="1.4.0.5" />
+		<PackageReference Include="Xamarin.AndroidX.Collection.Jvm" Version="1.4.0.5" />
+		<PackageReference Include="Xamarin.AndroidX.Collection.Ktx" Version="1.4.0.5" />
+		<PackageReference Include="Xamarin.AndroidX.Activity.Ktx" Version="1.9.0.3" />
+		<PackageReference Include="Xamarin.AndroidX.Fragment.Ktx" Version="1.7.0.2" />
+		<PackageReference Include="Xamarin.AndroidX.Lifecycle.LiveData" Version="2.7.0.4" />
+		<PackageReference Include="Xamarin.AndroidX.Lifecycle.LiveData.Core.Ktx" Version="2.7.0.4" />
+		<PackageReference Include="Xamarin.AndroidX.Lifecycle.Process" Version="2.7.0.4" />
+		<PackageReference Include="Xamarin.AndroidX.Lifecycle.Runtime.Ktx" Version="2.7.0.4" />
+		<PackageReference Include="Xamarin.AndroidX.Lifecycle.ViewModel.Ktx" Version="2.7.0.4" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <MauiXaml Update="Pages\BasePage.xaml">
+	    <Generator>MSBuild:Compile</Generator>
+	  </MauiXaml>
+	  <MauiXaml Update="Pages\Friends.xaml">
+	    <Generator>MSBuild:Compile</Generator>
+	  </MauiXaml>
+	  <MauiXaml Update="Pages\Settings.xaml">
+	    <Generator>MSBuild:Compile</Generator>
+	  </MauiXaml>
+	  <MauiXaml Update="Pages\SettingsPage.xaml">
+	    <Generator>MSBuild:Compile</Generator>
+	  </MauiXaml>
+	  <MauiXaml Update="Pages\SignIn.xaml">
+	    <Generator>MSBuild:Compile</Generator>
+	  </MauiXaml>
+	  <MauiXaml Update="Pages\SignUp.xaml">
+	    <Generator>MSBuild:Compile</Generator>
+	  </MauiXaml>
+	  <MauiXaml Update="Pages\StatsFriend.xaml">
+	    <Generator>MSBuild:Compile</Generator>
+	  </MauiXaml>
+	  <MauiXaml Update="Pages\Zapis.xaml">
+	    <Generator>MSBuild:Compile</Generator>
+	  </MauiXaml>
 	</ItemGroup>
 
 </Project>

@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:controls="clr-namespace:Dezolati.Controls"
+             x:Class="Dezolati.Pages.Hospody"
+             Title="Hospody">
+    <Grid RowDefinitions="Auto, *, Auto">
+        <Image Grid.RowSpan="3" Source="{AppThemeBinding Light=woodlight.jpg, Dark=wooddark.jpg}" Aspect="AspectFill" />
+
+        <!-- horní lišta: Zpět (jen mimo Android) a Kde jsem -->
+        <Grid Grid.Row="0" ColumnDefinitions="Auto, *, Auto" Margin="{DynamicResource TopBarMargin}">
+            <controls:PencilButton Grid.Column="0" Variant="Outline" Text="Zpět"
+                                   IsVisible="{OnPlatform Default=True, Android=False}" Clicked="OnZpetClicked" />
+            <controls:PencilButton Grid.Column="2" Variant="Outline" Text="Kde jsem?" Clicked="OnWhereAmIClicked" />
+        </Grid>
+
+        <!-- mapa položená na stole v papírovém rámečku -->
+        <Border Grid.Row="1" Margin="12,0,12,8" Padding="5" BackgroundColor="{StaticResource Paper}"
+                StrokeThickness="0" StrokeShape="RoundRectangle 2">
+            <Grid>
+                <ContentView x:Name="MapHost" />
+
+                <VerticalStackLayout x:Name="LoadingBox" Spacing="8" Padding="20"
+                                     VerticalOptions="Center" HorizontalOptions="Center">
+                    <ActivityIndicator x:Name="LoadingSpinner" IsRunning="True" Color="{StaticResource Pencil}" />
+                    <Label x:Name="LoadingLabel" Text="Sháním seznam hospod…" Style="{StaticResource Body}"
+                           HorizontalTextAlignment="Center" />
+                    <controls:PencilButton x:Name="RetryButton" Text="Zkusit znovu" Variant="Primary"
+                                           IsVisible="False" Clicked="OnRetryClicked" />
+                </VerticalStackLayout>
+
+                <!-- povinné uvedení zdroje mapy -->
+                <Label Text="© přispěvatelé OpenStreetMap" FontSize="11" FontFamily="OpenSansRegular"
+                       TextColor="#555555" BackgroundColor="#CCF5F5DC" Padding="4,1"
+                       HorizontalOptions="End" VerticalOptions="End" InputTransparent="True" />
+            </Grid>
+        </Border>
+
+        <!-- kartička vybrané hospody -->
+        <Border x:Name="PubCard" Grid.Row="2" Style="{StaticResource Listek}" IsVisible="False" Margin="12,0,12,16">
+            <Grid ColumnDefinitions="*, Auto" ColumnSpacing="10">
+                <VerticalStackLayout Grid.Column="0" Spacing="0" VerticalOptions="Center">
+                    <Label x:Name="CardName" Style="{StaticResource Heading}" HorizontalOptions="Start"
+                           HorizontalTextAlignment="Start" LineBreakMode="TailTruncation" MaxLines="2" />
+                    <Label x:Name="CardInfo" Style="{StaticResource Small}" />
+                </VerticalStackLayout>
+                <controls:PencilButton Grid.Column="1" Text="Otevřít" Variant="Primary" WidthRequest="130"
+                                       VerticalOptions="Center" Clicked="OnOpenClicked" />
+            </Grid>
+        </Border>
+    </Grid>
+</ContentPage>

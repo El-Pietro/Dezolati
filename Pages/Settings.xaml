@@ -1,0 +1,74 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:controls="clr-namespace:Dezolati.Controls"
+             x:Class="Dezolati.Pages.Settings">
+    <Grid RowDefinitions="Auto, *">
+        <Image Grid.RowSpan="2" Source="{AppThemeBinding Light=woodlight.jpg, Dark=wooddark.jpg}" Aspect="AspectFill" />
+
+        <!-- Android: místo tlačítka Zpět jen odsazení pod stavovou lištou (zpět = systémové tlačítko) -->
+        <BoxView Grid.Row="0" HeightRequest="0" Color="Transparent" InputTransparent="True" Margin="{DynamicResource TopBarMargin}" />
+        <!-- Windows a spol. systémové Zpět nemají → tam tlačítko zůstává -->
+        <controls:PencilButton Grid.Row="0" Variant="Outline" Text="Zpět" IsVisible="{OnPlatform Default=True, Android=False}"
+                               HorizontalOptions="Start" Margin="{DynamicResource TopBarMargin}" Clicked="OnZpetClicked" />
+
+        <Border Grid.Row="1" Style="{StaticResource Listek}">
+            <ScrollView>
+                <VerticalStackLayout Spacing="4">
+                    <Label Text="Nastavení píče" Style="{StaticResource Title}" />
+
+                    <Label Text="Jméno:" Style="{StaticResource FieldLabel}" />
+                    <Entry x:Name="NameEntry" Placeholder="Tvoje jméno" />
+
+                    <Label Text="Přezdívka:" Style="{StaticResource FieldLabel}" />
+                    <Entry x:Name="NicknameEntry" Placeholder="Podle ní tě najdou kámoši" />
+
+                    <!-- Volby: vybraná = hnědá pastelka, nevybraná = bledá tužka (přepíná code-behind) -->
+                    <Label Text="Pohlaví:" Style="{StaticResource FieldLabel}" />
+                    <Grid ColumnDefinitions="*, *" ColumnSpacing="10">
+                        <controls:PencilButton x:Name="GenderPic" Grid.Column="0" Text="Píč"
+                                               Variant="Secondary" CommandParameter="Píč" Clicked="OnGenderClicked" />
+                        <controls:PencilButton x:Name="GenderPicka" Grid.Column="1" Text="Píčka"
+                                               Variant="Secondary" CommandParameter="Píčka" Clicked="OnGenderClicked" />
+                    </Grid>
+
+                    <Label Text="Typ píče:" Style="{StaticResource FieldLabel}" />
+                    <Grid ColumnDefinitions="*, *" ColumnSpacing="10">
+                        <controls:PencilButton x:Name="TypePivo" Grid.Column="0" Text="Pivopíč/ka"
+                                               Variant="Secondary" CommandParameter="Pivopíč/ka" Clicked="OnTypeClicked" />
+                        <controls:PencilButton x:Name="TypeVino" Grid.Column="1" Text="Vínopíč/ka"
+                                               Variant="Secondary" CommandParameter="Vínopíč/ka" Clicked="OnTypeClicked" />
+                    </Grid>
+
+                    <!-- připomínka po X minutách bez zápisu (ukládá se hned, jen v tomhle telefonu) -->
+                    <Label Text="Připomínat, když nic nezapíšu:" Style="{StaticResource FieldLabel}" />
+                    <Grid ColumnDefinitions="*, *, *, *" ColumnSpacing="6">
+                        <controls:PencilButton x:Name="Rem0" Grid.Column="0" Text="Vyp" Variant="Secondary"
+                                               FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                               CommandParameter="0" Clicked="OnReminderClicked" />
+                        <controls:PencilButton x:Name="Rem20" Grid.Column="1" Text="20 min" Variant="Secondary"
+                                               FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                               CommandParameter="20" Clicked="OnReminderClicked" />
+                        <controls:PencilButton x:Name="Rem30" Grid.Column="2" Text="30 min" Variant="Secondary"
+                                               FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                               CommandParameter="30" Clicked="OnReminderClicked" />
+                        <controls:PencilButton x:Name="Rem60" Grid.Column="3" Text="60 min" Variant="Secondary"
+                                               FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                               CommandParameter="60" Clicked="OnReminderClicked" />
+                    </Grid>
+
+                    <controls:PencilButton Text="Uložit změny" Variant="Primary" Clicked="OnSaveClicked" Margin="0,24,0,0" />
+                    <!-- verze a ruční kontrola aktualizace (instalace jde jen na Androidu) -->
+                    <Label x:Name="VersionLabel" Style="{StaticResource Small}" Margin="0,18,0,0"
+                           HorizontalTextAlignment="Center" />
+                    <controls:PencilButton x:Name="UpdateButton" Text="Zkontrolovat aktualizace" Variant="Secondary"
+                                           IsVisible="{OnPlatform Default=False, Android=True}"
+                                           Clicked="OnCheckUpdateClicked" />
+
+                    <controls:PencilButton x:Name="LogoutButton" Text="Odhlásit se" Variant="Danger"
+                                           Margin="0,10,0,0" Clicked="OnLogoutClicked" />
+                </VerticalStackLayout>
+            </ScrollView>
+        </Border>
+    </Grid>
+</ContentPage>

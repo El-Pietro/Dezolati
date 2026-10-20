@@ -3,13 +3,44 @@
     x:Class="Dezolati.AppShell"
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-    xmlns:local="clr-namespace:Dezolati"
+    xmlns:pages="clr-namespace:Dezolati.Pages"
     Shell.FlyoutBehavior="Disabled"
-    Title="Dezolati">
-
+    Shell.NavBarIsVisible="False"
+    Title="Dezoláti">
     <ShellContent
-        Title="Home"
-        ContentTemplate="{DataTemplate local:MainPage}"
+        Title="Přihlášení"
+        ContentTemplate="{DataTemplate pages:SignIn}"
+        Route="SignIn" />
+    <ShellContent
+        Title="Registrace"
+        ContentTemplate="{DataTemplate pages:SignUp}"
+        Route="SignUp" />
+    <ShellContent
+        ContentTemplate="{DataTemplate pages:MainPage}"
         Route="MainPage" />
+    <ShellContent
+        Title="Zápis"
+        ContentTemplate="{DataTemplate pages:Zapis}"
+        Route="Zapis" />
+    <ShellContent
+        Title="Nastavení"
+        ContentTemplate="{DataTemplate pages:Settings}"
+        Route="Settings" />
+    <ShellContent
+        Title="Přátelé"
+        ContentTemplate="{DataTemplate pages:Friends}"
+        Route="Friends" />
+    <ShellContent
+        Title="Statistiky Přítele"
+        ContentTemplate="{DataTemplate pages:StatsFriend}"
+        Route="StatsFriend" />
+    <ShellContent
+        Title="Hospody"
+        ContentTemplate="{DataTemplate pages:Hospody}"
+        Route="Hospody" />
+    <ShellContent
+        Title="Hospoda"
+        ContentTemplate="{DataTemplate pages:Hospoda}"
+        Route="Hospoda" />
 
 </Shell>
