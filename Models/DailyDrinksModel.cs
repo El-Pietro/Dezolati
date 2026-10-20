@@ -29,5 +29,9 @@
         public DailyDrinksModel? Record { get; set; }
         /// <summary>Posledních 30 dní, nejnovější první.</summary>
         public List<DailyDrinksModel> Last30 { get; set; } = new();
+        /// <summary>Hospoda posledního zápisu (jen když ji dotyčný hlásí kámošům).</summary>
+        public string? CurrentPubName { get; set; }
+        /// <summary>Kdy tam zapsal naposledy (UTC).</summary>
+        public DateTime? CurrentPubAt { get; set; }
     }
 }

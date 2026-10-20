@@ -8,10 +8,11 @@
         <Image Grid.RowSpan="3" Source="{AppThemeBinding Light=woodlight.jpg, Dark=wooddark.jpg}" Aspect="AspectFill" />
 
         <!-- horní lišta: Zpět (jen mimo Android) a Kde jsem -->
-        <Grid Grid.Row="0" ColumnDefinitions="Auto, *, Auto" Margin="{DynamicResource TopBarMargin}">
+        <Grid Grid.Row="0" ColumnDefinitions="Auto, *, Auto, Auto" ColumnSpacing="10" Margin="{DynamicResource TopBarMargin}">
             <controls:PencilButton Grid.Column="0" Variant="Outline" Text="Zpět"
                                    IsVisible="{OnPlatform Default=True, Android=False}" Clicked="OnZpetClicked" />
-            <controls:PencilButton Grid.Column="2" Variant="Outline" Text="Kde jsem?" Clicked="OnWhereAmIClicked" />
+            <controls:PencilButton x:Name="AddButton" Grid.Column="2" Variant="Outline" Text="Přidat" Clicked="OnAddClicked" />
+            <controls:PencilButton Grid.Column="3" Variant="Outline" Text="Kde jsem?" Clicked="OnWhereAmIClicked" />
         </Grid>
 
         <!-- mapa položená na stole v papírovém rámečku -->
@@ -29,11 +30,44 @@
                                            IsVisible="False" Clicked="OnRetryClicked" />
                 </VerticalStackLayout>
 
+                <!-- zaměřovací křížek při přidávání podniku (střed mapy) -->
+                <Grid x:Name="Crosshair" IsVisible="False" InputTransparent="True" WidthRequest="44" HeightRequest="44"
+                      HorizontalOptions="Center" VerticalOptions="Center">
+                    <BoxView Color="#C0392B" WidthRequest="3" HeightRequest="44" HorizontalOptions="Center" />
+                    <BoxView Color="#C0392B" WidthRequest="44" HeightRequest="3" VerticalOptions="Center" />
+                </Grid>
+
                 <!-- povinné uvedení zdroje mapy -->
                 <Label Text="© přispěvatelé OpenStreetMap" FontSize="11" FontFamily="OpenSansRegular"
                        TextColor="#555555" BackgroundColor="#CCF5F5DC" Padding="4,1"
                        HorizontalOptions="End" VerticalOptions="End" InputTransparent="True" />
             </Grid>
+        </Border>
+
+        <!-- přidání podniku, který v mapě chybí -->
+        <Border x:Name="AddCard" Grid.Row="2" Style="{StaticResource Listek}" IsVisible="False" Margin="12,0,12,16">
+            <VerticalStackLayout Spacing="6">
+                <Label Text="Posuň mapu, ať je křížek na podniku" Style="{StaticResource Small}" HorizontalTextAlignment="Center" />
+                <Entry x:Name="AddNameEntry" Placeholder="Název podniku" MaxLength="80" />
+                <Grid ColumnDefinitions="*, *, *, *" ColumnSpacing="6">
+                    <controls:PencilButton x:Name="KindPub" Grid.Column="0" Text="Hospoda" Variant="Secondary"
+                                           FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                           CommandParameter="pub" Clicked="OnKindClicked" />
+                    <controls:PencilButton x:Name="KindBar" Grid.Column="1" Text="Bar" Variant="Secondary"
+                                           FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                           CommandParameter="bar" Clicked="OnKindClicked" />
+                    <controls:PencilButton x:Name="KindRestaurant" Grid.Column="2" Text="Restaurace" Variant="Secondary"
+                                           FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                           CommandParameter="restaurant" Clicked="OnKindClicked" />
+                    <controls:PencilButton x:Name="KindGarden" Grid.Column="3" Text="Zahrádka" Variant="Secondary"
+                                           FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                           CommandParameter="biergarten" Clicked="OnKindClicked" />
+                </Grid>
+                <Grid ColumnDefinitions="*, *" ColumnSpacing="10">
+                    <controls:PencilButton x:Name="AddSaveButton" Grid.Column="0" Text="Přidat sem" Variant="Primary" Clicked="OnAddSaveClicked" />
+                    <controls:PencilButton Grid.Column="1" Text="Zrušit" Variant="Secondary" Clicked="OnAddCancelClicked" />
+                </Grid>
+            </VerticalStackLayout>
         </Border>
 
         <!-- kartička vybrané hospody -->

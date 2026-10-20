@@ -16,17 +16,31 @@
                 <VerticalStackLayout Spacing="4">
                     <Label x:Name="NameLabel" Style="{StaticResource Title}" />
                     <Label x:Name="InfoLabel" Style="{StaticResource Small}" HorizontalTextAlignment="Center" />
+                    <Label x:Name="ClosedLabel" Text="Natrvalo zavřeno" Style="{StaticResource Heading}" TextColor="#A01C1C"
+                           HorizontalTextAlignment="Center" IsVisible="False" />
                     <Label x:Name="OsmLabel" Style="{StaticResource Small}" HorizontalTextAlignment="Center" IsVisible="False" />
+
+                    <!-- kontakty z OpenStreetMap -->
+                    <Grid x:Name="ContactBox" ColumnDefinitions="*, *" ColumnSpacing="10" Margin="0,6,0,0" IsVisible="False">
+                        <controls:PencilButton x:Name="WebButton" Grid.Column="0" Text="Web" Variant="Secondary"
+                                               FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                               Clicked="OnWebClicked" />
+                        <controls:PencilButton x:Name="CallButton" Grid.Column="1" Text="Zavolat" Variant="Secondary"
+                                               FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                               Clicked="OnCallClicked" />
+                    </Grid>
                     <ActivityIndicator x:Name="Busy" IsRunning="False" IsVisible="False" Color="{StaticResource Pencil}" />
 
                     <!-- zobrazení -->
                     <VerticalStackLayout x:Name="ViewBox" Spacing="2" Margin="0,10,0,0">
                         <Label Text="Co točí:" Style="{StaticResource FieldLabel}" />
                         <Label x:Name="TapsLabel" Style="{StaticResource Body}" />
+                        <Label x:Name="TapsSourceLabel" Text="podle OpenStreetMap" Style="{StaticResource Small}" IsVisible="False" />
                         <Label Text="Ceny:" Style="{StaticResource FieldLabel}" />
                         <Label x:Name="PricesLabel" Style="{StaticResource Body}" />
                         <Label Text="Otvíračka:" Style="{StaticResource FieldLabel}" />
                         <Label x:Name="HoursLabel" Style="{StaticResource Body}" />
+                        <Label x:Name="HoursSourceLabel" Text="podle OpenStreetMap" Style="{StaticResource Small}" IsVisible="False" />
                         <Label Text="Poznámka:" Style="{StaticResource FieldLabel}" />
                         <Label x:Name="NoteLabel" Style="{StaticResource Body}" />
                         <Label x:Name="UpdatedLabel" Style="{StaticResource Small}" Margin="0,8,0,0" />
@@ -36,6 +50,12 @@
                         <controls:PencilButton x:Name="HistoryButton" Text="Historie změn" Variant="Secondary"
                                                Clicked="OnHistoryClicked" />
                         <VerticalStackLayout x:Name="HistoryList" Spacing="8" Margin="0,8,0,0" />
+
+                        <!-- zavření / smazání -->
+                        <controls:PencilButton x:Name="ClosedButton" Text="Natrvalo zavřeno" Variant="Danger"
+                                               Margin="0,16,0,0" Clicked="OnClosedClicked" />
+                        <controls:PencilButton x:Name="DeleteButton" Text="Smazat podnik" Variant="Danger"
+                                               IsVisible="False" Clicked="OnDeleteClicked" />
                     </VerticalStackLayout>
 
                     <!-- úprava -->

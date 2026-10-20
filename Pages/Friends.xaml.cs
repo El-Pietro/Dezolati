@@ -35,6 +35,7 @@ public partial class Friends : ContentPage
             PendingRequestsList.ItemsSource = requests;
             PendingHeader.IsVisible = PendingRequestsList.IsVisible = requests.Count > 0;
             FriendsList.ItemsSource = friends;
+            FriendBadge.Set(requests.Count);   // odznak na lístku bez dalšího čtení
         }
         catch (Exception ex)
         {

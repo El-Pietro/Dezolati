@@ -10,6 +10,9 @@ public partial class Settings : ContentPage
 
     private string? gender;
     private string? drinkerType;
+    private bool notifyFriends = true;
+    private bool sharePub;
+    private bool detectPub;
 
     public Settings()
     {
@@ -42,7 +45,11 @@ public partial class Settings : ContentPage
                 NicknameEntry.Text = user.Nickname;
                 gender = user.Gender;
                 drinkerType = user.DrinkerType;
+                notifyFriends = user.NotifyFriends;
+                sharePub = user.SharePub;
+                PushService.SharePub = sharePub;
             }
+            detectPub = PushService.DetectPub || sharePub;
         }
         catch (Exception ex)
         {
@@ -75,6 +82,13 @@ public partial class Settings : ContentPage
 
     private void UpdateChips()
     {
+        SetChip(NotifyOn, notifyFriends);
+        SetChip(NotifyOff, !notifyFriends);
+        SetChip(DetectOn, detectPub);
+        SetChip(DetectOff, !detectPub);
+        SetChip(ShareOn, sharePub);
+        SetChip(ShareOff, !sharePub);
+
         var rem = Reminders.Minutes;
         SetChip(Rem0, rem == 0);
         SetChip(Rem20, rem == 20);
@@ -133,7 +147,9 @@ public partial class Settings : ContentPage
                 Nickname = nickname,
                 Gender = gender,
                 DrinkerType = drinkerType,
-                Email = AuthSession.Email
+                Email = AuthSession.Email,
+                NotifyFriends = notifyFriends,
+                SharePub = sharePub
             };
             await firestoreService.UpdateUserData(userId, profile);
             UserSession.SetProfile(profile);
@@ -172,8 +188,91 @@ public partial class Settings : ContentPage
         }
     }
 
+    private async void OnNotifyClicked(object sender, EventArgs e)
+    {
+        var on = ((PencilButton)sender).CommandParameter as string == "1";
+        if (on == notifyFriends) return;
+        notifyFriends = on;
+        UpdateChips();
+        await SavePrefsAsync();
+    }
+
+    /// <summary>Poznávání hospody – jen v telefonu. Vypnutí vypne i hlášení kámošům.</summary>
+    private async void OnDetectClicked(object sender, EventArgs e)
+    {
+        var on = ((PencilButton)sender).CommandParameter as string == "1";
+        if (on == detectPub) return;
+        if (on && !await EnsureLocationAsync()) return;
+
+        detectPub = on;
+        PushService.DetectPub = on;
+        if (!on && sharePub)
+        {
+            sharePub = false;
+            PushService.SharePub = false;
+            UpdateChips();
+            await SavePrefsAsync();
+            return;
+        }
+        UpdateChips();
+    }
+
+    /// <summary>Hlášení kámošům – bez poznávání hospody nejde, takže ho zapne taky.</summary>
+    private async void OnShareClicked(object sender, EventArgs e)
+    {
+        var on = ((PencilButton)sender).CommandParameter as string == "1";
+        if (on == sharePub) return;
+        if (on && !await EnsureLocationAsync()) return;
+
+        sharePub = on;
+        PushService.SharePub = on;
+        if (on)
+        {
+            detectPub = true;
+            PushService.DetectPub = true;
+        }
+        UpdateChips();
+        await SavePrefsAsync();
+    }
+
+    /// <summary>Bez polohy nejde poznat hospodu.</summary>
+    private async Task<bool> EnsureLocationAsync()
+    {
+        var status = await Permissions.CheckStatusAsync<Permissions.LocationWhenInUse>();
+        if (status != PermissionStatus.Granted)
+            status = await Permissions.RequestAsync<Permissions.LocationWhenInUse>();
+        if (status == PermissionStatus.Granted) return true;
+
+        await Listek.AlertAsync(this, "Bez polohy to nejde",
+            "Povol appce polohu (jen při používání), jinak nepoznám, ve které hospodě sedíš.");
+        return false;
+    }
+
+    private async void OnNewsClicked(object sender, EventArgs e) =>
+        await Shell.Current.GoToAsync("//Novinky", new Dictionary<string, object> { ["back"] = "//Settings" });
+
+    private async Task SavePrefsAsync()
+    {
+        if (AuthSession.Uid is not string uid) return;
+        try
+        {
+            await firestoreService.UpdateNotificationPrefs(uid, notifyFriends, sharePub);
+            if (UserSession.Profile is { } p)
+            {
+                p.NotifyFriends = notifyFriends;
+                p.SharePub = sharePub;
+            }
+        }
+        catch (Exception ex)
+        {
+            await Listek.AlertAsync(this, "Chyba", $"Nastavení se nepodařilo uložit: {ex.Message}");
+        }
+    }
+
     private async void OnLogoutClicked(object sender, EventArgs e)
     {
+        await PushService.UnregisterAsync();   // tenhle telefon už nemá chodit oznámení pro tenhle účet
+        FriendBadge.Reset();
         AuthSession.SignOut();
         Preferences.Remove("LastPassword");
         await Shell.Current.GoToAsync("//SignIn");

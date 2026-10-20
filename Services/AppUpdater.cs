@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 
 namespace Dezolati.Services
 {
@@ -7,7 +7,7 @@ namespace Dezolati.Services
 
     /// <summary>
     /// Aktualizace mimo Google Play: poslední Release na GitHubu → stáhnout APK → instalátor Androidu.
-    /// Nic nečte z Firestore. GitHub bez přihlášení dovolí 60 dotazů za hodinu na IP, kontrolujeme max. jednou za 6 h.
+    /// Nic nečte z Firestore. GitHub bez přihlášení dovolí 60 dotazů za hodinu na IP, kontrolujeme max. jednou za 30 min.
     ///
     /// Vydání nové verze:
     ///  1. zvýšit ApplicationDisplayVersion (např. 3.1) a ApplicationVersion v Dezolati.csproj,
@@ -23,10 +23,13 @@ namespace Dezolati.Services
         private const string KeyLastCheck = "upd_last_check";
         private const string KeySnoozedTag = "upd_snoozed_tag";
         private const string KeySnoozedAt = "upd_snoozed_at";
-        private static readonly TimeSpan CheckEvery = TimeSpan.FromHours(6);
+        private static readonly TimeSpan CheckEvery = TimeSpan.FromMinutes(30);
         private static readonly TimeSpan SnoozeFor = TimeSpan.FromDays(1);
 
         private static readonly HttpClient Http = CreateHttp();
+
+        /// <summary>Stejný klient (s User-Agentem) pro seznam novinek.</summary>
+        internal static HttpClient GitHubHttp => Http;
 
         private static HttpClient CreateHttp()
         {

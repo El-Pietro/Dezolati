@@ -8,7 +8,7 @@ namespace Dezolati.Controls
         private static AppRelease? _pending;   // nalezená, ale ještě nenainstalovaná verze
         private static bool _busy;
 
-        /// <summary>Při otevření lístku: zkontrolovat GitHub (max. jednou za 6 h) a případně nabídnout.</summary>
+        /// <summary>Při otevření lístku: zkontrolovat GitHub (max. jednou za 30 min) a případně nabídnout.</summary>
         public static async Task CheckAndOfferAsync(Page page)
         {
             if (_busy || !AppUpdater.IsSupported) return;

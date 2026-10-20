@@ -14,7 +14,7 @@ namespace Dezolati.Services
         /// <summary>Oblast podle ISO 3166-2 (CZ-64 = Jihomoravský kraj).</summary>
         public const string Area = "CZ-64";
 
-        private const string FileName = "hospody_cz64_v2.json"; // v2 = i restaurace
+        private const string FileName = "hospody_cz64_v3.json"; // v2 = i restaurace, v3 = web a telefon
         private static readonly TimeSpan MaxAge = TimeSpan.FromDays(30);
 
         private static readonly string[] Endpoints =
@@ -72,6 +72,25 @@ namespace Dezolati.Services
                 await SaveFileAsync(fresh);
                 Set(fresh);
                 return fresh;
+            }
+            finally
+            {
+                Lock.Release();
+            }
+        }
+
+        /// <summary>Katalog, jen pokud už je v telefonu (nikdy nestahuje). null = ještě nebyl stažen.</summary>
+        public static async Task<IReadOnlyList<PubInfo>?> GetCachedAsync()
+        {
+            if (_pubs != null) return _pubs;
+            if (!File.Exists(FilePath)) return null;
+            await Lock.WaitAsync();
+            try
+            {
+                if (_pubs != null) return _pubs;
+                var cached = await LoadFileAsync();
+                if (cached != null) Set(cached);
+                return cached;
             }
             finally
             {
@@ -158,7 +177,8 @@ namespace Dezolati.Services
         // sloupce CSV výstupu (pořadí musí sedět s Parse)
         private const string Columns =
             "::type,::id,::lat,::lon,name,amenity,\"addr:street\",\"addr:place\",\"addr:housenumber\"," +
-            "\"addr:conscriptionnumber\",\"addr:city\",brewery,opening_hours";
+            "\"addr:conscriptionnumber\",\"addr:city\",brewery,opening_hours," +
+            "website,\"contact:website\",phone,\"contact:phone\"";
 
         private static async Task<List<PubInfo>> DownloadAsync()
         {
@@ -213,6 +233,17 @@ namespace Dezolati.Services
             return oneLine.Length > 160 ? oneLine[..160] + "…" : oneLine;
         }
 
+        // OSM umí víc hodnot oddělených středníkem → stačí první
+        private static string? FirstOf(params string[] values)
+        {
+            foreach (var v in values)
+            {
+                var first = v.Split(';')[0].Trim();
+                if (first.Length > 0) return first;
+            }
+            return null;
+        }
+
         internal static List<PubInfo> Parse(string csv)
         {
             var result = new List<PubInfo>();
@@ -246,7 +277,9 @@ namespace Dezolati.Services
                     Math.Round(lat, 6), Math.Round(lon, 6),
                     parts.Count > 0 ? string.Join(", ", parts) : null,
                     Col(11).Length > 0 ? Col(11) : null,
-                    Col(12).Length > 0 ? Col(12) : null));
+                    Col(12).Length > 0 ? Col(12) : null,
+                    FirstOf(Col(13), Col(14)),
+                    FirstOf(Col(15), Col(16))));
             }
             return result;
         }
