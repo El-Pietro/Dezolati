@@ -23,6 +23,7 @@ public partial class Settings : ContentPage
     {
         base.OnAppearing();
         VersionLabel.Text = $"Dezoláti {AppUpdater.CurrentVersionText}";
+        UsageButton.IsVisible = UsageService.IsAdmin;
         await LoadUserData();
     }
 
@@ -247,6 +248,9 @@ public partial class Settings : ContentPage
             "Povol appce polohu (jen při používání), jinak nepoznám, ve které hospodě sedíš.");
         return false;
     }
+
+    private async void OnUsageClicked(object sender, EventArgs e) =>
+        await Shell.Current.GoToAsync("//Spotreba");
 
     private async void OnNewsClicked(object sender, EventArgs e) =>
         await Shell.Current.GoToAsync("//Novinky", new Dictionary<string, object> { ["back"] = "//Settings" });

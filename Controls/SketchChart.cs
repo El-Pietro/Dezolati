@@ -1,4 +1,4 @@
-namespace Dezolati.Controls
+﻿namespace Dezolati.Controls
 {
     /// <summary>Barvy pastelek pro druhy pití (pořadí: pivo, víno, panáky).</summary>
     public static class Pastelky
@@ -34,6 +34,9 @@ namespace Dezolati.Controls
         /// <summary>Semínko náhody – stejný graf se při překreslení netřese.</summary>
         public int Seed { get; set; } = 7;
 
+        /// <summary>Volitelná čára limitu (např. denní limit databáze) – přerušovaná červená.</summary>
+        public int? Limit { get; set; }
+
         public void Draw(ICanvas canvas, RectF rect)
         {
             canvas.StrokeLineCap = LineCap.Round;
@@ -50,7 +53,7 @@ namespace Dezolati.Controls
 
             var baseY = r.Bottom - 3;
             var top = r.Top + 4;
-            var max = Math.Max(1, Values.Max(v => v.Sum()));
+            var max = Math.Max(1, Math.Max(Values.Max(v => v.Sum()), Limit ?? 0));
             var slot = r.Width / n;
             var barW = Math.Max(2f, slot * 0.66f);
 
@@ -80,6 +83,16 @@ namespace Dezolati.Controls
             }
 
             WobblyLine(c, r.Left, baseY + 1, r.Right, baseY + 1, new Random(Seed));
+
+            if (Limit is int limit && limit > 0)
+            {
+                var ly = baseY - (baseY - top) * limit / max;
+                c.StrokeColor = Pastelky.Vino.WithAlpha(0.8f);
+                c.StrokeSize = 1.3f;
+                c.StrokeDashPattern = new float[] { 5, 4 };
+                c.DrawLine(r.Left, ly, r.Right, ly);
+                c.StrokeDashPattern = null;
+            }
         }
 
         private void DrawRatio(ICanvas c, RectF r)
@@ -112,7 +125,7 @@ namespace Dezolati.Controls
         private static float J(Random rnd, float amount) => (float)(rnd.NextDouble() * 2 - 1) * amount;
 
         /// <summary>Vyčmárá obdélník cikcakem a obtáhne ho.</summary>
-        private static void Scribble(ICanvas c, RectF rect, Color color, Random rnd)
+        internal static void Scribble(ICanvas c, RectF rect, Color color, Random rnd)
         {
             if (rect.Width < 0.5f || rect.Height < 0.5f) return;
 
@@ -155,7 +168,7 @@ namespace Dezolati.Controls
             c.DrawPath(WobblyRect(rect, rnd));
         }
 
-        private static PathF WobblyRect(RectF r, Random rnd)
+        internal static PathF WobblyRect(RectF r, Random rnd)
         {
             const float j = 0.7f;
             var p = new PathF();

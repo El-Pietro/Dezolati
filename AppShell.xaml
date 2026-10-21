@@ -46,5 +46,9 @@
         Title="Co je nového"
         ContentTemplate="{DataTemplate pages:Novinky}"
         Route="Novinky" />
+    <ShellContent
+        Title="Spotřeba"
+        ContentTemplate="{DataTemplate pages:Spotreba}"
+        Route="Spotreba" />
 
 </Shell>

@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:controls="clr-namespace:Dezolati.Controls"
+             x:Class="Dezolati.Pages.Spotreba"
+             Title="Spotřeba">
+    <Grid RowDefinitions="Auto, *">
+        <Image Grid.RowSpan="2" Source="{AppThemeBinding Light=woodlight.jpg, Dark=wooddark.jpg}" Aspect="AspectFill" />
+
+        <BoxView Grid.Row="0" HeightRequest="0" Color="Transparent" InputTransparent="True" Margin="{DynamicResource TopBarMargin}" />
+        <controls:PencilButton Grid.Row="0" Variant="Outline" Text="Zpět" IsVisible="{OnPlatform Default=True, Android=False}"
+                               HorizontalOptions="Start" Margin="{DynamicResource TopBarMargin}" Clicked="OnZpetClicked" />
+
+        <Border Grid.Row="1" Style="{StaticResource Listek}">
+            <ScrollView>
+                <VerticalStackLayout Spacing="4">
+                    <Label Text="Spotřeba" Style="{StaticResource Title}" />
+                    <Label x:Name="UpdatedLabel" Style="{StaticResource Small}" HorizontalTextAlignment="Center" />
+                    <ActivityIndicator x:Name="Busy" IsRunning="False" IsVisible="False" Color="{StaticResource Pencil}" />
+                    <Label x:Name="ErrorLabel" Style="{StaticResource Error}" IsVisible="False" />
+
+                    <VerticalStackLayout x:Name="UsageBox" Spacing="4" IsVisible="False">
+                        <Label x:Name="TodayHeading" Style="{StaticResource Heading}" Margin="0,8,0,0" />
+                        <VerticalStackLayout x:Name="TodayBox" Spacing="2" />
+
+                        <Label Text="Tento měsíc" Style="{StaticResource Heading}" Margin="0,14,0,0" />
+                        <VerticalStackLayout x:Name="MonthBox" Spacing="2" />
+
+                        <Label Text="Čtení za posledních 30 dní" Style="{StaticResource Heading}" Margin="0,14,0,0" />
+                        <Label x:Name="ReadsCaption" Style="{StaticResource Small}" />
+                        <GraphicsView x:Name="ReadsChart" HeightRequest="120" />
+
+                        <Label Text="Zápisy za posledních 30 dní" Style="{StaticResource Heading}" Margin="0,12,0,0" />
+                        <Label x:Name="WritesCaption" Style="{StaticResource Small}" />
+                        <GraphicsView x:Name="WritesChart" HeightRequest="120" />
+
+                        <Label Text="Přerušovaná čára = denní limit zdarma. Den se počítá od 9:00 do 9:00 (půlnoc v Kalifornii, kdy Google limity nuluje). Čísla mají zpoždění pár minut. Když něco přeleze 80 %, přijde ti oznámení."
+                               Style="{StaticResource Small}" Margin="0,12,0,0" />
+                    </VerticalStackLayout>
+
+                    <controls:PencilButton x:Name="RefreshButton" Text="Obnovit" Variant="Secondary"
+                                           Margin="0,14,0,0" Clicked="OnRefreshClicked" />
+                </VerticalStackLayout>
+            </ScrollView>
+        </Border>
+    </Grid>
+</ContentPage>
