@@ -35,6 +35,34 @@ namespace Dezolati.Services
             return new DailyDrinksModel { UserId = uid, Day = s.Day, Pivo = s.Pivo, Vino = s.Vino, Panaky = s.Panaky };
         }
 
+        // ---------------- „lístek v telefonu je aktuální“ (úspora čtení) ----------------
+        // Po přečtení ze serveru appka chvíli věří svému lístku: vlastní zápisy si do něj přičítá sama
+        // (DrinkQueue po odeslání), takže návrat na lístek nic nečte. Při návratu do appky
+        // nebo po 10 minutách (zápis z jiného telefonu / Discordu) se zase přečte ze serveru.
+        private static readonly TimeSpan FreshFor = TimeSpan.FromMinutes(10);
+        private static string? _freshKey;
+        private static DateTime _freshAt;
+
+        public static bool IsFresh(string uid, DateTime day) =>
+            _freshKey == $"{uid}_{day:yyyyMMdd}" && DateTime.UtcNow - _freshAt < FreshFor
+            && Load<DailySnapshot>(DailyKey(uid)) is { } s && s.Day.Date == day.Date;
+
+        public static void MarkFresh(string uid, DateTime day)
+        {
+            _freshKey = $"{uid}_{day:yyyyMMdd}";
+            _freshAt = DateTime.UtcNow;
+        }
+
+        public static void MarkStale() => _freshKey = null;
+
+        /// <summary>Odeslaný zápis přičíst k lístku v telefonu (jen když je to ten samý den).</summary>
+        public static void ApplyDelta(string uid, DateTime day, int pivo, int vino, int panaky)
+        {
+            var s = Load<DailySnapshot>(DailyKey(uid));
+            if (s == null || s.Day.Date != day.Date) return;
+            Save(DailyKey(uid), new DailySnapshot(s.Day, Math.Max(0, s.Pivo + pivo), Math.Max(0, s.Vino + vino), Math.Max(0, s.Panaky + panaky)));
+        }
+
         public static void Clear(string uid)
         {
             Preferences.Remove(ProfileKey(uid));

@@ -29,7 +29,7 @@
 
         <!-- Lístek -->
         <Border Grid.Row="1" Style="{StaticResource Listek}" Margin="16,0,16,12">
-            <Grid RowDefinitions="Auto, Auto, *">
+            <Grid RowDefinitions="Auto, Auto, Auto, *">
                 <Label Grid.Row="0" Text="Dezoláti!" Style="{StaticResource Title}" />
 
                 <Label x:Name="SouhrnLabel"
@@ -38,7 +38,15 @@
                        HorizontalOptions="Fill"
                        HorizontalTextAlignment="Center" />
 
-                <ScrollView Grid.Row="2" Margin="0,8,0,0">
+                <!-- orientační promile – malým písmem, není to hlavní informace -->
+                <Label x:Name="PromileLabel"
+                       Grid.Row="2"
+                       Style="{StaticResource Small}"
+                       TextColor="{StaticResource InkSoft}"
+                       HorizontalTextAlignment="Center"
+                       IsVisible="False" />
+
+                <ScrollView Grid.Row="3" Margin="0,8,0,0">
                     <VerticalStackLayout Spacing="2">
                         <Label Text="Pívo:" Style="{StaticResource Heading}">
                             <Label.GestureRecognizers>

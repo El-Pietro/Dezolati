@@ -1,4 +1,4 @@
-using Dezolati.Controls;
+﻿using Dezolati.Controls;
 using Dezolati.Models;
 using Dezolati.Services;
 using Mapsui;
@@ -77,7 +77,17 @@ public partial class Hospody : ContentPage
         Outline = new Pen(MColor.White, 3)
     };
 
+    // domov (jen v telefonu): modrý trojúhelník
+    private static readonly IStyle HomeSymbol = new SymbolStyle
+    {
+        SymbolType = SymbolType.Triangle,
+        SymbolScale = 0.6,
+        Fill = new MBrush(new MColor(70, 110, 170)),
+        Outline = new Pen(MColor.White, 2)
+    };
+
     private MapControl? mapControl;
+    private MemoryLayer? homeLayer;
     private MemoryLayer? pubLayer;
     private MemoryLayer? meLayer;
     private PubInfo? selected;
@@ -113,8 +123,11 @@ public partial class Hospody : ContentPage
 
         pubLayer = new MemoryLayer("Hospody") { Style = null, IsMapInfoLayer = true };
         meLayer = new MemoryLayer("Já") { Style = null };
+        homeLayer = new MemoryLayer("Domov") { Style = null };
+        map.Layers.Add(homeLayer);
         map.Layers.Add(pubLayer);
         map.Layers.Add(meLayer);
+        ShowHome();
 
         // výchozí pohled: Brno
         var (x, y) = SphericalMercator.FromLonLat(16.6068, 49.1951);
@@ -179,6 +192,39 @@ public partial class Hospody : ContentPage
         }
         pubLayer.Features = features;
         pubLayer.DataHasChanged();
+    }
+
+    private void ShowHome()
+    {
+        if (homeLayer == null) return;
+        var features = new List<IFeature>();
+        if (HomePlace.Location is { } h)
+        {
+            var (x, y) = SphericalMercator.FromLonLat(h.Lon, h.Lat);
+            var f = new PointFeature(x, y);
+            f.Styles.Add(HomeSymbol);
+            features.Add(f);
+        }
+        homeLayer.Features = features;
+        homeLayer.DataHasChanged();
+    }
+
+    private async void OnHomeHereClicked(object sender, EventArgs e)
+    {
+        if (mapControl == null) return;
+        var vp = mapControl.Map.Navigator.Viewport;
+        var (lon, lat) = SphericalMercator.ToLonLat(vp.CenterX, vp.CenterY);
+
+        var replace = HomePlace.IsSet;
+        if (!await Listek.ConfirmAsync(this, replace ? "Přestěhoval ses?" : "Tady bydlíš?",
+                "Pití do 80 m odsud se bude počítat jako „doma“. Poloha domova zůstane jen v tomhle telefonu, " +
+                "kámoši uvidí nanejvýš to, že jsi pil doma.",
+                replace ? "Nový domov" : "Tady bydlím"))
+            return;
+
+        HomePlace.Set(Math.Round(lat, 6), Math.Round(lon, 6));
+        CloseAdd();
+        ShowHome();
     }
 
     private void OnMapInfo(object? sender, MapInfoEventArgs e)

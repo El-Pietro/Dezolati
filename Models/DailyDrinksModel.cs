@@ -12,9 +12,20 @@
         public int Pivo { get; set; }
         public int Vino { get; set; }
         public int Panaky { get; set; }
+        /// <summary>Útrata v Kč (null = den z doby před sledováním útraty a bez odhadu).</summary>
+        public int? Kc { get; set; }
+        /// <summary>Útrata je jen zpětný odhad podle výchozích cen.</summary>
+        public bool KcEstimate { get; set; }
+        /// <summary>Kousky podle místa (od verze 3.7; zbytek = nevím).</summary>
+        public int PlacePub { get; set; }
+        public int PlaceHome { get; set; }
+        public int PlaceOther { get; set; }
 
         public int Total => Pivo + Vino + Panaky;
     }
+
+    /// <summary>Jedna hospoda ve statistice „kde nejčastěji piju“ (UserPubStats/{uid}).</summary>
+    public sealed record PubStat(string PubId, string? Name, int Count, int Visits, int Kc, DateTime? LastAt);
 
     /// <summary>Statistiky jednoho uživatele.</summary>
     public class UserStats
@@ -33,5 +44,13 @@
         public string? CurrentPubName { get; set; }
         /// <summary>Kdy tam zapsal naposledy (UTC).</summary>
         public DateTime? CurrentPubAt { get; set; }
+        /// <summary>Útrata za celou historii (jen dny, kde je známá).</summary>
+        public long TotalKc { get; set; }
+        /// <summary>Kousky podle místa za celou historii.</summary>
+        public long TotalPlacePub { get; set; }
+        public long TotalPlaceHome { get; set; }
+        public long TotalPlaceOther { get; set; }
+        /// <summary>Hospody, nejčastější první.</summary>
+        public List<PubStat> Pubs { get; set; } = new();
     }
 }

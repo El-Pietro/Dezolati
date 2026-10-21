@@ -122,7 +122,7 @@ namespace Dezolati.Services
         }
 
         /// <summary>
-        /// Zápis pití: 0 čtení, 3 zápisy v jedné atomické dávce.
+        /// Zápis pití: 0 čtení (+ max. 1 za 12 h kvůli cenám hospody), 3–4 zápisy v jedné atomické dávce.
         /// Jde přes frontu v telefonu – bez signálu se odešle později.
         /// Vrací true = uloženo na serveru, false = čeká ve frontě.
         /// </summary>
@@ -134,14 +134,19 @@ namespace Dezolati.Services
             var now = DateTime.UtcNow;
             var day = UserSession.CurrentPubDay;   // den se určí teď, ne až při odeslání
 
-            // hospoda podle polohy (jen při ručním zápisu a se zapnutým poznáváním hospody)
-            var (pubId, pubName) = fromReminder ? (null, null) : await PushService.PubHereAsync();
+            // kde jsem: při ručním zápisu podle polohy, z připomínky (bez polohy) jako minule
+            var last = PushService.LastPlace(userId, day);
+            var place = fromReminder ? last : await PushService.PlaceHereAsync();
+            var newVisit = place.PubId != null && place.PubId != last.PubId;
+            var kc = await Prices.ForDrinkAsync(pivo, vino, panaky, place.PubId);
 
             DrinkQueue.Enqueue(userId, new PendingDrink(Guid.NewGuid().ToString("N"), now, day,
                 pivo, vino, panaky, Correction: false, Name: name ?? UserSession.Profile?.Nickname,
-                PubId: pubId, PubName: pubName, SharePub: PushService.SharePub));
-            if (!fromReminder && PushService.DetectPub)
-                PushService.RememberPub(userId, day, pubId, pubName);   // pro lístek: „📍 U Peťky“
+                PubId: place.PubId, PubName: place.PubName, SharePub: PushService.SharePub,
+                Place: place.Place, Kc: kc, NewVisit: newVisit));
+            if (PushService.DetectPub && place.Place != null)
+                PushService.RememberPlace(userId, day, place);   // pro lístek: „📍 U Peťky“
+            Promile.Log(userId, day, now, pivo, vino, panaky);
             UserSession.OnDrinkRecorded(now, day);
 
             // další připomínka za X minut (lokální notifikace)
@@ -152,20 +157,45 @@ namespace Dezolati.Services
 
         /// <summary>
         /// Škrtnutí čárky z lístku daného dne (záporné hodnoty). Neposouvá čas posledního drinku.
+        /// Útrata se odečte cenou hospody, kde se ten den pilo naposledy, jinak výchozí cenou.
         /// Vrací true = uloženo, false = čeká ve frontě.
         /// </summary>
         public async Task<bool> RecordCorrection(string userId, DateTime day, int pivo, int vino, int panaky)
         {
+            pivo = Math.Abs(pivo); vino = Math.Abs(vino); panaky = Math.Abs(panaky);
+            var last = PushService.LastPlace(userId, day);
+            var kc = await Prices.ForDrinkAsync(pivo, vino, panaky, last.PubId);
+
             DrinkQueue.Enqueue(userId, new PendingDrink(Guid.NewGuid().ToString("N"), DateTime.UtcNow, day.Date,
-                -Math.Abs(pivo), -Math.Abs(vino), -Math.Abs(panaky), Correction: true, Name: UserSession.Profile?.Nickname));
+                -pivo, -vino, -panaky, Correction: true, Name: UserSession.Profile?.Nickname, Kc: -kc));
             Reminders.OnCorrection(day, pivo, vino, panaky);
+            if (day.Date == UserSession.CurrentPubDay.Date)
+                Promile.Log(userId, day, DateTime.UtcNow, -pivo, -vino, -panaky);
 
             return await DrinkQueue.FlushAsync(userId);
         }
 
         /// <summary>
-        /// Statistiky za ~33 čtení bez ohledu na délku historie:
-        /// agregace (1) + posledních 30 dní (≤30) + rekord (1) + hospodský den kámoše (1).
+        /// Úprava staršího dne (max. 30 dní zpět): dopsat (kladné) nebo škrtnout (záporné).
+        /// Jako korekce – neposouvá poslední pivo, místo „nevím“, útrata výchozími cenami.
+        /// </summary>
+        public async Task<bool> RecordPastEdit(string userId, DateTime day, int pivo, int vino, int panaky)
+        {
+            if (day.Date < DateTime.Today.AddDays(-31)) throw new InvalidOperationException("Upravit jde jen posledních 30 dní.");
+            var kc = Prices.Default(pivo, vino, panaky);
+            DrinkQueue.Enqueue(userId, new PendingDrink(Guid.NewGuid().ToString("N"), DateTime.UtcNow, day.Date,
+                pivo, vino, panaky, Correction: true, Name: UserSession.Profile?.Nickname, Kc: kc));
+            if (day.Date == UserSession.CurrentPubDay.Date)
+            {
+                Reminders.Adjust(day, pivo, vino, panaky);
+                Promile.Log(userId, day, DateTime.UtcNow, pivo, vino, panaky);
+            }
+            return await DrinkQueue.FlushAsync(userId);
+        }
+
+        /// <summary>
+        /// Statistiky za ~35 čtení bez ohledu na délku historie:
+        /// 2 agregace + posledních 30 dní (≤30) + rekord (1) + hospodský den kámoše (1) + hospody (1).
         /// </summary>
         public async Task<UserStats> GetStats(string userId)
         {
@@ -184,10 +214,21 @@ namespace Dezolati.Services
             var recordTask = FirestoreRest.QueryAsync("DailyDrinks", byUser,
                 orderBy: "Total", descending: true, limit: 1);
 
-            await Task.WhenAll(aggTask, lastTask, recordTask);
+            // útrata a místa za celou historii (agregace bere max. 5 polí → druhý dotaz, 1 čtení)
+            var agg2Task = FirestoreRest.AggregateAsync("DailyDrinks", byUser,
+                new Dictionary<string, string>
+                {
+                    ["kc"] = "Kc", ["home"] = "PlaceHome", ["pub"] = "PlacePub", ["other"] = "PlaceOther"
+                });
+
+            var pubsTask = GetPubStats(userId);
+
+            await Task.WhenAll(aggTask, lastTask, recordTask, agg2Task, pubsTask);
 
             var agg = aggTask.Result;
             long Get(string k) => agg.TryGetValue(k, out var v) ? v : 0;
+            var agg2 = agg2Task.Result;
+            long Get2(string k) => agg2.TryGetValue(k, out var v) ? v : 0;
 
             return new UserStats
             {
@@ -197,8 +238,128 @@ namespace Dezolati.Services
                 Record = recordTask.Result.Select(ToDaily).FirstOrDefault(r => r.Total > 0),
                 Last30 = lastTask.Result.Select(ToDaily).OrderByDescending(d => d.Day).ToList(),
                 CurrentPubName = pubName,
-                CurrentPubAt = pubAt
+                CurrentPubAt = pubAt,
+                TotalKc = Get2("kc"),
+                TotalPlaceHome = Get2("home"),
+                TotalPlacePub = Get2("pub"),
+                TotalPlaceOther = Get2("other"),
+                Pubs = pubsTask.Result
             };
+        }
+
+        // ================= Statistika hospod =================
+
+        /// <summary>
+        /// Kde dotyčný pije nejčastěji (1 čtení). U sebe při prvním otevření jednou dopočítá zápisy
+        /// od verze 3.5 (od té doby mají hospodu) – čtení = počet takových zápisů.
+        /// </summary>
+        public async Task<List<PubStat>> GetPubStats(string userId)
+        {
+            var doc = await FirestoreRest.GetAsync($"UserPubStats/{userId}");
+            var backfilled = doc?.Fields["Backfilled"]?["booleanValue"]?.GetValue<bool>() == true;
+            if (!backfilled && userId == AuthSession.Uid)
+            {
+                try { return await BackfillPubStats(userId); }
+                catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Dopočet hospod: {ex.Message}"); }
+            }
+            return ParsePubStats(doc);
+        }
+
+        private static List<PubStat> ParsePubStats(FsDoc? doc)
+        {
+            var list = new List<PubStat>();
+            if (doc?.Fields["Pubs"]?["mapValue"]?["fields"] is not JsonObject pubs) return list;
+            foreach (var (id, node) in pubs)
+            {
+                if (node?["mapValue"]?["fields"] is not JsonObject f) continue;
+                var lastAt = f["LastAt"]?["timestampValue"]?.GetValue<string>();
+                list.Add(new PubStat(id,
+                    f["Name"]?["stringValue"]?.GetValue<string>(),
+                    (int)FsDoc.ValueToLong(f["Count"]),
+                    (int)FsDoc.ValueToLong(f["Visits"]),
+                    (int)FsDoc.ValueToLong(f["Kc"]),
+                    lastAt == null ? null : DateTime.Parse(lastAt, CultureInfo.InvariantCulture,
+                        DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal)));
+            }
+            return list.Where(p => p.Count > 0)
+                .OrderByDescending(p => p.Count).ThenByDescending(p => p.LastAt).ToList();
+        }
+
+        /// <summary>
+        /// Jednorázově: statistika hospod ze zápisů, které hospodu mají (od 3.5 mají pole SharePub).
+        /// Dva dotazy jen na rovnost → nepotřebují složený index.
+        /// </summary>
+        private async Task<List<PubStat>> BackfillPubStats(string userId)
+        {
+            var a = FirestoreRest.QueryAsync("Drinks", new[] { Filter.Eq("UserId", userId), Filter.Eq("SharePub", true) });
+            var b = FirestoreRest.QueryAsync("Drinks", new[] { Filter.Eq("UserId", userId), Filter.Eq("SharePub", false) });
+            await Task.WhenAll(a, b);
+
+            var pubs = new Dictionary<string, (string? Name, int Count, HashSet<string> Days, DateTime? Last, int Kc)>();
+            foreach (var d in a.Result.Concat(b.Result))
+            {
+                if (d.Str("PubId") is not string pubId) continue;
+                if (d.Fields["Correction"]?["booleanValue"]?.GetValue<bool>() == true) continue;
+                var total = (int)(d.Int("Pivo") + d.Int("Vino") + d.Int("Panaky"));
+                if (total <= 0) continue;
+                var at = d.Time("DrinkAt");
+                var cur = pubs.TryGetValue(pubId, out var x) ? x : (null, 0, new HashSet<string>(), null, 0);
+                cur.Count += total;
+                cur.Kc += (int)d.Int("Kc");
+                cur.Days.Add(d.Str("Day") ?? "");
+                if (cur.Last == null || at > cur.Last) { cur.Last = at; cur.Name = d.Str("PubName") ?? cur.Name; }
+                cur.Name ??= d.Str("PubName");
+                pubs[pubId] = cur;
+            }
+
+            var map = pubs.ToDictionary(kv => kv.Key, kv => (object?)new Dictionary<string, object?>
+            {
+                ["Name"] = kv.Value.Name,
+                ["Count"] = kv.Value.Count,
+                ["Visits"] = kv.Value.Days.Count,
+                ["Kc"] = kv.Value.Kc,
+                ["LastAt"] = kv.Value.Last
+            });
+
+            // celý dokument naráz (zahrnuje i zápisy z 3.7, takže nic nechybí ani se nezdvojí)
+            await FirestoreRest.CommitAsync(new[]
+            {
+                FirestoreRest.SetWrite($"UserPubStats/{userId}", new()
+                {
+                    ["UserId"] = userId,
+                    ["Backfilled"] = true,
+                    ["Pubs"] = map
+                })
+            });
+
+            return pubs.Select(kv => new PubStat(kv.Key, kv.Value.Name, kv.Value.Count, kv.Value.Days.Count, kv.Value.Kc, kv.Value.Last))
+                .OrderByDescending(p => p.Count).ThenByDescending(p => p.LastAt).ToList();
+        }
+
+        // ================= Útrata – zpětný odhad =================
+
+        /// <summary>
+        /// Dny bez útraty dostanou odhad podle výchozích cen (KcEstimate = true).
+        /// Čtení = počet dní s pitím, zápisy = počet dní bez útraty. Vrací (dní, Kč).
+        /// </summary>
+        public async Task<(int Days, long Kc)> EstimatePastSpend(string userId)
+        {
+            if (!Prices.AnyDefault) throw new InvalidOperationException("Nejdřív si v Nastavení vyplň výchozí ceny.");
+            var docs = await FirestoreRest.QueryAsync("DailyDrinks", new[] { Filter.Eq("UserId", userId) });
+            var writes = new List<JsonObject>();
+            long sum = 0;
+            foreach (var d in docs)
+            {
+                if (d.Has("Kc")) continue;
+                var kc = Prices.Default((int)d.Int("Pivo"), (int)d.Int("Vino"), (int)d.Int("Panaky"));
+                if (kc <= 0) continue;
+                sum += kc;
+                writes.Add(FirestoreRest.SetWrite($"DailyDrinks/{d.Id}",
+                    new() { ["Kc"] = kc, ["KcEstimate"] = true },
+                    mask: new[] { "Kc", "KcEstimate" }));
+            }
+            await FirestoreRest.CommitAsync(writes);
+            return (writes.Count, sum);
         }
 
         // ================= Přátelé =================
@@ -346,7 +507,12 @@ namespace Dezolati.Services
             UpdatedAt = d.Time("UpdatedAt") ?? d.Time("UpdateAt"),
             Pivo = (int)d.Int("Pivo"),
             Vino = (int)d.Int("Vino"),
-            Panaky = (int)d.Int("Panaky")
+            Panaky = (int)d.Int("Panaky"),
+            Kc = d.Has("Kc") ? (int)d.Int("Kc") : null,
+            KcEstimate = d.Fields["KcEstimate"]?["booleanValue"]?.GetValue<bool>() == true,
+            PlacePub = (int)d.Int("PlacePub"),
+            PlaceHome = (int)d.Int("PlaceHome"),
+            PlaceOther = (int)d.Int("PlaceOther")
         };
     }
 }

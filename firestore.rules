@@ -63,6 +63,7 @@ service cloud.firestore {
       function d() { return request.resource.data; }
       function textOk(f) { return !(f in d()) || (d()[f] is string && d()[f].size() <= 300); }
       function boolOk(f) { return !(f in d()) || d()[f] is bool; }
+      function priceOk(f) { return !(f in d()) || d()[f] == null || (d()[f] is int && d()[f] > 0 && d()[f] <= 5000); }
       function isCustomId() { return pubId.matches('c_[a-f0-9]{16}'); }
       function editOk() {
         return getAfter(/databases/$(database)/documents/PubEdits/$(d().EditId)).data.PubId == pubId
@@ -73,11 +74,13 @@ service cloud.firestore {
             && d().keys().hasOnly(
                  ['PubId', 'Name', 'DisplayName', 'Renamed', 'Closed', 'Flagged', 'Taps', 'Prices', 'Hours', 'Note',
                   'Custom', 'Kind', 'Lat', 'Lon', 'CreatedBy', 'CreatedByNick',
-                  'UpdatedAt', 'UpdatedBy', 'UpdatedByNick', 'EditId'])
+                  'UpdatedAt', 'UpdatedBy', 'UpdatedByNick', 'EditId',
+                  'PricePivo', 'PriceVino', 'PricePanak', 'Deleted'])
             && d().PubId == pubId
             && d().UpdatedBy == me()
             && textOk('DisplayName') && textOk('Taps') && textOk('Prices') && textOk('Hours') && textOk('Note')
-            && boolOk('Renamed') && boolOk('Closed') && boolOk('Flagged')
+            && boolOk('Renamed') && boolOk('Closed') && boolOk('Flagged') && boolOk('Deleted')
+            && priceOk('PricePivo') && priceOk('PriceVino') && priceOk('PricePanak')
             && editOk();
       }
 
@@ -97,7 +100,10 @@ service cloud.firestore {
                     && d().get('Custom', false) == resource.data.get('Custom', false)
                     && d().get('CreatedBy', '') == resource.data.get('CreatedBy', '')
                     && d().get('Lat', 0) == resource.data.get('Lat', 0)
-                    && d().get('Lon', 0) == resource.data.get('Lon', 0);
+                    && d().get('Lon', 0) == resource.data.get('Lon', 0)
+                    // „smazat“ (skrýt) vlastní podnik smí jen jeho autor
+                    && (d().get('Deleted', false) == resource.data.get('Deleted', false)
+                        || (resource.data.get('Custom', false) == true && resource.data.CreatedBy == me()));
 
       // smazat jde jen vlastní podnik a jen jeho autor (ostatní ho můžou označit jako zavřený)
       allow delete: if signedIn() && resource.data.get('Custom', false) == true && resource.data.CreatedBy == me();
@@ -112,6 +118,12 @@ service cloud.firestore {
       allow delete: if signedIn() && resource.data.Uid == me();
     }
 
+    // Statistika hospod uživatele (kde pije nejčastěji): kámoši ji vidí, zapisuje jen on sám.
+    match /UserPubStats/{uid} {
+      allow read: if signedIn();
+      allow write: if signedIn() && me() == uid;
+    }
+
     // PubPresence (kdo už dnes v které hospodě oznámil, že sedí) zapisuje jen server – z appky nic.
 
     // Historie úprav: jen přidávat, nikdo nemaže ani nepřepisuje.
@@ -119,7 +131,8 @@ service cloud.firestore {
       allow read: if signedIn();
       allow create: if signedIn()
                     && request.resource.data.keys().hasOnly(
-                         ['PubId', 'By', 'ByNick', 'At', 'Action', 'Closed', 'DisplayName', 'Taps', 'Prices', 'Hours', 'Note'])
+                         ['PubId', 'By', 'ByNick', 'At', 'Action', 'Closed', 'DisplayName', 'Taps', 'Prices', 'Hours', 'Note',
+                          'PricePivo', 'PriceVino', 'PricePanak'])
                     && request.resource.data.By == me()
                     && request.resource.data.At is timestamp;
       allow update, delete: if false;

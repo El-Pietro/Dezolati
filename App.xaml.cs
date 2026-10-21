@@ -18,6 +18,7 @@ namespace Dezolati
         protected override void OnResume()
         {
             base.OnResume();
+            Services.LocalCache.MarkStale();               // mezitím mohl zapisovat jiný telefon → lístek přečíst ze serveru
             Services.UserSession.RaiseDrinksChanged();
             Services.FriendBadge.Invalidate();             // mezitím mohla přijít žádost o přátelství
             _ = Services.FriendBadge.RefreshAsync();

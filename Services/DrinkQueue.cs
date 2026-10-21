@@ -15,7 +15,10 @@ namespace Dezolati.Services
         string? Name,
         string? PubId = null,   // ve které hospodě (když je zapnuté poznávání hospody)
         string? PubName = null,
-        bool SharePub = false); // hlásit kámošům (oznámení + „teď sedí“ v profilu)
+        bool SharePub = false,  // hlásit kámošům (oznámení + „teď sedí“ v profilu)
+        string? Place = null,   // hospoda / doma / jinde / null = nevím (Services/Places.cs)
+        int Kc = 0,             // kolik to stálo (u škrtnutí záporné)
+        bool NewVisit = false); // první zápis dne v téhle hospodě (statistika návštěv)
 
     /// <summary>
     /// Fronta zápisů v telefonu. Každý zápis jde nejdřív sem a hned se zkusí odeslat.
@@ -117,6 +120,7 @@ namespace Dezolati.Services
             {
                 while (Peek(uid) is PendingDrink item)
                 {
+                    var stored = true;
                     try
                     {
                         await FirestoreRest.CommitAsync(BuildWrites(uid, item));
@@ -129,6 +133,7 @@ namespace Dezolati.Services
                     {
                         // databáze zápis odmítla (pravidla, špatná data) → opakování nepomůže, zahodit
                         System.Diagnostics.Debug.WriteLine($"Zápis {item.Id} zahozen: {ex.Message}");
+                        stored = false;
                     }
                     catch (Exception ex)
                     {
@@ -139,6 +144,8 @@ namespace Dezolati.Services
                     }
 
                     Remove(uid, item.Id);
+                    // lístek v telefonu ví o zápisu i bez dalšího čtení ze serveru
+                    if (stored) LocalCache.ApplyDelta(uid, item.Day, item.Pivo, item.Vino, item.Panaky);
                 }
                 return true;
             }
@@ -148,7 +155,7 @@ namespace Dezolati.Services
             }
         }
 
-        /// <summary>3 zápisy v jedné atomické dávce (u škrtnutí 2).</summary>
+        /// <summary>3–4 zápisy v jedné atomické dávce (u škrtnutí 2): log, denní součet, profil, statistika hospod.</summary>
         private static List<JsonObject> BuildWrites(string uid, PendingDrink d)
         {
             var key = PubDay.Key(d.Day);
@@ -170,7 +177,9 @@ namespace Dezolati.Services
                     ["Correction"] = d.Correction,
                     ["PubId"] = d.PubId,       // kde se pilo (statistiky)
                     ["PubName"] = d.PubName,
-                    ["SharePub"] = d.SharePub  // Cloud Function pošle kámošům „sedí v hospodě“ jen při true
+                    ["SharePub"] = d.SharePub, // Cloud Function pošle kámošům „sedí v hospodě“ jen při true
+                    ["Place"] = d.Place,
+                    ["Kc"] = d.Kc
                 }, mustNotExist: true),
 
                 // 2) denní součet – atomicky přičíst (u škrtnutí odečíst)
@@ -183,13 +192,7 @@ namespace Dezolati.Services
                         ["UpdatedAt"] = d.At
                     },
                     mask: new[] { "UserId", "Date", "Day", "UpdatedAt" },
-                    increments: new Dictionary<string, long>
-                    {
-                        ["Pivo"] = d.Pivo,
-                        ["Vino"] = d.Vino,
-                        ["Panaky"] = d.Panaky,
-                        ["Total"] = d.Pivo + d.Vino + d.Panaky
-                    })
+                    increments: DailyIncrements(d))
             };
 
             // 3) poslední drink kvůli 3h pauze (škrtnutí ho neposouvá)
@@ -209,7 +212,57 @@ namespace Dezolati.Services
                     mask: new[] { "LastDrinkAt", "LastDrinkDay", "CurrentPubId", "CurrentPubName", "CurrentPubAt" }));
             }
 
+            // 4) statistika hospod (kde nejčastěji piju) – jen u skutečného pití v hospodě
+            var total = d.Pivo + d.Vino + d.Panaky;
+            if (!d.Correction && d.PubId != null && total > 0)
+            {
+                var seg = FieldSegment(d.PubId);
+                var inc = new Dictionary<string, long>
+                {
+                    [$"Pubs.{seg}.Count"] = total,
+                    [$"Pubs.{seg}.Kc"] = d.Kc
+                };
+                if (d.NewVisit) inc[$"Pubs.{seg}.Visits"] = 1;
+
+                writes.Add(FirestoreRest.SetWrite($"UserPubStats/{uid}",
+                    new()
+                    {
+                        ["UserId"] = uid,
+                        ["Pubs"] = new Dictionary<string, object?>
+                        {
+                            [d.PubId] = new Dictionary<string, object?> { ["Name"] = d.PubName, ["LastAt"] = d.At }
+                        }
+                    },
+                    mask: new[] { "UserId", $"Pubs.{seg}.Name", $"Pubs.{seg}.LastAt" },
+                    increments: inc));
+            }
+
             return writes;
         }
+
+        /// <summary>Přičtení do denního součtu: kousky, útrata, místo.</summary>
+        private static Dictionary<string, long> DailyIncrements(PendingDrink d)
+        {
+            var total = d.Pivo + d.Vino + d.Panaky;
+            var inc = new Dictionary<string, long>
+            {
+                ["Pivo"] = d.Pivo,
+                ["Vino"] = d.Vino,
+                ["Panaky"] = d.Panaky,
+                ["Total"] = total
+            };
+            if (d.Kc != 0) inc["Kc"] = d.Kc;
+            switch (d.Place)
+            {
+                case Services.Place.Pub: inc["PlacePub"] = total; break;
+                case Services.Place.Home: inc["PlaceHome"] = total; break;
+                case Services.Place.Other: inc["PlaceOther"] = total; break;
+            }
+            return inc;
+        }
+
+        /// <summary>Id hospody jako část cesty k poli (n123, c_ab12… projdou; jinak v `zpětných uvozovkách`).</summary>
+        internal static string FieldSegment(string id) =>
+            System.Text.RegularExpressions.Regex.IsMatch(id, "^[A-Za-z_][A-Za-z0-9_]*$") ? id : $"`{id.Replace("`", "")}`";
     }
 }

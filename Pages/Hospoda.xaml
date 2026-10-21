@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8" ?>
+﻿<?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:controls="clr-namespace:Dezolati.Controls"
@@ -37,6 +37,7 @@
                         <Label x:Name="TapsLabel" Style="{StaticResource Body}" />
                         <Label x:Name="TapsSourceLabel" Text="podle OpenStreetMap" Style="{StaticResource Small}" IsVisible="False" />
                         <Label Text="Ceny:" Style="{StaticResource FieldLabel}" />
+                        <Label x:Name="PriceNumbersLabel" Style="{StaticResource Body}" IsVisible="False" />
                         <Label x:Name="PricesLabel" Style="{StaticResource Body}" />
                         <Label Text="Otvíračka:" Style="{StaticResource FieldLabel}" />
                         <Label x:Name="HoursLabel" Style="{StaticResource Body}" />
@@ -64,8 +65,14 @@
                         <Entry x:Name="NameEntry" MaxLength="80" />
                         <Label Text="Co točí:" Style="{StaticResource FieldLabel}" />
                         <Editor x:Name="TapsEntry" Placeholder="Plzeň 12°, Kozel 11°…" AutoSize="TextChanges" MaxLength="300" />
-                        <Label Text="Ceny:" Style="{StaticResource FieldLabel}" />
-                        <Editor x:Name="PricesEntry" Placeholder="Plzeň 0,5 l = 62 Kč" AutoSize="TextChanges" MaxLength="300" />
+                        <Label Text="Ceny v Kč (pro výpočet útraty):" Style="{StaticResource FieldLabel}" />
+                        <Grid ColumnDefinitions="*, *, *" ColumnSpacing="8">
+                            <Entry x:Name="PricePivoEntry" Grid.Column="0" Placeholder="pivo 0,5" Keyboard="Numeric" MaxLength="4" />
+                            <Entry x:Name="PriceVinoEntry" Grid.Column="1" Placeholder="víno 2 dcl" Keyboard="Numeric" MaxLength="4" />
+                            <Entry x:Name="PricePanakEntry" Grid.Column="2" Placeholder="panák" Keyboard="Numeric" MaxLength="4" />
+                        </Grid>
+                        <Label Text="Ceny – poznámka:" Style="{StaticResource FieldLabel}" />
+                        <Editor x:Name="PricesEntry" Placeholder="Plzeň 0,5 l = 62 Kč, Kozel 48 Kč" AutoSize="TextChanges" MaxLength="300" />
                         <Label Text="Otvíračka:" Style="{StaticResource FieldLabel}" />
                         <Editor x:Name="HoursEntry" Placeholder="Po–Čt 15–23, Pá–So 15–02" AutoSize="TextChanges" MaxLength="300" />
                         <Label Text="Poznámka:" Style="{StaticResource FieldLabel}" />

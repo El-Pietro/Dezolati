@@ -57,6 +57,10 @@ namespace Dezolati.Services
         public static void OnCorrection(DateTime day, int pivo, int vino, int panaky) =>
             AddToTally(day, -Math.Abs(pivo), -Math.Abs(vino), -Math.Abs(panaky));
 
+        /// <summary>Úprava dneška z jiného místa (dopsání ve statistikách) – kladné přičte, záporné ubere.</summary>
+        public static void Adjust(DateTime day, int pivo, int vino, int panaky) =>
+            AddToTally(day, pivo, vino, panaky);
+
         /// <summary>Jednou požádat o povolení notifikací (Android 13+).</summary>
         public static async Task EnsurePermissionAsync()
         {

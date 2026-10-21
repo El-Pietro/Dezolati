@@ -32,6 +32,7 @@ namespace Dezolati.Pages
             FriendBadge.Changed -= OnBadgeChanged;
             FriendBadge.Changed += OnBadgeChanged;
             ShowBadge();
+            StartPromileTimer();
             await LoadData();
 
             // oznámení od kámošů: povolení + token telefonu (jednou za spuštění)
@@ -52,6 +53,36 @@ namespace Dezolati.Pages
             base.OnDisappearing();
             UserSession.DrinksChanged -= OnDrinksChanged;
             FriendBadge.Changed -= OnBadgeChanged;
+            promileTimer?.Stop();
+        }
+
+        // ---------------- orientační promile (malým písmem) ----------------
+
+        private static readonly System.Globalization.CultureInfo Cs = new("cs-CZ");
+        private IDispatcherTimer? promileTimer;
+
+        private void StartPromileTimer()
+        {
+            UpdatePromile();
+            if (promileTimer == null)
+            {
+                promileTimer = Dispatcher.CreateTimer();
+                promileTimer.Interval = TimeSpan.FromMinutes(1);
+                promileTimer.Tick += (_, _) => UpdatePromile();
+            }
+            promileTimer.Start();
+        }
+
+        private void UpdatePromile()
+        {
+            var est = AuthSession.Uid is string uid ? Promile.Estimate(uid, UserSession.Profile?.Gender) : null;
+            if (est is not { } e)
+            {
+                PromileLabel.IsVisible = false;
+                return;
+            }
+            PromileLabel.Text = $"≈ {e.Promile.ToString("0.0", Cs)} ‰ · střízlivý kolem {e.SoberAtLocal:H:mm} · jen odhad, neřiď podle toho";
+            PromileLabel.IsVisible = true;
         }
 
         private void OnBadgeChanged() => MainThread.BeginInvokeOnMainThread(ShowBadge);
@@ -116,12 +147,18 @@ namespace Dezolati.Pages
                     // telefon hlásí, že je bez internetu → na server se ani nezkoušet
                     today = LocalCache.LoadDaily(userId, day);
                 }
+                else if (LocalCache.IsFresh(userId, day))
+                {
+                    // lístek v telefonu je čerstvý (vlastní zápisy se do něj přičítají) → nic nečíst
+                    today = LocalCache.LoadDaily(userId, day);
+                }
                 else
                 {
                     try
                     {
                         today = await firestoreService.GetDailyDrinks(userId, day);
                         LocalCache.SaveDaily(userId, day, today);
+                        LocalCache.MarkFresh(userId, day);
                     }
                     catch (Exception ex) when (Net.IsNetworkError(ex))
                     {
@@ -188,6 +225,7 @@ namespace Dezolati.Pages
                 text += "\n(bez signálu)";
 
             SouhrnLabel.Text = text;
+            UpdatePromile();
 
             // pevný seed = čárky vypadají pokaždé stejně, neskáčou při každém načtení
             DrawCarky(Pivo, pivo, new Random(1));

@@ -77,7 +77,7 @@
                                                FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
                                                CommandParameter="0" Clicked="OnDetectClicked" />
                     </Grid>
-                    <Label Text="Při zápisu se podívá, jestli jsi do 60 m od hospody. Uvidíš ji na lístku a ve statistikách, kámoši ne."
+                    <Label Text="Při zápisu se podívá, jestli jsi do 60 m od hospody (nebo doma). Uvidíš to na lístku, ve statistikách „kde nejčastěji piješ“ to uvidí i kámoši. Poloha se nikam neukládá."
                            Style="{StaticResource Small}" />
 
                     <Label Text="Hlásit kámošům, kde piju:" Style="{StaticResource FieldLabel}" />
@@ -91,6 +91,57 @@
                     </Grid>
                     <Label Text="Kámošům přijde „sedí v hospodě“ a uvidí, kde jsi. Ukládá se jen název hospody, poloha nikam."
                            Style="{StaticResource Small}" />
+
+                    <!-- domov: poloha jen v telefonu, nastavuje se na mapě -->
+                    <Label Text="Domov:" Style="{StaticResource FieldLabel}" />
+                    <Label x:Name="HomeLabel" Style="{StaticResource Small}" />
+                    <controls:PencilButton x:Name="HomeClearButton" Text="Zapomenout domov" Variant="Secondary"
+                                           FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                           IsVisible="False" Clicked="OnHomeClearClicked" />
+
+                    <!-- ceny pro útratu (jen v telefonu) -->
+                    <Label Text="Moje obvyklé ceny v Kč (útrata):" Style="{StaticResource FieldLabel}" />
+                    <Grid ColumnDefinitions="*, *, *" ColumnSpacing="8">
+                        <Entry x:Name="PricePivoEntry" Grid.Column="0" Placeholder="pivo 0,5" Keyboard="Numeric" MaxLength="4"
+                               TextChanged="OnPriceChanged" />
+                        <Entry x:Name="PriceVinoEntry" Grid.Column="1" Placeholder="víno 2 dcl" Keyboard="Numeric" MaxLength="4"
+                               TextChanged="OnPriceChanged" />
+                        <Entry x:Name="PricePanakEntry" Grid.Column="2" Placeholder="panák" Keyboard="Numeric" MaxLength="4"
+                               TextChanged="OnPriceChanged" />
+                    </Grid>
+                    <Label Text="Když má hospoda v profilu vyplněné ceny, vezmou se ty. Tvoje ceny vidíš jen ty."
+                           Style="{StaticResource Small}" />
+
+                    <!-- orientační promile (vše jen v telefonu) -->
+                    <Label Text="Orientační promile na lístku:" Style="{StaticResource FieldLabel}" />
+                    <Grid ColumnDefinitions="*, *" ColumnSpacing="10">
+                        <controls:PencilButton x:Name="PromileOn" Grid.Column="0" Text="Počítat" Variant="Secondary"
+                                               FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                               CommandParameter="1" Clicked="OnPromileClicked" />
+                        <controls:PencilButton x:Name="PromileOff" Grid.Column="1" Text="Nepočítat" Variant="Secondary"
+                                               FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                               CommandParameter="0" Clicked="OnPromileClicked" />
+                    </Grid>
+                    <VerticalStackLayout x:Name="PromileBox" Spacing="4" IsVisible="False">
+                        <Grid ColumnDefinitions="Auto, *" ColumnSpacing="10">
+                            <Label Text="Váha (kg):" Style="{StaticResource Small}" VerticalOptions="Center" />
+                            <Entry x:Name="WeightEntry" Grid.Column="1" Placeholder="80" Keyboard="Numeric" MaxLength="3"
+                                   TextChanged="OnWeightChanged" />
+                        </Grid>
+                        <Grid ColumnDefinitions="*, *, *" ColumnSpacing="8">
+                            <controls:PencilButton x:Name="Deg10" Grid.Column="0" Text="10°" Variant="Secondary"
+                                                   FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                                   CommandParameter="10" Clicked="OnDegreesClicked" />
+                            <controls:PencilButton x:Name="Deg11" Grid.Column="1" Text="11°" Variant="Secondary"
+                                                   FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                                   CommandParameter="11" Clicked="OnDegreesClicked" />
+                            <controls:PencilButton x:Name="Deg12" Grid.Column="2" Text="12°" Variant="Secondary"
+                                                   FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                                   CommandParameter="12" Clicked="OnDegreesClicked" />
+                        </Grid>
+                        <Label Text="Odhad ze vzorce (Widmark) podle váhy, pohlaví a časů zápisů. Skutečnost se může lišit klidně o půl promile – podle toho NIKDY neřiď. Váha zůstává jen v telefonu."
+                               Style="{StaticResource Small}" />
+                    </VerticalStackLayout>
 
                     <controls:PencilButton Text="Uložit změny" Variant="Primary" Clicked="OnSaveClicked" Margin="0,24,0,0" />
                     <!-- verze a ruční kontrola aktualizace (instalace jde jen na Androidu) -->

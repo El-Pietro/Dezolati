@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using Dezolati.Controls;
 using Dezolati.Models;
 using Dezolati.Services;
@@ -117,13 +117,30 @@ public partial class Hospoda : ContentPage, IQueryAttributable
         HoursLabel.Text = Or(hoursFromOsm ? OsmHoursCz : profile.Hours);
         HoursSourceLabel.IsVisible = hoursFromOsm;
 
-        PricesLabel.Text = Or(profile.Prices);
+        var nums = PriceNumbers(profile);
+        PriceNumbersLabel.Text = nums;
+        PriceNumbersLabel.IsVisible = nums.Length > 0;
+        PricesLabel.Text = nums.Length > 0 && string.IsNullOrWhiteSpace(profile.Prices) ? "" : Or(profile.Prices);
+        PricesLabel.IsVisible = PricesLabel.Text.Length > 0;
         NoteLabel.Text = Or(profile.Note);
 
         UpdatedLabel.Text = profile.UpdatedAt is DateTime at
             ? $"Naposledy upravil(a) {profile.UpdatedByNick ?? "?"}, {at.ToString("d. M. yyyy", Cs)}"
             : "Zatím to nikdo nevyplnil. Buď první.";
     }
+
+    private static string PriceNumbers(PubProfile p)
+    {
+        var parts = new List<string>();
+        if (p.PricePivo is int a) parts.Add($"pivo {a} Kč");
+        if (p.PriceVino is int b) parts.Add($"víno {b} Kč");
+        if (p.PricePanak is int c) parts.Add($"panák {c} Kč");
+        return string.Join(" · ", parts);
+    }
+
+    private static int? ParsePrice(string? text) =>
+        int.TryParse((text ?? "").Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) && n > 0 && n <= PubService.MaxPrice
+            ? n : null;
 
     private void SetEditing(bool editing)
     {
@@ -138,6 +155,9 @@ public partial class Hospoda : ContentPage, IQueryAttributable
         // když nikdo nic nezadal, předvyplnit z OpenStreetMap (jde přepsat)
         TapsEntry.Text = string.IsNullOrWhiteSpace(profile.Taps) ? OsmTaps : profile.Taps;
         PricesEntry.Text = profile.Prices;
+        PricePivoEntry.Text = profile.PricePivo?.ToString(CultureInfo.InvariantCulture);
+        PriceVinoEntry.Text = profile.PriceVino?.ToString(CultureInfo.InvariantCulture);
+        PricePanakEntry.Text = profile.PricePanak?.ToString(CultureInfo.InvariantCulture);
         HoursEntry.Text = string.IsNullOrWhiteSpace(profile.Hours) ? OsmHoursCz : profile.Hours;
         NoteEntry.Text = profile.Note;
         editStart = CurrentEditValues();
@@ -150,7 +170,9 @@ public partial class Hospoda : ContentPage, IQueryAttributable
 
     private string[] CurrentEditValues() => new[]
     {
-        Norm(NameEntry.Text), Norm(TapsEntry.Text), Norm(PricesEntry.Text), Norm(HoursEntry.Text), Norm(NoteEntry.Text)
+        Norm(NameEntry.Text), Norm(TapsEntry.Text), Norm(PricesEntry.Text), Norm(HoursEntry.Text), Norm(NoteEntry.Text),
+        ParsePrice(PricePivoEntry.Text)?.ToString() ?? "", ParsePrice(PriceVinoEntry.Text)?.ToString() ?? "",
+        ParsePrice(PricePanakEntry.Text)?.ToString() ?? ""
     };
 
     private async void OnSaveClicked(object sender, EventArgs e)
@@ -172,6 +194,9 @@ public partial class Hospoda : ContentPage, IQueryAttributable
             Prices = PricesEntry.Text,
             Hours = HoursEntry.Text,
             Note = NoteEntry.Text,
+            PricePivo = ParsePrice(PricePivoEntry.Text),
+            PriceVino = ParsePrice(PriceVinoEntry.Text),
+            PricePanak = ParsePrice(PricePanakEntry.Text),
             Closed = profile.Closed
         };
 
@@ -243,9 +268,13 @@ public partial class Hospoda : ContentPage, IQueryAttributable
                 Diff("název", ed.DisplayName, prev?.DisplayName);
                 Diff("točí", ed.Taps, prev?.Taps);
                 Diff("ceny", ed.Prices, prev?.Prices);
+                Diff("cena piva", Kc(ed.PricePivo), Kc(prev?.PricePivo));
+                Diff("cena vína", Kc(ed.PriceVino), Kc(prev?.PriceVino));
+                Diff("cena panáku", Kc(ed.PricePanak), Kc(prev?.PricePanak));
                 Diff("otvíračka", ed.Hours, prev?.Hours);
                 Diff("poznámka", ed.Note, prev?.Note);
                 if (lines.Count == 1) lines.Add("(beze změny)");
+                static string? Kc(int? n) => n is int v ? $"{v} Kč" : null;
 
                 HistoryList.Add(new Label { Text = string.Join("\n", lines), Style = AppStyle("Small") });
             }
@@ -277,6 +306,9 @@ public partial class Hospoda : ContentPage, IQueryAttributable
             Prices = profile.Prices,
             Hours = profile.Hours,
             Note = profile.Note,
+            PricePivo = profile.PricePivo,
+            PriceVino = profile.PriceVino,
+            PricePanak = profile.PricePanak,
             Closed = closing
         };
         try

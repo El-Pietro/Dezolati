@@ -138,8 +138,10 @@ namespace Dezolati.Services
         /// increments = atomické přičtení (FieldValue.Increment).
         /// mustNotExist = jen vytvořit (selže, když už existuje).
         /// </summary>
+        /// <param name="serverTime">pole, do kterých server zapíše svůj čas (REQUEST_TIME) – nezávisle na hodinách telefonu</param>
         public static JsonObject SetWrite(string path, Dictionary<string, object?> fields,
-            IEnumerable<string>? mask = null, IDictionary<string, long>? increments = null, bool mustNotExist = false)
+            IEnumerable<string>? mask = null, IDictionary<string, long>? increments = null, bool mustNotExist = false,
+            IEnumerable<string>? serverTime = null)
         {
             var write = new JsonObject
             {
@@ -154,12 +156,21 @@ namespace Dezolati.Services
                 {
                     ["fieldPaths"] = new JsonArray(mask.Select(k => (JsonNode?)JsonValue.Create(k)).ToArray())
                 };
-            if (increments is { Count: > 0 })
-                write["updateTransforms"] = new JsonArray(increments.Select(kv => (JsonNode?)new JsonObject
+            var transforms = new List<JsonNode?>();
+            if (increments != null)
+                transforms.AddRange(increments.Select(kv => (JsonNode?)new JsonObject
                 {
                     ["fieldPath"] = kv.Key,
                     ["increment"] = ToValue(kv.Value)
-                }).ToArray());
+                }));
+            if (serverTime != null)
+                transforms.AddRange(serverTime.Select(f => (JsonNode?)new JsonObject
+                {
+                    ["fieldPath"] = f,
+                    ["setToServerValue"] = "REQUEST_TIME"
+                }));
+            if (transforms.Count > 0)
+                write["updateTransforms"] = new JsonArray(transforms.ToArray());
             if (mustNotExist)
                 write["currentDocument"] = new JsonObject { ["exists"] = false };
             return write;

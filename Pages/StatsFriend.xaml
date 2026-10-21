@@ -23,6 +23,28 @@
 
                     <Grid x:Name="SummaryGrid" ColumnDefinitions="Auto, *" ColumnSpacing="12" RowSpacing="6" />
 
+                    <!-- útrata (jen u sebe) -->
+                    <VerticalStackLayout x:Name="SpendBox" Spacing="4" IsVisible="False">
+                        <Label Text="Útrata" Style="{StaticResource Heading}" Margin="0,12,0,0" />
+                        <Grid x:Name="SpendGrid" ColumnDefinitions="Auto, *" ColumnSpacing="12" RowSpacing="6" />
+                        <Label x:Name="SpendNote" Style="{StaticResource Small}" IsVisible="False" />
+                        <controls:PencilButton x:Name="EstimateButton" Text="Dopočítat útratu zpětně (odhad)" Variant="Secondary"
+                                               FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                               IsVisible="False" Clicked="OnEstimateClicked" />
+                    </VerticalStackLayout>
+
+                    <!-- kde se pije: doma / hospoda / jinde -->
+                    <VerticalStackLayout x:Name="PlacesBox" Spacing="4" IsVisible="False">
+                        <Label Text="Kde se pije" Style="{StaticResource Heading}" Margin="0,12,0,0" />
+                        <Grid x:Name="PlacesGrid" ColumnDefinitions="Auto, *" ColumnSpacing="12" RowSpacing="6" />
+                    </VerticalStackLayout>
+
+                    <!-- nejčastější hospody -->
+                    <VerticalStackLayout x:Name="PubsBox" Spacing="4" IsVisible="False">
+                        <Label Text="Nejčastější hospody" Style="{StaticResource Heading}" Margin="0,12,0,0" />
+                        <VerticalStackLayout x:Name="PubsList" Spacing="6" />
+                    </VerticalStackLayout>
+
                     <!-- Grafy vyčmárané pastelkou (Controls/SketchChart.cs); popisky jsou obyčejné Labely -->
                     <VerticalStackLayout x:Name="ChartsBox" Spacing="4" IsVisible="False">
                         <HorizontalStackLayout x:Name="Legend" Spacing="16" Margin="0,12,0,0" HorizontalOptions="Center" />
@@ -46,7 +68,15 @@
                     </VerticalStackLayout>
 
                     <Label Text="Poslední tahy" Style="{StaticResource Heading}" Margin="0,16,0,0" />
+                    <Label x:Name="EditHint" Text="(ťukni na den a dopiš nebo škrtni, co chybí – 30 dní zpět)"
+                           Style="{StaticResource Small}" IsVisible="False" />
                     <VerticalStackLayout x:Name="HistoryList" Spacing="4" />
+                    <controls:PencilButton x:Name="OtherDayButton" Text="Upravit jiný den" Variant="Secondary"
+                                           FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                           IsVisible="False" Clicked="OnOtherDayClicked" />
+                    <!-- skrytý kalendář pro „jiný den“ (otevře se přes Focus) -->
+                    <DatePicker x:Name="OtherDayPicker" Opacity="0" HeightRequest="1" Format="d. M. yyyy"
+                                DateSelected="OnOtherDaySelected" />
 
                     <controls:PencilButton x:Name="RemoveFriendButton" Text="Odebrat z kámošů" Variant="Danger"
                                            Margin="0,24,0,0" IsVisible="False" Clicked="OnRemoveFriendClicked" />

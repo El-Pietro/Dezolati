@@ -24,6 +24,7 @@ public partial class Settings : ContentPage
         base.OnAppearing();
         VersionLabel.Text = $"Dezoláti {AppUpdater.CurrentVersionText}";
         UsageButton.IsVisible = UsageService.IsAdmin;
+        LoadLocalSettings();
         await LoadUserData();
     }
 
@@ -81,8 +82,71 @@ public partial class Settings : ContentPage
         UpdateChips();
     }
 
+    // ---------------- jen v telefonu: domov, ceny, promile ----------------
+
+    private bool loadingLocal;
+
+    private void LoadLocalSettings()
+    {
+        loadingLocal = true;
+        HomeLabel.Text = HomePlace.IsSet
+            ? "Nastavený (poloha jen v tomhle telefonu). Pití do 80 m se počítá jako „doma“."
+            : "Nenastavený – na mapě dej Přidat a pak „Tady bydlím“.";
+        HomeClearButton.IsVisible = HomePlace.IsSet;
+
+        static string P(int v) => v > 0 ? v.ToString(System.Globalization.CultureInfo.InvariantCulture) : "";
+        PricePivoEntry.Text = P(Prices.Pivo);
+        PriceVinoEntry.Text = P(Prices.Vino);
+        PricePanakEntry.Text = P(Prices.Panak);
+        WeightEntry.Text = P(Promile.WeightKg);
+        loadingLocal = false;
+    }
+
+    private void OnHomeClearClicked(object sender, EventArgs e)
+    {
+        HomePlace.Clear();
+        LoadLocalSettings();
+    }
+
+    private static int ParseNum(string? text) =>
+        int.TryParse((text ?? "").Trim(), out var n) && n > 0 ? n : 0;
+
+    private void OnPriceChanged(object? sender, TextChangedEventArgs e)
+    {
+        if (loadingLocal) return;
+        Prices.Pivo = Math.Min(ParseNum(PricePivoEntry.Text), PubService.MaxPrice);
+        Prices.Vino = Math.Min(ParseNum(PriceVinoEntry.Text), PubService.MaxPrice);
+        Prices.Panak = Math.Min(ParseNum(PricePanakEntry.Text), PubService.MaxPrice);
+    }
+
+    private void OnWeightChanged(object? sender, TextChangedEventArgs e)
+    {
+        if (loadingLocal) return;
+        Promile.WeightKg = ParseNum(WeightEntry.Text);
+    }
+
+    private void OnPromileClicked(object sender, EventArgs e)
+    {
+        Promile.Enabled = ((PencilButton)sender).CommandParameter as string == "1";
+        UpdateChips();
+    }
+
+    private void OnDegreesClicked(object sender, EventArgs e)
+    {
+        if (((PencilButton)sender).CommandParameter is string s && int.TryParse(s, out var deg))
+            Promile.BeerDegrees = deg;
+        UpdateChips();
+    }
+
     private void UpdateChips()
     {
+        SetChip(PromileOn, Promile.Enabled);
+        SetChip(PromileOff, !Promile.Enabled);
+        PromileBox.IsVisible = Promile.Enabled;
+        SetChip(Deg10, Promile.BeerDegrees == 10);
+        SetChip(Deg11, Promile.BeerDegrees == 11);
+        SetChip(Deg12, Promile.BeerDegrees == 12);
+
         SetChip(NotifyOn, notifyFriends);
         SetChip(NotifyOff, !notifyFriends);
         SetChip(DetectOn, detectPub);

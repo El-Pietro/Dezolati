@@ -33,14 +33,20 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
         _ = Load();
     }
 
+    private UserStats? stats;      // naposledy načtené (úprava dne se promítne bez dalšího čtení)
+    private bool isMe;
+
     private async Task Load()
     {
         SummaryGrid.Clear();
         SummaryGrid.RowDefinitions.Clear();
         HistoryList.Clear();
         NowLabel.IsVisible = false;
-        var isMe = userId == AuthSession.Uid;
+        SpendBox.IsVisible = PlacesBox.IsVisible = PubsBox.IsVisible = false;
+        isMe = userId == AuthSession.Uid;
         RemoveFriendButton.IsVisible = !string.IsNullOrEmpty(userId) && !isMe;
+        EditHint.IsVisible = OtherDayButton.IsVisible = isMe;
+        stats = null;
 
         if (string.IsNullOrEmpty(userId))
             return;
@@ -49,58 +55,9 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
         {
             Busy.IsRunning = Busy.IsVisible = true;
 
-            // ~33 čtení bez ohledu na to, jak dlouho už dotyčný chlastá
-            var stats = await firestoreService.GetStats(userId);
-            var history = stats.Last30;
-            var today = stats.Today;
-
-            DailyDrinksModel Sum(IEnumerable<DailyDrinksModel> days) => new()
-            {
-                Pivo = days.Sum(d => d.Pivo),
-                Vino = days.Sum(d => d.Vino),
-                Panaky = days.Sum(d => d.Panaky)
-            };
-
-            ShowNow(stats, isMe);
-
-            var dnes = Sum(history.Where(h => h.Day == today));
-            var tyden = Sum(history.Where(h => h.Day > today.AddDays(-7)));
-            var mesic = Sum(history.Where(h => h.Day > today.AddDays(-30)));
-            var celkem = stats.Totals;
-            var drinkingDays = stats.Days;
-            var record = stats.Record;
-
-            string fav = celkem.Total == 0 ? "—"
-                : celkem.Pivo >= celkem.Vino && celkem.Pivo >= celkem.Panaky ? "pivo"
-                : celkem.Vino >= celkem.Panaky ? "víno"
-                : "tvrdej";
-
-            AddRow("Dnes", dnes.Total == 0 ? "čistý lístek" : Cz.Souhrn(dnes.Pivo, dnes.Vino, dnes.Panaky));
-            AddRow("7 dní", Cz.Souhrn(tyden.Pivo, tyden.Vino, tyden.Panaky));
-            AddRow("30 dní", Cz.Souhrn(mesic.Pivo, mesic.Vino, mesic.Panaky));
-            AddRow("Celkem", Cz.Souhrn(celkem.Pivo, celkem.Vino, celkem.Panaky));
-            AddRow("Dní v akci", drinkingDays.ToString());
-            AddRow("Rekord", record == null ? "—"
-                : $"{record.Day.ToString("d. M. yyyy", Cs)} ({Cz.Plural(record.Total, "kousek", "kousky", "kousků")})");
-            AddRow("Srdcovka", fav);
-            if (drinkingDays > 0)
-                AddRow("Průměr / tah", (celkem.Total / (double)drinkingDays).ToString("0.0", Cs));
-
-            DrawCharts(history, today, celkem);
-
-            var last = history.Where(h => h.Total > 0).Take(14).ToList();
-            if (last.Count == 0)
-            {
-                HistoryList.Add(new Label { Text = "Zatím nic. Abstinent, nebo lhář?", Style = AppStyle("Body") });
-            }
-            foreach (var day in last)
-            {
-                HistoryList.Add(new Label
-                {
-                    Text = $"{day.Day.ToString("ddd d. M.", Cs)} – {Cz.Souhrn(day.Pivo, day.Vino, day.Panaky)}",
-                    Style = AppStyle("Body")
-                });
-            }
+            // ~35 čtení bez ohledu na to, jak dlouho už dotyčný chlastá
+            stats = await firestoreService.GetStats(userId);
+            Render(stats);
         }
         catch (Exception ex)
         {
@@ -110,6 +67,262 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
         {
             Busy.IsRunning = Busy.IsVisible = false;
         }
+    }
+
+    private static DailyDrinksModel Sum(IEnumerable<DailyDrinksModel> days) => new()
+    {
+        Pivo = days.Sum(d => d.Pivo),
+        Vino = days.Sum(d => d.Vino),
+        Panaky = days.Sum(d => d.Panaky)
+    };
+
+    private void Render(UserStats stats)
+    {
+        SummaryGrid.Clear();
+        SummaryGrid.RowDefinitions.Clear();
+        HistoryList.Clear();
+
+        var history = stats.Last30;
+        var today = stats.Today;
+
+        ShowNow(stats, isMe);
+
+        var dnes = Sum(history.Where(h => h.Day == today));
+        var tyden = Sum(history.Where(h => h.Day > today.AddDays(-7)));
+        var mesic = Sum(history.Where(h => h.Day > today.AddDays(-30)));
+        var celkem = stats.Totals;
+        var drinkingDays = stats.Days;
+        var record = stats.Record;
+
+        string fav = celkem.Total == 0 ? "—"
+            : celkem.Pivo >= celkem.Vino && celkem.Pivo >= celkem.Panaky ? "pivo"
+            : celkem.Vino >= celkem.Panaky ? "víno"
+            : "tvrdej";
+
+        AddRow(SummaryGrid, "Dnes", dnes.Total == 0 ? "čistý lístek" : Cz.Souhrn(dnes.Pivo, dnes.Vino, dnes.Panaky));
+        AddRow(SummaryGrid, "7 dní", Cz.Souhrn(tyden.Pivo, tyden.Vino, tyden.Panaky));
+        AddRow(SummaryGrid, "30 dní", Cz.Souhrn(mesic.Pivo, mesic.Vino, mesic.Panaky));
+        AddRow(SummaryGrid, "Celkem", Cz.Souhrn(celkem.Pivo, celkem.Vino, celkem.Panaky));
+        AddRow(SummaryGrid, "Dní v akci", drinkingDays.ToString());
+        AddRow(SummaryGrid, "Rekord", record == null ? "—"
+            : $"{record.Day.ToString("d. M. yyyy", Cs)} ({Cz.Plural(record.Total, "kousek", "kousky", "kousků")})");
+        AddRow(SummaryGrid, "Srdcovka", fav);
+        if (drinkingDays > 0)
+            AddRow(SummaryGrid, "Průměr / tah", (celkem.Total / (double)drinkingDays).ToString("0.0", Cs));
+
+        RenderSpend(stats);
+        RenderPlaces(stats);
+        RenderPubs(stats);
+        DrawCharts(history, today, celkem);
+
+        var last = history.Where(h => h.Total > 0).Take(14).ToList();
+        if (last.Count == 0)
+        {
+            HistoryList.Add(new Label { Text = "Zatím nic. Abstinent, nebo lhář?", Style = AppStyle("Body") });
+        }
+        foreach (var day in last)
+        {
+            var label = new Label
+            {
+                Text = $"{day.Day.ToString("ddd d. M.", Cs)} – {Cz.Souhrn(day.Pivo, day.Vino, day.Panaky)}",
+                Style = AppStyle("Body")
+            };
+            if (isMe && day.Day.Date >= today.Date.AddDays(-30))
+            {
+                var tap = new TapGestureRecognizer();
+                var d = day.Day;
+                tap.Tapped += async (_, _) => await EditDayAsync(d);
+                label.GestureRecognizers.Add(tap);
+            }
+            HistoryList.Add(label);
+        }
+    }
+
+    // ---------------- útrata ----------------
+
+    private static string Kc(long kc) => $"{kc.ToString("#,0", Cs)} Kč";
+
+    private void RenderSpend(UserStats stats)
+    {
+        SpendGrid.Clear();
+        SpendGrid.RowDefinitions.Clear();
+        if (!isMe) return;   // útrata je jen moje věc
+
+        var h = stats.Last30;
+        var today = stats.Today;
+        long SumKc(IEnumerable<DailyDrinksModel> days) => days.Sum(d => (long)(d.Kc ?? 0));
+
+        var anyKc = stats.TotalKc != 0 || h.Any(d => d.Kc != null);
+        SpendBox.IsVisible = true;
+        if (anyKc)
+        {
+            AddRow(SpendGrid, "Dnes", Kc(SumKc(h.Where(d => d.Day == today))));
+            AddRow(SpendGrid, "7 dní", Kc(SumKc(h.Where(d => d.Day > today.AddDays(-7)))));
+            AddRow(SpendGrid, "30 dní", Kc(SumKc(h.Where(d => d.Day > today.AddDays(-30)))));
+            AddRow(SpendGrid, "Celkem", Kc(stats.TotalKc));
+        }
+
+        var estimated = Preferences.Get($"kc_estimated_{userId}", false);
+        if (!Prices.AnyDefault)
+        {
+            SpendNote.Text = "Vyplň si v Nastavení, kolik u vás stojí pivo, víno a panák – útrata se pak počítá sama. V hospodě s vyplněnými cenami se vezmou ty.";
+            SpendNote.IsVisible = true;
+        }
+        else
+        {
+            SpendNote.Text = "Počítá se od verze 3.7 cenami hospody (jsou-li vyplněné), jinak tvými výchozími.";
+            SpendNote.IsVisible = !estimated;
+        }
+        EstimateButton.IsVisible = Prices.AnyDefault && !estimated && stats.Totals.Total > 0;
+    }
+
+    private async void OnEstimateClicked(object sender, EventArgs e)
+    {
+        if (userId == null || !isMe) return;
+        var ok = await Listek.ConfirmAsync(this, "Útrata zpětně",
+            $"Dny bez útraty dostanou odhad podle tvých výchozích cen (pivo {Prices.Pivo} Kč, víno {Prices.Vino} Kč, panák {Prices.Panak} Kč). " +
+            "Kolik jsi kde skutečně utratil, už nikdo nezjistí – je to odhad. Stojí to jedno čtení a jeden zápis za každý den s pitím.",
+            "Dopočítat");
+        if (!ok) return;
+        try
+        {
+            EstimateButton.IsEnabled = false;
+            var (days, kc) = await firestoreService.EstimatePastSpend(userId);
+            Preferences.Set($"kc_estimated_{userId}", true);
+            await Listek.AlertAsync(this, "Hotovo", days == 0
+                ? "Nebylo co dopočítat."
+                : $"Dopočítáno {Cz.Plural(days, "den", "dny", "dní")}, odhadem {Kc(kc)}. Na játra se radši nedívej.");
+            await Load();
+        }
+        catch (Exception ex)
+        {
+            await Listek.AlertAsync(this, "Chyba", ex.Message);
+        }
+        finally
+        {
+            EstimateButton.IsEnabled = true;
+        }
+    }
+
+    // ---------------- místa a hospody ----------------
+
+    private void RenderPlaces(UserStats stats)
+    {
+        PlacesGrid.Clear();
+        PlacesGrid.RowDefinitions.Clear();
+
+        string Split(long pub, long home, long other)
+        {
+            var known = pub + home + other;
+            if (known == 0) return "—";
+            int P(long v) => (int)Math.Round(100.0 * v / known);
+            var parts = new List<string>();
+            if (pub > 0) parts.Add($"hospoda {P(pub)} %");
+            if (home > 0) parts.Add($"doma {P(home)} %");
+            if (other > 0) parts.Add($"jinde {P(other)} %");
+            return string.Join(" · ", parts);
+        }
+
+        var h = stats.Last30;
+        long p30 = h.Sum(d => (long)d.PlacePub), h30 = h.Sum(d => (long)d.PlaceHome), o30 = h.Sum(d => (long)d.PlaceOther);
+        var anyTotal = stats.TotalPlacePub + stats.TotalPlaceHome + stats.TotalPlaceOther > 0;
+        PlacesBox.IsVisible = anyTotal;
+        if (!anyTotal) return;
+
+        AddRow(PlacesGrid, "30 dní", Split(p30, h30, o30));
+        AddRow(PlacesGrid, "Celkem", Split(stats.TotalPlacePub, stats.TotalPlaceHome, stats.TotalPlaceOther));
+    }
+
+    private void RenderPubs(UserStats stats)
+    {
+        PubsList.Clear();
+        var top = stats.Pubs.Take(5).ToList();
+        PubsBox.IsVisible = top.Count > 0;
+        var rank = 1;
+        foreach (var p in top)
+        {
+            var info = $"{Cz.Plural(p.Count, "kousek", "kousky", "kousků")}";
+            if (p.Visits > 0) info += $" · {Cz.Plural(p.Visits, "návštěva", "návštěvy", "návštěv")}";
+            if (p.LastAt is DateTime at) info += $" · naposledy {at.ToLocalTime().ToString("d. M.", Cs)}";
+            if (isMe && p.Kc > 0) info += $" · {Kc(p.Kc)}";
+
+            var box = new VerticalStackLayout { Spacing = 0 };
+            box.Add(new Label { Text = $"{rank++}. {p.Name ?? "?"}", Style = AppStyle("Body") });
+            box.Add(new Label { Text = info, Style = AppStyle("Small") });
+
+            var tap = new TapGestureRecognizer();
+            var id = p.PubId;
+            tap.Tapped += async (_, _) => await Shell.Current.GoToAsync("//Hospoda", new Dictionary<string, object> { ["pubId"] = id });
+            box.GestureRecognizers.Add(tap);
+            PubsList.Add(box);
+        }
+    }
+
+    // ---------------- úprava starších dní (jen u sebe) ----------------
+
+    private async Task EditDayAsync(DateTime day)
+    {
+        if (!isMe || userId == null || stats == null) return;
+        if (day.Date < stats.Today.Date.AddDays(-30) || day.Date > stats.Today.Date) return;
+
+        var current = stats.Last30.FirstOrDefault(d => d.Day.Date == day.Date) ?? new DailyDrinksModel { Day = day.Date };
+        var title = day.Date == stats.Today.Date ? "Dneska" : day.ToString("dddd d. M.", Cs);
+        var summary = current.Total == 0 ? "Čistý lístek." : Cz.Souhrn(current.Pivo, current.Vino, current.Panaky);
+
+        const string add = "Dopsat", strike = "Škrtnout";
+        var buttons = new List<(string, PencilVariant)> { (add, PencilVariant.Primary) };
+        if (current.Total > 0) buttons.Add((strike, PencilVariant.Danger));
+        buttons.Add(("Nic", PencilVariant.Secondary));
+        var action = await Listek.ShowAsync(this, title, summary, buttons.ToArray());
+        if (action != add && action != strike) return;
+
+        var sign = action == add ? 1 : -1;
+        var kinds = new List<(string, PencilVariant)>();
+        if (sign > 0 || current.Pivo > 0) kinds.Add(("Pivo", PencilVariant.Primary));
+        if (sign > 0 || current.Vino > 0) kinds.Add(("Víno", PencilVariant.Primary));
+        if (sign > 0 || current.Panaky > 0) kinds.Add(("Panák", PencilVariant.Primary));
+        kinds.Add(("Nic", PencilVariant.Secondary));
+        var kind = await Listek.ShowAsync(this, action == add ? "Co dopsat?" : "Co škrtnout?",
+            "Po jednom kousku – klidně víckrát za sebou.", kinds.ToArray());
+        if (kind is not ("Pivo" or "Víno" or "Panák")) return;
+
+        int p = kind == "Pivo" ? sign : 0, v = kind == "Víno" ? sign : 0, pa = kind == "Panák" ? sign : 0;
+        try
+        {
+            await firestoreService.RecordPastEdit(userId, day.Date, p, v, pa);
+
+            // promítnout bez dalšího čtení
+            if (!stats.Last30.Contains(current))
+            {
+                stats.Last30.Add(current);
+                stats.Last30 = stats.Last30.OrderByDescending(d => d.Day).ToList();
+            }
+            current.Pivo += p; current.Vino += v; current.Panaky += pa;
+            current.Kc = (current.Kc ?? 0) + Prices.Default(p, v, pa);
+            stats.Totals.Pivo += p; stats.Totals.Vino += v; stats.Totals.Panaky += pa;
+            stats.TotalKc += Prices.Default(p, v, pa);
+            Render(stats);
+            if (day.Date == stats.Today.Date) UserSession.RaiseDrinksChanged();
+        }
+        catch (Exception ex)
+        {
+            await Listek.AlertAsync(this, "Chyba", $"Úprava se nepovedla: {ex.Message}");
+        }
+    }
+
+    private void OnOtherDayClicked(object sender, EventArgs e)
+    {
+        if (stats == null) return;
+        OtherDayPicker.MaximumDate = stats.Today.Date;
+        OtherDayPicker.MinimumDate = stats.Today.Date.AddDays(-30);
+        OtherDayPicker.Date = stats.Today.Date;   // vybrat dnešek = nic (ten je na lístku)
+        OtherDayPicker.Focus();
+    }
+
+    private async void OnOtherDaySelected(object? sender, DateChangedEventArgs e)
+    {
+        if (stats == null || e.NewDate.Date == stats.Today.Date) return;
+        await EditDayAsync(e.NewDate.Date);
     }
 
     /// <summary>„Teď sedí: U Peťky (před 40 min)“ – jen když tam zapisoval v posledních 3 hodinách.</summary>
@@ -237,12 +450,12 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
         }
     }
 
-    private void AddRow(string label, string value)
+    private static void AddRow(Grid grid, string label, string value)
     {
-        var row = SummaryGrid.RowDefinitions.Count;
-        SummaryGrid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
-        SummaryGrid.Add(new Label { Text = label, Style = AppStyle("FieldLabel"), Margin = 0 }, 0, row);
-        SummaryGrid.Add(new Label { Text = value, Style = AppStyle("Body") }, 1, row);
+        var row = grid.RowDefinitions.Count;
+        grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+        grid.Add(new Label { Text = label, Style = AppStyle("FieldLabel"), Margin = 0 }, 0, row);
+        grid.Add(new Label { Text = value, Style = AppStyle("Body") }, 1, row);
     }
 
     private static Style? AppStyle(string key) =>

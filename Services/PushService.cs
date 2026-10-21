@@ -40,36 +40,49 @@ namespace Dezolati.Services
 
         // ---------------- hospoda posledního zápisu (jen v telefonu, pro lístek) ----------------
 
-        private record LastPubInfo(DateTime Day, string? PubId, string? PubName);
+        private record LastPubInfo(DateTime Day, string? PubId, string? PubName, string? Place = null);
 
         private static string LastPubKey(string uid) => $"last_pub_{uid}";
 
-        /// <summary>Po zápisu: kde se pilo (null = mimo hospodu / nepoznáno).</summary>
-        public static void RememberPub(string uid, DateTime day, string? pubId, string? pubName)
+        /// <summary>Po zápisu: kde se pilo (hospoda, doma, jinde; null = nepoznáno).</summary>
+        public static void RememberPlace(string uid, DateTime day, PlaceInfo place)
         {
             try
             {
-                Preferences.Set(LastPubKey(uid),
-                    System.Text.Json.JsonSerializer.Serialize(new LastPubInfo(day.Date, pubId, pubName)));
+                Preferences.Set(LastPubKey(uid), System.Text.Json.JsonSerializer.Serialize(
+                    new LastPubInfo(day.Date, place.PubId, place.PubName, place.Place)));
             }
             catch { }
         }
 
-        /// <summary>Hospoda posledního zápisu v daném hospodském dni (pro lístek).</summary>
-        public static string? LastPubName(string uid, DateTime day)
+        private static LastPubInfo? LastInfo(string uid, DateTime day)
         {
-            if (!DetectPub) return null;
             try
             {
                 var json = Preferences.Get(LastPubKey(uid), null as string);
                 if (string.IsNullOrEmpty(json)) return null;
                 var info = System.Text.Json.JsonSerializer.Deserialize<LastPubInfo>(json);
-                return info != null && info.Day.Date == day.Date ? info.PubName : null;
+                return info != null && info.Day.Date == day.Date ? info : null;
             }
             catch
             {
                 return null;
             }
+        }
+
+        /// <summary>Kde byl poslední zápis dne (pro lístek: „📍 U Peťky“ / „📍 doma“).</summary>
+        public static string? LastPubName(string uid, DateTime day)
+        {
+            if (!DetectPub) return null;
+            var info = LastInfo(uid, day);
+            return info?.Place == Place.Home ? "doma" : info?.PubName;
+        }
+
+        /// <summary>Místo posledního zápisu dne (zápis z připomínky ho převezme – bez polohy).</summary>
+        public static PlaceInfo LastPlace(string uid, DateTime day)
+        {
+            var info = LastInfo(uid, day);
+            return info == null ? PlaceInfo.Unknown : new PlaceInfo(info.Place, info.PubId, info.PubName);
         }
 
         /// <summary>Po přihlášení / otevření lístku: povolení, kanál, token. Jednou za spuštění.</summary>
@@ -143,31 +156,36 @@ namespace Dezolati.Services
         }
 
         /// <summary>
-        /// Ve které hospodě teď sedím? Jen když je poznávání (nebo hlášení) zapnuté, poloha povolená
-        /// a seznam hospod už je v telefonu. Nikdy se kvůli tomu neptá a nezdržuje zápis víc než pár sekund.
+        /// Kde teď jsem: doma (do 80 m od domova, poloha domova jen v telefonu), v hospodě (do 60 m),
+        /// jinde, nebo nevím (poznávání vypnuté / bez polohy). Nezdržuje zápis víc než pár sekund.
         /// </summary>
-        public static async Task<(string? PubId, string? PubName)> PubHereAsync()
+        public static async Task<PlaceInfo> PlaceHereAsync()
         {
-            if (!DetectPub && !SharePub) return (null, null);
+            if (!DetectPub && !SharePub) return PlaceInfo.Unknown;
             try
             {
                 if (await Permissions.CheckStatusAsync<Permissions.LocationWhenInUse>() != PermissionStatus.Granted)
-                    return (null, null);
+                    return PlaceInfo.Unknown;
 
                 var loc = await Geolocation.GetLastKnownLocationAsync();
                 if (loc == null || DateTimeOffset.Now - loc.Timestamp > TimeSpan.FromMinutes(10))
                     loc = await Geolocation.GetLocationAsync(
                         new GeolocationRequest(GeolocationAccuracy.Medium, TimeSpan.FromSeconds(4))) ?? loc;
-                if (loc == null) return (null, null);
+                if (loc == null) return PlaceInfo.Unknown;
 
-                if (await PubCatalog.GetCachedAsync() == null) return (null, null);
+                if (HomePlace.IsNear(loc.Latitude, loc.Longitude))
+                    return new PlaceInfo(Place.Home, null, null);
+
+                if (await PubCatalog.GetCachedAsync() == null) return new PlaceInfo(Place.Other, null, null);
                 await PubService.LoadOverlayAsync();
                 var pub = PubService.Nearest(loc.Latitude, loc.Longitude, PubRadiusMeters);
-                return pub == null ? (null, null) : (pub.Id, PubService.NameOf(pub));
+                return pub == null
+                    ? new PlaceInfo(Place.Other, null, null)
+                    : new PlaceInfo(Place.Pub, pub.Id, PubService.NameOf(pub));
             }
             catch
             {
-                return (null, null);
+                return PlaceInfo.Unknown;
             }
         }
     }

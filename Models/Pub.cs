@@ -1,4 +1,4 @@
-namespace Dezolati.Models
+﻿namespace Dezolati.Models
 {
     /// <summary>
     /// Hospoda z OpenStreetMap (katalog v telefonu, ne ve Firestore).
@@ -34,6 +34,10 @@ namespace Dezolati.Models
         public string? Prices { get; set; }
         public string? Hours { get; set; }
         public string? Note { get; set; }
+        /// <summary>Ceny v Kč pro výpočet útraty (null = nevyplněno): pivo 0,5 l, víno 2 dcl, panák.</summary>
+        public int? PricePivo { get; set; }
+        public int? PriceVino { get; set; }
+        public int? PricePanak { get; set; }
         /// <summary>Podnik je natrvalo zavřený (na mapě šedě).</summary>
         public bool Closed { get; set; }
         /// <summary>Kdo podnik přidal (jen u podniků, které v OSM chyběly).</summary>
@@ -59,5 +63,8 @@ namespace Dezolati.Models
         public string? Prices { get; set; }
         public string? Hours { get; set; }
         public string? Note { get; set; }
+        public int? PricePivo { get; set; }
+        public int? PriceVino { get; set; }
+        public int? PricePanak { get; set; }
     }
 }
