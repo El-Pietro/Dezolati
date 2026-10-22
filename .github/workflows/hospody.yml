@@ -1,6 +1,7 @@
 # Katalog hospod celé ČR pro appku (název, typ, poloha) z OpenStreetMap.
-# Jednou týdně stáhne z Overpass API všechny pub/bar/biergarten/restaurant v ČR,
-# zabalí je do hospody-cz.csv.gz a nahraje k vydání „katalog“ (pre-release, appka ho nebere jako aktualizaci).
+# Jednou týdně stáhne výřez ČR z Geofabriku (spolehlivější než velký dotaz na Overpass – ten vrací 504),
+# vybere pub/bar/biergarten/restaurant, zabalí do hospody-cz.csv.gz a nahraje k vydání „katalog“
+# (pre-release, appka ho nebere jako aktualizaci).
 # Ručně: GitHub → Actions → Katalog hospod → Run workflow.
 # Data © přispěvatelé OpenStreetMap (ODbL).
 name: Katalog hospod
@@ -17,28 +18,66 @@ jobs:
   katalog:
     runs-on: ubuntu-latest
     steps:
-      - name: Stáhnout hospody z OpenStreetMap
+      - name: Nástroje
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq osmium-tool
+
+      - name: Stáhnout ČR z Geofabriku
         run: |
-          Q='[out:csv(::type,::id,::lat,::lon,name,amenity)][timeout:900][maxsize:1073741824];area["ISO3166-1"="CZ"][admin_level=2]->.cz;nwr["amenity"~"^(pub|bar|biergarten|restaurant)$"](area.cz);out center;'
-          ok=0
-          for url in https://overpass-api.de/api/interpreter https://overpass.private.coffee/api/interpreter https://overpass.kumi.systems/api/interpreter; do
-            for i in 1 2; do
-              echo "Zkouším $url ($i)"
-              if curl -sS --fail -m 1000 \
-                   -A "Dezolati-katalog (+https://github.com/El-Pietro/Dezolati)" \
-                   -e "https://github.com/El-Pietro/Dezolati" \
-                   --data-urlencode "data=$Q" "$url" -o hospody.csv \
-                 && head -c 5 hospody.csv | grep -q '@type'; then
-                n=$(wc -l < hospody.csv)
-                echo "Řádků: $n"
-                if [ "$n" -gt 10000 ]; then ok=1; break 2; fi
-              fi
-              sleep 60
-            done
-          done
-          [ "$ok" = 1 ] || { echo "Overpass katalog nevrátil"; exit 1; }
+          curl -sS --fail --retry 3 --retry-delay 30 -L \
+            -o cz.osm.pbf https://download.geofabrik.de/europe/czech-republic-latest.osm.pbf
+          ls -l cz.osm.pbf
+
+      - name: Vybrat hospody
+        run: |
+          osmium tags-filter cz.osm.pbf nwr/amenity=pub,bar,biergarten,restaurant -o hospody.osm.pbf --overwrite
+          osmium export hospody.osm.pbf -f geojsonseq --add-unique-id=type_id \
+            --format-option=print_record_separator=false -o hospody.geojsonseq --overwrite
+          python3 - <<'PY'
+          import json
+          kinds = {"pub", "bar", "biergarten", "restaurant"}
+          types = {"n": "node", "w": "way", "r": "relation"}
+
+          def points(g):
+              t, c = g["type"], g["coordinates"]
+              if t == "Point": yield c
+              elif t in ("LineString", "MultiPoint"): yield from c
+              elif t in ("Polygon", "MultiLineString"):
+                  for ring in c: yield from ring
+              elif t == "MultiPolygon":
+                  for poly in c:
+                      for ring in poly: yield from ring
+
+          def clean(s):
+              return " ".join(str(s).replace("\t", " ").split())
+
+          seen, rows = set(), []
+          with open("hospody.geojsonseq", encoding="utf-8") as f:
+              for line in f:
+                  line = line.strip().lstrip("\x1e")
+                  if not line: continue
+                  o = json.loads(line)
+                  p = o.get("properties") or {}
+                  name, kind = clean(p.get("name", "")), p.get("amenity", "")
+                  fid = str(o.get("id", ""))
+                  if not name or kind not in kinds or len(fid) < 2 or fid[0] not in types or fid in seen: continue
+                  pts = list(points(o["geometry"]))
+                  if not pts: continue
+                  # střed obdélníku (jako „out center“ v Overpassu)
+                  lon = (min(x for x, _ in pts) + max(x for x, _ in pts)) / 2
+                  lat = (min(y for _, y in pts) + max(y for _, y in pts)) / 2
+                  seen.add(fid)
+                  rows.append(f"{types[fid[0]]}\t{fid[1:]}\t{lat:.6f}\t{lon:.6f}\t{name}\t{kind}")
+
+          if len(rows) < 10000:
+              raise SystemExit(f"Podezřele málo podniků: {len(rows)}")
+          with open("hospody.csv", "w", encoding="utf-8", newline="\n") as f:
+              f.write("@type\t@id\t@lat\t@lon\tname\tamenity\n")
+              f.write("\n".join(rows) + "\n")
+          print(f"Podniků: {len(rows)}")
+          PY
           gzip -9 -n -c hospody.csv > hospody-cz.csv.gz
           ls -l hospody.csv hospody-cz.csv.gz
+          head -3 hospody.csv
 
       - name: Nahrát k vydání „katalog“
         env:
