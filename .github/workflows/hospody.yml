@@ -1,4 +1,4 @@
-# Katalog hospod celé ČR pro appku (název, typ, poloha) z OpenStreetMap.
+# Katalog hospod celé ČR pro appku (název, typ, poloha, adresa, otvíračka, pivovar, web, telefon) z OpenStreetMap.
 # Jednou týdně stáhne výřez ČR z Geofabriku (spolehlivější než velký dotaz na Overpass – ten vrací 504),
 # vybere pub/bar/biergarten/restaurant, zabalí do hospody-cz.csv.gz a nahraje k vydání „katalog“
 # (pre-release, appka ho nebere jako aktualizaci).
@@ -35,6 +35,9 @@ jobs:
           python3 - <<'PY'
           import json
           kinds = {"pub", "bar", "biergarten", "restaurant"}
+          # stejné sloupce jako Overpass dotaz v appce (PubCatalog.Columns → Parse)
+          extra = ["addr:street", "addr:place", "addr:housenumber", "addr:conscriptionnumber", "addr:city",
+                   "brewery", "opening_hours", "website", "contact:website", "phone", "contact:phone"]
           types = {"n": "node", "w": "way", "r": "relation"}
 
           def points(g):
@@ -66,12 +69,13 @@ jobs:
                   lon = (min(x for x, _ in pts) + max(x for x, _ in pts)) / 2
                   lat = (min(y for _, y in pts) + max(y for _, y in pts)) / 2
                   seen.add(fid)
-                  rows.append(f"{types[fid[0]]}\t{fid[1:]}\t{lat:.6f}\t{lon:.6f}\t{name}\t{kind}")
+                  cols = [types[fid[0]], fid[1:], f"{lat:.6f}", f"{lon:.6f}", name, kind] + [clean(p.get(k, "")) for k in extra]
+                  rows.append("\t".join(cols))
 
           if len(rows) < 10000:
               raise SystemExit(f"Podezřele málo podniků: {len(rows)}")
           with open("hospody.csv", "w", encoding="utf-8", newline="\n") as f:
-              f.write("@type\t@id\t@lat\t@lon\tname\tamenity\n")
+              f.write("\t".join(["@type", "@id", "@lat", "@lon", "name", "amenity"] + extra) + "\n")
               f.write("\n".join(rows) + "\n")
           print(f"Podniků: {len(rows)}")
           PY
