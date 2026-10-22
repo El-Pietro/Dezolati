@@ -1,0 +1,53 @@
+# Katalog hospod celé ČR pro appku (název, typ, poloha) z OpenStreetMap.
+# Jednou týdně stáhne z Overpass API všechny pub/bar/biergarten/restaurant v ČR,
+# zabalí je do hospody-cz.csv.gz a nahraje k vydání „katalog“ (pre-release, appka ho nebere jako aktualizaci).
+# Ručně: GitHub → Actions → Katalog hospod → Run workflow.
+# Data © přispěvatelé OpenStreetMap (ODbL).
+name: Katalog hospod
+
+on:
+  schedule:
+    - cron: '17 3 * * 1'   # pondělí 3:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  katalog:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Stáhnout hospody z OpenStreetMap
+        run: |
+          Q='[out:csv(::type,::id,::lat,::lon,name,amenity)][timeout:900][maxsize:1073741824];area["ISO3166-1"="CZ"][admin_level=2]->.cz;nwr["amenity"~"^(pub|bar|biergarten|restaurant)$"](area.cz);out center;'
+          ok=0
+          for url in https://overpass-api.de/api/interpreter https://overpass.private.coffee/api/interpreter https://overpass.kumi.systems/api/interpreter; do
+            for i in 1 2; do
+              echo "Zkouším $url ($i)"
+              if curl -sS --fail -m 1000 \
+                   -A "Dezolati-katalog (+https://github.com/El-Pietro/Dezolati)" \
+                   -e "https://github.com/El-Pietro/Dezolati" \
+                   --data-urlencode "data=$Q" "$url" -o hospody.csv \
+                 && head -c 5 hospody.csv | grep -q '@type'; then
+                n=$(wc -l < hospody.csv)
+                echo "Řádků: $n"
+                if [ "$n" -gt 10000 ]; then ok=1; break 2; fi
+              fi
+              sleep 60
+            done
+          done
+          [ "$ok" = 1 ] || { echo "Overpass katalog nevrátil"; exit 1; }
+          gzip -9 -n -c hospody.csv > hospody-cz.csv.gz
+          ls -l hospody.csv hospody-cz.csv.gz
+
+      - name: Nahrát k vydání „katalog“
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if ! gh release view katalog > /dev/null 2>&1; then
+            gh release create katalog --prerelease --latest=false \
+              --title "Katalog hospod (automaticky)" \
+              --notes "Seznam hospod z OpenStreetMap pro appku – obnovuje se sám jednou týdně, nemazat. Data © přispěvatelé OpenStreetMap (ODbL)."
+          fi
+          gh release upload katalog hospody-cz.csv.gz --clobber
