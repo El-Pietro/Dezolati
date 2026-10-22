@@ -390,7 +390,8 @@ public partial class Hospody : ContentPage, IQueryAttributable
         var f = new PointFeature(x, y);
         f["id"] = p.Id;
         var closed = PubService.IsClosed(p);
-        f["name"] = (favorite ? "★ " : "") + (closed ? PubService.NameOf(p) + " (zavřeno)" : PubService.NameOf(p));
+        // bez „★“ – písmo popisků v mapě ho nemá (ukáže čtvereček); oblíbenou pozná podle zlaté tečky
+        f["name"] = closed ? PubService.NameOf(p) + " (zavřeno)" : PubService.NameOf(p);
         f.Styles.Add(closed ? ClosedSymbol
             : favorite ? FavoriteSymbol
             : PubService.IsCustom(p) ? CustomSymbol

@@ -8,7 +8,7 @@ namespace Dezolati.Services
 {
     /// <summary>
     /// Katalog hospod, barů, restaurací a pivních zahrádek z OpenStreetMap.
-    /// Hlavně celá ČR v jednom souboru (název, typ, poloha) – vyrábí ho jednou týdně GitHub Action
+    /// Hlavně celá ČR v jednom souboru (název, typ, poloha, adresa, otvíračka, web…) – vyrábí ho jednou týdně GitHub Action
     /// (.github/workflows/hospody.yml) a appka si ho stáhne z vydání „katalog“ (obnova po 14 dnech).
     /// Podrobnosti (adresa, otvíračka, web…) se dotáhnou z Overpass API až při otevření hospody.
     /// Záloha, když GitHub nejde: čtverce mřížky (~14 × 14 km) přímo z Overpassu podle výřezu mapy.
@@ -25,7 +25,8 @@ namespace Dezolati.Services
         private static readonly TimeSpan MaxAge = TimeSpan.FromDays(30);
 
         private const string NationalUrl = "https://github.com/El-Pietro/Dezolati/releases/download/katalog/hospody-cz.csv.gz";
-        private const string NationalFileName = "hospody_cz.csv.gz";
+        private const string NationalFileName = "hospody_cz_v2.csv.gz";
+        private const string OldNationalFileName = "hospody_cz.csv.gz";   // první verze jen s názvy
         private const string DetailsFileName = "hospody_detaily.json";
         private static readonly TimeSpan NationalMaxAge = TimeSpan.FromDays(14);
         private static List<PubInfo>? _national;
@@ -243,6 +244,7 @@ namespace Dezolati.Services
                 if (_diskLoaded) return;
                 try { File.Delete(Path.Combine(FileSystem.AppDataDirectory, OldFileName)); } catch { }
                 try { Directory.Delete(Path.Combine(FileSystem.AppDataDirectory, OldDirName), recursive: true); } catch { }
+                try { File.Delete(Path.Combine(FileSystem.AppDataDirectory, OldNationalFileName)); } catch { }
                 Directory.CreateDirectory(Dir);
                 var loaded = new Dictionary<string, List<PubInfo>>();
                 foreach (var file in Directory.GetFiles(Dir, "*.json"))
@@ -342,7 +344,9 @@ namespace Dezolati.Services
             using var reader = new StreamReader(zip, Encoding.UTF8);
             var csv = reader.ReadToEnd();
             if (!csv.StartsWith("@type", StringComparison.Ordinal)) throw new InvalidDataException("Katalog není CSV z Overpassu.");
-            return ParseLight(csv);
+            // katalog s adresou, otvíračkou, webem… (stejné sloupce jako Columns) → podrobnosti se pak nestahují vůbec
+            var header = csv.AsSpan(0, Math.Max(0, csv.IndexOf('\n')));
+            return header.Count('\t') >= 16 ? Parse(csv) : ParseLight(csv);
         }
 
         private static async Task SaveCellAsync(string key, List<PubInfo> pubs)
