@@ -20,6 +20,16 @@
                            HorizontalTextAlignment="Center" IsVisible="False" />
                     <Label x:Name="OsmLabel" Style="{StaticResource Small}" HorizontalTextAlignment="Center" IsVisible="False" />
 
+                    <!-- oblíbená + pozvat kámoše -->
+                    <Grid ColumnDefinitions="*, *" ColumnSpacing="10" Margin="0,6,0,0">
+                        <controls:PencilButton x:Name="FavButton" Grid.Column="0" Text="☆ Oblíbená" Variant="Secondary"
+                                               FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                               Clicked="OnFavClicked" />
+                        <controls:PencilButton x:Name="InviteButton" Grid.Column="1" Text="Pozvat kámoše" Variant="Secondary"
+                                               FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                               Clicked="OnInviteClicked" />
+                    </Grid>
+
                     <!-- kontakty z OpenStreetMap -->
                     <Grid x:Name="ContactBox" ColumnDefinitions="*, *" ColumnSpacing="10" Margin="0,6,0,0" IsVisible="False">
                         <controls:PencilButton x:Name="WebButton" Grid.Column="0" Text="Web" Variant="Secondary"

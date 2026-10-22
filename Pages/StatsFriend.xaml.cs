@@ -45,7 +45,7 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
         SpendBox.IsVisible = PlacesBox.IsVisible = PubsBox.IsVisible = false;
         isMe = userId == AuthSession.Uid;
         RemoveFriendButton.IsVisible = !string.IsNullOrEmpty(userId) && !isMe;
-        EditHint.IsVisible = OtherDayButton.IsVisible = isMe;
+        EditHint.IsVisible = isMe;
         stats = null;
 
         if (string.IsNullOrEmpty(userId))
@@ -113,25 +113,24 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
         RenderSpend(stats);
         RenderPlaces(stats);
         RenderPubs(stats);
+        RenderFavorites(stats);
         DrawCharts(history, today, celkem);
 
-        var last = history.Where(h => h.Total > 0).Take(14).ToList();
-        if (last.Count == 0)
-        {
+        // celý měsíc den po dni, i prázdné dny (ťuknutím se dá dopsat zapomenutý večer)
+        if (!history.Any(h => h.Total > 0))
             HistoryList.Add(new Label { Text = "Zatím nic. Abstinent, nebo lhář?", Style = AppStyle("Body") });
-        }
-        foreach (var day in last)
+        var byDay = history.GroupBy(h => h.Day.Date).ToDictionary(g => g.Key, g => g.First());
+        for (var i = 0; i < 30; i++)
         {
-            var label = new Label
-            {
-                Text = $"{day.Day.ToString("ddd d. M.", Cs)} – {Cz.Souhrn(day.Pivo, day.Vino, day.Panaky)}",
-                Style = AppStyle("Body")
-            };
-            if (isMe && day.Day.Date >= today.Date.AddDays(-30))
+            var date = today.Date.AddDays(-i);
+            var text = date.ToString("ddd d. M.", Cs);
+            if (byDay.TryGetValue(date, out var day) && day.Total > 0)
+                text += $" – {Cz.Souhrn(day.Pivo, day.Vino, day.Panaky)}";
+            var label = new Label { Text = text, Style = AppStyle("Body") };
+            if (isMe)
             {
                 var tap = new TapGestureRecognizer();
-                var d = day.Day;
-                tap.Tapped += async (_, _) => await EditDayAsync(d);
+                tap.Tapped += async (_, _) => await EditDayAsync(date);
                 label.GestureRecognizers.Add(tap);
             }
             HistoryList.Add(label);
@@ -181,7 +180,9 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
         if (userId == null || !isMe) return;
         var ok = await Listek.ConfirmAsync(this, "Útrata zpětně",
             $"Dny bez útraty dostanou odhad podle tvých výchozích cen (pivo {Prices.Pivo} Kč, víno {Prices.Vino} Kč, panák {Prices.Panak} Kč). " +
-            "Kolik jsi kde skutečně utratil, už nikdo nezjistí – je to odhad. Stojí to jedno čtení a jeden zápis za každý den s pitím.",
+            "Kolik jsi kde skutečně utratil, už nikdo nezjistí – je to odhad." +
+            // technická poznámka jen pro správce, ostatní to nezajímá
+            (UsageService.IsAdmin ? " Stojí to jedno čtení a jeden zápis za každý den s pitím." : ""),
             "Dopočítat");
         if (!ok) return;
         try
@@ -213,6 +214,8 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
 
         string Split(long pub, long home, long other)
         {
+            // starší škrtnutí místa neubírala → pro jistotu nic pod nulu
+            pub = Math.Max(0, pub); home = Math.Max(0, home); other = Math.Max(0, other);
             var known = pub + home + other;
             if (known == 0) return "—";
             int P(long v) => (int)Math.Round(100.0 * v / known);
@@ -255,6 +258,25 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
             tap.Tapped += async (_, _) => await Shell.Current.GoToAsync("//Hospoda", new Dictionary<string, object> { ["pubId"] = id });
             box.GestureRecognizers.Add(tap);
             PubsList.Add(box);
+        }
+    }
+
+    private void RenderFavorites(UserStats stats)
+    {
+        FavList.Clear();
+        FavBox.IsVisible = stats.FavoritePubs.Count > 0;
+        foreach (var (id, fav) in stats.FavoritePubs.OrderBy(f => f.Value.Name, StringComparer.CurrentCultureIgnoreCase))
+        {
+            var label = new Label { Text = "★ " + fav.Name, Style = AppStyle("Body") };
+            var tap = new TapGestureRecognizer();
+            var pubId = id;
+            var f = fav;
+            tap.Tapped += async (_, _) => await Shell.Current.GoToAsync("//Hospoda", new Dictionary<string, object>
+            {
+                ["pubId"] = pubId, ["lat"] = f.Lat, ["lon"] = f.Lon, ["name"] = f.Name, ["kind"] = f.Kind ?? "pub"
+            });
+            label.GestureRecognizers.Add(tap);
+            FavList.Add(label);
         }
     }
 
@@ -308,21 +330,6 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
         {
             await Listek.AlertAsync(this, "Chyba", $"Úprava se nepovedla: {ex.Message}");
         }
-    }
-
-    private void OnOtherDayClicked(object sender, EventArgs e)
-    {
-        if (stats == null) return;
-        OtherDayPicker.MaximumDate = stats.Today.Date;
-        OtherDayPicker.MinimumDate = stats.Today.Date.AddDays(-30);
-        OtherDayPicker.Date = stats.Today.Date;   // vybrat dnešek = nic (ten je na lístku)
-        OtherDayPicker.Focus();
-    }
-
-    private async void OnOtherDaySelected(object? sender, DateChangedEventArgs e)
-    {
-        if (stats == null || e.NewDate.Date == stats.Today.Date) return;
-        await EditDayAsync(e.NewDate.Date);
     }
 
     /// <summary>„Teď sedí: U Peťky (před 40 min)“ – jen když tam zapisoval v posledních 3 hodinách.</summary>

@@ -20,15 +20,15 @@
                 <VerticalStackLayout Spacing="4">
                     <Label Text="Co to bude?" Style="{StaticResource Title}" />
 
-                    <Label Text="Piva:" Style="{StaticResource FieldLabel}" />
+                    <Label Text="Piva (velké 0,5 l):" Style="{StaticResource FieldLabel}" />
                     <Slider x:Name="PivaSlider" Minimum="0" Maximum="10" Value="1" ValueChanged="OnSliderValueChanged" />
                     <Label x:Name="PivaLabel" Text="1" Style="{StaticResource Heading}" HorizontalOptions="Center" />
 
-                    <Label Text="Víno:" Style="{StaticResource FieldLabel}" />
+                    <Label Text="Víno (sklenka 2 dcl):" Style="{StaticResource FieldLabel}" />
                     <Slider x:Name="VinoSlider" Minimum="0" Maximum="10" Value="0" ValueChanged="OnSliderValueChanged" />
                     <Label x:Name="VinoLabel" Text="0" Style="{StaticResource Heading}" HorizontalOptions="Center" />
 
-                    <Label Text="Panáky:" Style="{StaticResource FieldLabel}" />
+                    <Label Text="Panáky (jakékoli, 4 cl):" Style="{StaticResource FieldLabel}" />
                     <Slider x:Name="PanakySlider" Minimum="0" Maximum="10" Value="0" ValueChanged="OnSliderValueChanged" />
                     <Label x:Name="PanakyLabel" Text="0" Style="{StaticResource Heading}" HorizontalOptions="Center" />
 

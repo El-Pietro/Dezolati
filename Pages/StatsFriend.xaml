@@ -39,6 +39,12 @@
                         <Grid x:Name="PlacesGrid" ColumnDefinitions="Auto, *" ColumnSpacing="12" RowSpacing="6" />
                     </VerticalStackLayout>
 
+                    <!-- oblíbené hospody (z profilu) -->
+                    <VerticalStackLayout x:Name="FavBox" Spacing="4" IsVisible="False">
+                        <Label Text="Oblíbené hospody" Style="{StaticResource Heading}" Margin="0,12,0,0" />
+                        <VerticalStackLayout x:Name="FavList" Spacing="4" />
+                    </VerticalStackLayout>
+
                     <!-- nejčastější hospody -->
                     <VerticalStackLayout x:Name="PubsBox" Spacing="4" IsVisible="False">
                         <Label Text="Nejčastější hospody" Style="{StaticResource Heading}" Margin="0,12,0,0" />
@@ -68,15 +74,9 @@
                     </VerticalStackLayout>
 
                     <Label Text="Poslední tahy" Style="{StaticResource Heading}" Margin="0,16,0,0" />
-                    <Label x:Name="EditHint" Text="(ťukni na den a dopiš nebo škrtni, co chybí – 30 dní zpět)"
+                    <Label x:Name="EditHint" Text="(ťukni na den a dopiš nebo škrtni, co chybí)"
                            Style="{StaticResource Small}" IsVisible="False" />
                     <VerticalStackLayout x:Name="HistoryList" Spacing="4" />
-                    <controls:PencilButton x:Name="OtherDayButton" Text="Upravit jiný den" Variant="Secondary"
-                                           FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
-                                           IsVisible="False" Clicked="OnOtherDayClicked" />
-                    <!-- skrytý kalendář pro „jiný den“ (otevře se přes Focus) -->
-                    <DatePicker x:Name="OtherDayPicker" Opacity="0" HeightRequest="1" Format="d. M. yyyy"
-                                DateSelected="OnOtherDaySelected" />
 
                     <controls:PencilButton x:Name="RemoveFriendButton" Text="Odebrat z kámošů" Variant="Danger"
                                            Margin="0,24,0,0" IsVisible="False" Clicked="OnRemoveFriendClicked" />

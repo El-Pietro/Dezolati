@@ -11,7 +11,7 @@ public partial class Settings : ContentPage
     private string? gender;
     private string? drinkerType;
     private bool notifyFriends = true;
-    private bool sharePub;
+    private int shareLevel = 1;   // 0 nehlásit, 1 že piju, 2 i kde
     private bool detectPub;
 
     public Settings()
@@ -48,10 +48,10 @@ public partial class Settings : ContentPage
                 gender = user.Gender;
                 drinkerType = user.DrinkerType;
                 notifyFriends = user.NotifyFriends;
-                sharePub = user.SharePub;
-                PushService.SharePub = sharePub;
+                shareLevel = user.ShareLevel;
+                PushService.ShareLevel = shareLevel;
             }
-            detectPub = PushService.DetectPub || sharePub;
+            detectPub = PushService.DetectPub || shareLevel == 2;
         }
         catch (Exception ex)
         {
@@ -91,8 +91,9 @@ public partial class Settings : ContentPage
         loadingLocal = true;
         HomeLabel.Text = HomePlace.IsSet
             ? "Nastavený (poloha jen v tomhle telefonu). Pití do 80 m se počítá jako „doma“."
-            : "Nenastavený – na mapě dej Přidat a pak „Tady bydlím“.";
+            : "Nenastavený – pití doma se počítá jako „jinde“.";
         HomeClearButton.IsVisible = HomePlace.IsSet;
+        HomeSetButton.Text = HomePlace.IsSet ? "Přestěhovat" : "Nastavit domov";
 
         static string P(int v) => v > 0 ? v.ToString(System.Globalization.CultureInfo.InvariantCulture) : "";
         PricePivoEntry.Text = P(Prices.Pivo);
@@ -101,6 +102,9 @@ public partial class Settings : ContentPage
         WeightEntry.Text = P(Promile.WeightKg);
         loadingLocal = false;
     }
+
+    private async void OnHomeSetClicked(object sender, EventArgs e) =>
+        await Shell.Current.GoToAsync("//Hospody", new Dictionary<string, object> { ["mode"] = "home" });
 
     private void OnHomeClearClicked(object sender, EventArgs e)
     {
@@ -151,8 +155,15 @@ public partial class Settings : ContentPage
         SetChip(NotifyOff, !notifyFriends);
         SetChip(DetectOn, detectPub);
         SetChip(DetectOff, !detectPub);
-        SetChip(ShareOn, sharePub);
-        SetChip(ShareOff, !sharePub);
+        SetChip(ShareWhere, shareLevel == 2);
+        SetChip(ShareYes, shareLevel == 1);
+        SetChip(ShareNo, shareLevel == 0);
+        ShareHint.Text = shareLevel switch
+        {
+            2 => "Při prvním drinku po 3h pauze přijde kámošům „X si právě dal pivo v U Peťky“, uvidí tě na mapě a v „Teď pijí“. Ukládá se jen hospoda, poloha nikam.",
+            1 => "Při prvním drinku po 3h pauze přijde kámošům „X si právě dal pivo“ a uvidí tě v „Teď pijí“ – bez hospody.",
+            _ => "Kámošům nic nepřijde a v „Teď pijí“ nebudeš."
+        };
 
         var rem = Reminders.Minutes;
         SetChip(Rem0, rem == 0);
@@ -214,7 +225,9 @@ public partial class Settings : ContentPage
                 DrinkerType = drinkerType,
                 Email = AuthSession.Email,
                 NotifyFriends = notifyFriends,
-                SharePub = sharePub
+                SharePub = shareLevel == 2,
+                ShareLevel = shareLevel,
+                FavoritePubs = UserSession.Profile?.FavoritePubs ?? new()
             };
             await firestoreService.UpdateUserData(userId, profile);
             UserSession.SetProfile(profile);
@@ -271,10 +284,10 @@ public partial class Settings : ContentPage
 
         detectPub = on;
         PushService.DetectPub = on;
-        if (!on && sharePub)
+        if (!on && shareLevel == 2)
         {
-            sharePub = false;
-            PushService.SharePub = false;
+            shareLevel = 1;   // bez poznávání hospody jde hlásit jen „že piju“
+            PushService.ShareLevel = 1;
             UpdateChips();
             await SavePrefsAsync();
             return;
@@ -282,16 +295,16 @@ public partial class Settings : ContentPage
         UpdateChips();
     }
 
-    /// <summary>Hlášení kámošům – bez poznávání hospody nejde, takže ho zapne taky.</summary>
+    /// <summary>Hlášení kámošům: „i kde“ potřebuje poznávání hospody, takže ho zapne taky.</summary>
     private async void OnShareClicked(object sender, EventArgs e)
     {
-        var on = ((PencilButton)sender).CommandParameter as string == "1";
-        if (on == sharePub) return;
-        if (on && !await EnsureLocationAsync()) return;
+        if (((PencilButton)sender).CommandParameter is not string p || !int.TryParse(p, out var level)) return;
+        if (level == shareLevel) return;
+        if (level == 2 && !await EnsureLocationAsync()) return;
 
-        sharePub = on;
-        PushService.SharePub = on;
-        if (on)
+        shareLevel = level;
+        PushService.ShareLevel = level;
+        if (level == 2)
         {
             detectPub = true;
             PushService.DetectPub = true;
@@ -324,11 +337,12 @@ public partial class Settings : ContentPage
         if (AuthSession.Uid is not string uid) return;
         try
         {
-            await firestoreService.UpdateNotificationPrefs(uid, notifyFriends, sharePub);
+            await firestoreService.UpdateNotificationPrefs(uid, notifyFriends, shareLevel);
             if (UserSession.Profile is { } p)
             {
                 p.NotifyFriends = notifyFriends;
-                p.SharePub = sharePub;
+                p.ShareLevel = shareLevel;
+                p.SharePub = shareLevel == 2;
             }
         }
         catch (Exception ex)

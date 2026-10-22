@@ -18,7 +18,10 @@ namespace Dezolati.Services
         bool SharePub = false,  // hlásit kámošům (oznámení + „teď sedí“ v profilu)
         string? Place = null,   // hospoda / doma / jinde / null = nevím (Services/Places.cs)
         int Kc = 0,             // kolik to stálo (u škrtnutí záporné)
-        bool NewVisit = false); // první zápis dne v téhle hospodě (statistika návštěv)
+        bool NewVisit = false,  // první zápis dne v téhle hospodě (statistika návštěv)
+        bool ShareDrink = false,// hlásit kámošům, že piju (server pošle „X si dala pivo“ při novém sezení)
+        double? PubLat = null,  // poloha hospody – kámoši ji uvidí na mapě (jen při hlášení i s polohou)
+        double? PubLon = null);
 
     /// <summary>
     /// Fronta zápisů v telefonu. Každý zápis jde nejdřív sem a hned se zkusí odeslat.
@@ -179,7 +182,8 @@ namespace Dezolati.Services
                     ["PubName"] = d.PubName,
                     ["SharePub"] = d.SharePub, // Cloud Function pošle kámošům „sedí v hospodě“ jen při true
                     ["Place"] = d.Place,
-                    ["Kc"] = d.Kc
+                    ["Kc"] = d.Kc,
+                    ["ShareDrink"] = d.ShareDrink
                 }, mustNotExist: true),
 
                 // 2) denní součet – atomicky přičíst (u škrtnutí odečíst)
@@ -200,16 +204,24 @@ namespace Dezolati.Services
             if (!d.Correction)
             {
                 var shared = d.SharePub && d.PubId != null;
+                // emoji u jména v Kámoších: čeho bylo v zápisu nejvíc (remíza → tvrdší)
+                var kind = d.Panaky > 0 && d.Panaky >= d.Pivo && d.Panaky >= d.Vino ? "panak"
+                         : d.Vino > 0 && d.Vino >= d.Pivo ? "vino" : "pivo";
                 writes.Add(FirestoreRest.SetWrite($"Users/{uid}",
                     new()
                     {
+                        ["UserId"] = uid,          // „kdo teď pije“ hledá kámoše podle UserId
                         ["LastDrinkAt"] = d.At,
                         ["LastDrinkDay"] = key,
+                        ["LastDrinkKind"] = kind,
                         ["CurrentPubId"] = shared ? d.PubId : null,
                         ["CurrentPubName"] = shared ? d.PubName : null,
-                        ["CurrentPubAt"] = shared ? d.At : null
+                        ["CurrentPubAt"] = shared ? d.At : null,
+                        ["CurrentPubLat"] = shared ? d.PubLat : null,
+                        ["CurrentPubLon"] = shared ? d.PubLon : null
                     },
-                    mask: new[] { "LastDrinkAt", "LastDrinkDay", "CurrentPubId", "CurrentPubName", "CurrentPubAt" }));
+                    mask: new[] { "UserId", "LastDrinkAt", "LastDrinkDay", "LastDrinkKind", "CurrentPubId", "CurrentPubName", "CurrentPubAt",
+                                  "CurrentPubLat", "CurrentPubLon" }));
             }
 
             // 4) statistika hospod (kde nejčastěji piju) – jen u skutečného pití v hospodě
@@ -251,13 +263,12 @@ namespace Dezolati.Services
                 ["Panaky"] = d.Panaky,
                 ["Total"] = total
             };
-            if (d.Kc != 0) inc["Kc"] = d.Kc;
-            switch (d.Place)
-            {
-                case Services.Place.Pub: inc["PlacePub"] = total; break;
-                case Services.Place.Home: inc["PlaceHome"] = total; break;
-                case Services.Place.Other: inc["PlaceOther"] = total; break;
-            }
+            // vždy všechna pole (i nula): součet ve statistikách jde přes složený index
+            // a ten obsahuje jen dokumenty, které daná pole mají
+            inc["Kc"] = d.Kc;
+            inc["PlacePub"] = d.Place == Services.Place.Pub ? total : 0;
+            inc["PlaceHome"] = d.Place == Services.Place.Home ? total : 0;
+            inc["PlaceOther"] = d.Place == Services.Place.Other ? total : 0;
             return inc;
         }
 

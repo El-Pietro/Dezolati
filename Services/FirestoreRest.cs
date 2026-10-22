@@ -13,6 +13,8 @@ namespace Dezolati.Services
         public static Filter Eq(string field, object value) => new(field, "EQUAL", value);
         public static Filter Gte(string field, object value) => new(field, "GREATER_THAN_OR_EQUAL", value);
         public static Filter ArrayContains(string field, object value) => new(field, "ARRAY_CONTAINS", value);
+        /// <summary>Pole je jedna z hodnot (max. 30 hodnot v jednom dotazu).</summary>
+        public static Filter In(string field, IEnumerable<string> values) => new(field, "IN", values.ToList());
     }
 
     /// <summary>

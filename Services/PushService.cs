@@ -21,12 +21,30 @@ namespace Dezolati.Services
 
         private static bool _initDone;
 
-        /// <summary>Hlásit kámošům, ve které hospodě sedím (uloženo i v profilu, tady kvůli zápisu bez signálu).</summary>
-        public static bool SharePub
+        private const string KeyShareLevel = "share_level";
+
+        /// <summary>
+        /// Hlášení kámošům (uloženo i v profilu, tady kvůli zápisu bez signálu):
+        /// 0 nehlásit, 1 hlásit že piju (oznámení „X si dala pivo“), 2 i kde (hospoda, „Teď sedí“, mapa).
+        /// Výchozí 1; kdo dřív hlásil hospodu, má 2.
+        /// </summary>
+        public static int ShareLevel
         {
-            get => Preferences.Get(KeySharePub, false);
-            set => Preferences.Set(KeySharePub, value);
+            get => Preferences.ContainsKey(KeyShareLevel)
+                ? Math.Clamp(Preferences.Get(KeyShareLevel, 1), 0, 2)
+                : Preferences.Get(KeySharePub, false) ? 2 : 1;
+            set
+            {
+                Preferences.Set(KeyShareLevel, Math.Clamp(value, 0, 2));
+                Preferences.Set(KeySharePub, value == 2);
+            }
         }
+
+        /// <summary>Hlásit kámošům i hospodu (úroveň 2).</summary>
+        public static bool SharePub => ShareLevel == 2;
+
+        /// <summary>Hlásit kámošům, že piju (úroveň 1 a víc).</summary>
+        public static bool ShareDrink => ShareLevel >= 1;
 
         /// <summary>
         /// Poznávat hospodu podle polohy (jen pro mě: lístek, statistiky). Jen v telefonu.
@@ -40,7 +58,7 @@ namespace Dezolati.Services
 
         // ---------------- hospoda posledního zápisu (jen v telefonu, pro lístek) ----------------
 
-        private record LastPubInfo(DateTime Day, string? PubId, string? PubName, string? Place = null);
+        private record LastPubInfo(DateTime Day, string? PubId, string? PubName, string? Place = null, double? Lat = null, double? Lon = null);
 
         private static string LastPubKey(string uid) => $"last_pub_{uid}";
 
@@ -50,7 +68,7 @@ namespace Dezolati.Services
             try
             {
                 Preferences.Set(LastPubKey(uid), System.Text.Json.JsonSerializer.Serialize(
-                    new LastPubInfo(day.Date, place.PubId, place.PubName, place.Place)));
+                    new LastPubInfo(day.Date, place.PubId, place.PubName, place.Place, place.Lat, place.Lon)));
             }
             catch { }
         }
@@ -82,7 +100,7 @@ namespace Dezolati.Services
         public static PlaceInfo LastPlace(string uid, DateTime day)
         {
             var info = LastInfo(uid, day);
-            return info == null ? PlaceInfo.Unknown : new PlaceInfo(info.Place, info.PubId, info.PubName);
+            return info == null ? PlaceInfo.Unknown : new PlaceInfo(info.Place, info.PubId, info.PubName, info.Lat, info.Lon);
         }
 
         /// <summary>Po přihlášení / otevření lístku: povolení, kanál, token. Jednou za spuštění.</summary>
@@ -173,15 +191,22 @@ namespace Dezolati.Services
                         new GeolocationRequest(GeolocationAccuracy.Medium, TimeSpan.FromSeconds(4))) ?? loc;
                 if (loc == null) return PlaceInfo.Unknown;
 
+                LastLocation.Remember(loc.Latitude, loc.Longitude);
                 if (HomePlace.IsNear(loc.Latitude, loc.Longitude))
                     return new PlaceInfo(Place.Home, null, null);
 
-                if (await PubCatalog.GetCachedAsync() == null) return new PlaceInfo(Place.Other, null, null);
+                // hospody v okolí: chybí-li čtverec mapy, dotáhnout (max. pár sekund, bez signálu nic)
+                try
+                {
+                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+                    await PubCatalog.EnsureCellsAsync(PubCatalog.CellsNear(loc.Latitude, loc.Longitude), cts.Token);
+                }
+                catch { }
                 await PubService.LoadOverlayAsync();
                 var pub = PubService.Nearest(loc.Latitude, loc.Longitude, PubRadiusMeters);
                 return pub == null
                     ? new PlaceInfo(Place.Other, null, null)
-                    : new PlaceInfo(Place.Pub, pub.Id, PubService.NameOf(pub));
+                    : new PlaceInfo(Place.Pub, pub.Id, PubService.NameOf(pub), pub.Lat, pub.Lon);
             }
             catch
             {

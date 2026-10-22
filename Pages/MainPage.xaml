@@ -84,7 +84,7 @@
                             </FlexLayout.GestureRecognizers>
                         </FlexLayout>
 
-                        <Label Text="(ťukni na řádek a škrtni čárku)" Style="{StaticResource Small}"
+                        <Label Text="(ťukni na řádek a škrtni čárku)" Style="{StaticResource Small}" HorizontalTextAlignment="Center"
                                TextColor="{StaticResource InkSoft}" HorizontalOptions="Center" Margin="0,12,0,0" />
                     </VerticalStackLayout>
                 </ScrollView>

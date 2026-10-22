@@ -25,10 +25,16 @@ public partial class Hospoda : ContentPage, IQueryAttributable
     public void ApplyQueryAttributes(IDictionary<string, object> query)
     {
         var id = query.TryGetValue("pubId", out var v) ? v as string : null;
-        _ = LoadAsync(id);
+        // náhradní údaje pro hospodu mimo stažené čtverce mapy (oblíbená kámoše apod.)
+        PubInfo? fallback = null;
+        if (id != null && query.TryGetValue("lat", out var la) && la is double lat
+            && query.TryGetValue("lon", out var lo) && lo is double lon)
+            fallback = new PubInfo(id, query.TryGetValue("name", out var n) && n is string name ? name : "?",
+                query.TryGetValue("kind", out var k) && k is string kind ? kind : "pub", lat, lon, null, null, null);
+        _ = LoadAsync(id, fallback);
     }
 
-    private async Task LoadAsync(string? id)
+    private async Task LoadAsync(string? id, PubInfo? fallback = null)
     {
         SetEditing(false);
         HistoryList.Clear();
@@ -41,9 +47,17 @@ public partial class Hospoda : ContentPage, IQueryAttributable
         {
             Busy.IsRunning = Busy.IsVisible = true;
 
-            await PubCatalog.GetAsync(); // z telefonu, nic se nestahuje
+            await PubCatalog.GetAsync(); // z telefonu
             await PubService.LoadOverlayAsync();
             pub = PubService.Find(id);
+            if (pub == null && Favorites.All.TryGetValue(id, out var fav))
+                fallback ??= Favorites.ToPub(id, fav);
+            if (pub == null && fallback != null)
+            {
+                // hospoda mimo stažené čtverce mapy → dotáhnout její okolí, jinak aspoň to, co víme
+                try { await PubCatalog.EnsureCellsAsync(PubCatalog.CellsNear(fallback.Lat, fallback.Lon)); } catch { }
+                pub = PubService.Find(id) ?? fallback;
+            }
             if (pub == null)
             {
                 NameLabel.Text = "Hospoda zmizela";
@@ -62,7 +76,17 @@ public partial class Hospoda : ContentPage, IQueryAttributable
 
             RenderProfile(); // prázdné, než dorazí Firestore
             RenderState();
+            // husté oblasti mají v telefonu jen název a polohu → adresa, otvíračka, web… teď (souběžně s profilem)
+            var details = pub.Light ? PubCatalog.EnsureDetailsAsync(pub) : null;
             profile = await PubService.GetProfileAsync(pub.Id) ?? new PubProfile();
+            if (details != null)
+            {
+                var detailed = await details;
+                pub = PubService.Find(detailed.Id) is { Light: false } fresh ? fresh : detailed;
+                WebButton.IsVisible = !string.IsNullOrEmpty(pub.Website);
+                CallButton.IsVisible = !string.IsNullOrEmpty(pub.Phone);
+                ContactBox.IsVisible = WebButton.IsVisible || CallButton.IsVisible;
+            }
             NameLabel.Text = PubService.NameOf(pub);
             RenderOsmName();
             RenderProfile();
@@ -89,6 +113,7 @@ public partial class Hospoda : ContentPage, IQueryAttributable
     private void RenderState()
     {
         if (pub == null) return;
+        FavButton.Text = Favorites.Is(pub.Id) ? "★ Oblíbená" : "☆ Oblíbená";
         var custom = PubService.IsCustom(pub);
         ClosedLabel.IsVisible = profile.Closed;
         ClosedButton.Text = profile.Closed ? "Zase otevřeno" : "Natrvalo zavřeno";
@@ -347,6 +372,48 @@ public partial class Hospoda : ContentPage, IQueryAttributable
         catch (Exception ex)
         {
             await Listek.AlertAsync(this, "Chyba", $"Smazat se nepovedlo: {ex.Message}");
+        }
+    }
+
+    private async void OnFavClicked(object sender, EventArgs e)
+    {
+        if (pub == null) return;
+        try
+        {
+            FavButton.IsEnabled = false;
+            var on = await Favorites.ToggleAsync(pub);
+            FavButton.Text = on ? "★ Oblíbená" : "☆ Oblíbená";
+        }
+        catch (Exception ex)
+        {
+            await Listek.AlertAsync(this, "Chyba", Net.IsNetworkError(ex) ? "Bez signálu to nejde uložit." : ex.Message);
+        }
+        finally
+        {
+            FavButton.IsEnabled = true;
+        }
+    }
+
+    private async void OnInviteClicked(object sender, EventArgs e)
+    {
+        if (pub == null) return;
+        var name = PubService.NameOf(pub);
+        if (!await Listek.ConfirmAsync(this, "Pozvat kámoše?",
+                $"Kámošům do {Invites.RadiusKm:0} km přijde „zve tě na drink do {name}“.", "Pozvat"))
+            return;
+        try
+        {
+            InviteButton.IsEnabled = false;
+            await Invites.SendAsync(pub);
+            await Listek.AlertAsync(this, "Posláno", "Pozvánka letí. Teď už jen čekat, kdo dorazí.");
+        }
+        catch (Exception ex)
+        {
+            await Listek.AlertAsync(this, "Nepovedlo se", Net.IsNetworkError(ex) ? "Bez signálu pozvánka neodejde." : ex.Message);
+        }
+        finally
+        {
+            InviteButton.IsEnabled = true;
         }
     }
 

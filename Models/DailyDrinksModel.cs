@@ -52,5 +52,7 @@
         public long TotalPlaceOther { get; set; }
         /// <summary>Hospody, nejčastější první.</summary>
         public List<PubStat> Pubs { get; set; } = new();
+        /// <summary>Oblíbené hospody (z profilu).</summary>
+        public Dictionary<string, FavoritePub> FavoritePubs { get; set; } = new();
     }
 }

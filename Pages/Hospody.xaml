@@ -8,11 +8,12 @@
         <Image Grid.RowSpan="3" Source="{AppThemeBinding Light=woodlight.jpg, Dark=wooddark.jpg}" Aspect="AspectFill" />
 
         <!-- horní lišta: Zpět (jen mimo Android) a Kde jsem -->
-        <Grid Grid.Row="0" ColumnDefinitions="Auto, *, Auto, Auto" ColumnSpacing="10" Margin="{DynamicResource TopBarMargin}">
+        <Grid Grid.Row="0" ColumnDefinitions="Auto, *, Auto, Auto, Auto" ColumnSpacing="8" Margin="{DynamicResource TopBarMargin}">
             <controls:PencilButton Grid.Column="0" Variant="Outline" Text="Zpět"
                                    IsVisible="{OnPlatform Default=True, Android=False}" Clicked="OnZpetClicked" />
-            <controls:PencilButton x:Name="AddButton" Grid.Column="2" Variant="Outline" Text="Přidat" Clicked="OnAddClicked" />
-            <controls:PencilButton Grid.Column="3" Variant="Outline" Text="Kde jsem?" Clicked="OnWhereAmIClicked" />
+            <controls:PencilButton x:Name="FilterButton" Grid.Column="2" Variant="Outline" Text="Filtr" Clicked="OnFilterClicked" />
+            <controls:PencilButton x:Name="AddButton" Grid.Column="3" Variant="Outline" Text="Přidat" Clicked="OnAddClicked" />
+            <controls:PencilButton Grid.Column="4" Variant="Outline" Text="Kde jsem?" Clicked="OnWhereAmIClicked" />
         </Grid>
 
         <!-- mapa položená na stole v papírovém rámečku -->
@@ -20,6 +21,11 @@
                 StrokeThickness="0" StrokeShape="RoundRectangle 2">
             <Grid>
                 <ContentView x:Name="MapHost" />
+
+                <!-- stav dotahování hospod (čtverce mapy) -->
+                <Label x:Name="CellStatusLabel" IsVisible="False" InputTransparent="True" FontSize="12" FontFamily="OpenSansRegular"
+                       TextColor="#3B2314" BackgroundColor="#E6F5F5DC" Padding="8,3" Margin="0,6,0,0"
+                       HorizontalOptions="Center" VerticalOptions="Start" />
 
                 <VerticalStackLayout x:Name="LoadingBox" Spacing="8" Padding="20"
                                      VerticalOptions="Center" HorizontalOptions="Center">
@@ -67,23 +73,79 @@
                     <controls:PencilButton x:Name="AddSaveButton" Grid.Column="0" Text="Přidat sem" Variant="Primary" Clicked="OnAddSaveClicked" />
                     <controls:PencilButton Grid.Column="1" Text="Zrušit" Variant="Secondary" Clicked="OnAddCancelClicked" />
                 </Grid>
-                <!-- domov: poloha zůstane jen v telefonu -->
-                <controls:PencilButton Text="…nebo tady bydlím" Variant="Outline"
-                                       FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
-                                       Clicked="OnHomeHereClicked" />
+            </VerticalStackLayout>
+        </Border>
+
+        <!-- nastavení domova (otevírá se z Nastavení); poloha zůstane jen v telefonu -->
+        <Border x:Name="HomeCard" Grid.Row="2" Style="{StaticResource Listek}" IsVisible="False" Margin="12,0,12,16">
+            <VerticalStackLayout Spacing="6">
+                <Label Text="Posuň mapu, ať je křížek na tvém domově" Style="{StaticResource Small}" HorizontalTextAlignment="Center" />
+                <Grid ColumnDefinitions="*, *" ColumnSpacing="10">
+                    <controls:PencilButton Grid.Column="0" Text="Tady bydlím" Variant="Primary" Clicked="OnHomeHereClicked" />
+                    <controls:PencilButton Grid.Column="1" Text="Zrušit" Variant="Secondary" Clicked="OnHomeCancelClicked" />
+                </Grid>
+            </VerticalStackLayout>
+        </Border>
+
+        <!-- filtr mapy (pamatuje si volbu) -->
+        <Border x:Name="FilterCard" Grid.Row="2" Style="{StaticResource Listek}" IsVisible="False" Margin="12,0,12,16">
+            <VerticalStackLayout Spacing="6">
+                <Grid ColumnDefinitions="*, *" ColumnSpacing="8">
+                    <controls:PencilButton x:Name="ShowAll" Grid.Column="0" Text="Vše" Variant="Secondary"
+                                           FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                           CommandParameter="all" Clicked="OnShowModeClicked" />
+                    <controls:PencilButton x:Name="ShowFav" Grid.Column="1" Text="★ Oblíbené" Variant="Secondary"
+                                           FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                           CommandParameter="fav" Clicked="OnShowModeClicked" />
+                </Grid>
+                <Grid ColumnDefinitions="*, *, *, *" ColumnSpacing="6">
+                    <controls:PencilButton x:Name="FPub" Grid.Column="0" Text="Hospody" Variant="Secondary"
+                                           FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                           CommandParameter="pub" Clicked="OnFilterKindClicked" />
+                    <controls:PencilButton x:Name="FBar" Grid.Column="1" Text="Bary" Variant="Secondary"
+                                           FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                           CommandParameter="bar" Clicked="OnFilterKindClicked" />
+                    <controls:PencilButton x:Name="FRestaurant" Grid.Column="2" Text="Restaurace" Variant="Secondary"
+                                           FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                           CommandParameter="restaurant" Clicked="OnFilterKindClicked" />
+                    <controls:PencilButton x:Name="FGarden" Grid.Column="3" Text="Zahrádky" Variant="Secondary"
+                                           FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                           CommandParameter="biergarten" Clicked="OnFilterKindClicked" />
+                </Grid>
+                <Grid ColumnDefinitions="*, *" ColumnSpacing="8">
+                    <controls:PencilButton x:Name="FClosed" Grid.Column="0" Text="I zavřené" Variant="Secondary"
+                                           FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                           Clicked="OnFilterClosedClicked" />
+                    <controls:PencilButton Grid.Column="1" Text="Hotovo" Variant="Primary"
+                                           FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                           Clicked="OnFilterDoneClicked" />
+                </Grid>
             </VerticalStackLayout>
         </Border>
 
         <!-- kartička vybrané hospody -->
         <Border x:Name="PubCard" Grid.Row="2" Style="{StaticResource Listek}" IsVisible="False" Margin="12,0,12,16">
-            <Grid ColumnDefinitions="*, Auto" ColumnSpacing="10">
+            <Grid RowDefinitions="Auto, Auto" ColumnDefinitions="*, Auto" ColumnSpacing="10" RowSpacing="6">
                 <VerticalStackLayout Grid.Column="0" Spacing="0" VerticalOptions="Center">
                     <Label x:Name="CardName" Style="{StaticResource Heading}" HorizontalOptions="Start"
                            HorizontalTextAlignment="Start" LineBreakMode="TailTruncation" MaxLines="2" />
                     <Label x:Name="CardInfo" Style="{StaticResource Small}" />
                 </VerticalStackLayout>
-                <controls:PencilButton Grid.Column="1" Text="Otevřít" Variant="Primary" WidthRequest="130"
-                                       VerticalOptions="Center" Clicked="OnOpenClicked" />
+                <!-- oblíbená: hvězdička -->
+                <Label x:Name="CardStar" Grid.Column="1" Text="☆" FontSize="34" TextColor="#C27A12"
+                       VerticalOptions="Center" Padding="8,0">
+                    <Label.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="OnStarTapped" />
+                    </Label.GestureRecognizers>
+                </Label>
+                <Grid Grid.Row="1" Grid.ColumnSpan="2" ColumnDefinitions="*, *" ColumnSpacing="10">
+                    <controls:PencilButton Grid.Column="0" Text="Otevřít" Variant="Primary"
+                                           FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                           Clicked="OnOpenClicked" />
+                    <controls:PencilButton x:Name="InviteButton" Grid.Column="1" Text="Pozvat kámoše" Variant="Secondary"
+                                           FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                           Clicked="OnInviteClicked" />
+                </Grid>
             </Grid>
         </Border>
     </Grid>

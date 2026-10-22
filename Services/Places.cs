@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text.Json;
 
 namespace Dezolati.Services
@@ -12,9 +12,39 @@ namespace Dezolati.Services
     }
 
     /// <summary>Výsledek „kde teď jsem“ při zápisu.</summary>
-    public sealed record PlaceInfo(string? Place, string? PubId, string? PubName)
+    public sealed record PlaceInfo(string? Place, string? PubId, string? PubName, double? Lat = null, double? Lon = null)
     {
         public static readonly PlaceInfo Unknown = new(null, null, null);
+    }
+
+    /// <summary>
+    /// Poslední známá poloha z používání appky (jen v telefonu). Podle ní telefon sám rozhodne,
+    /// jestli ukázat pozvánku „do 15 km“ – na pozadí polohu zjišťovat nejde a nikam se neposílá.
+    /// </summary>
+    public static class LastLocation
+    {
+        private const string Key = "last_location";
+        private record Loc(double Lat, double Lon, DateTime At);
+
+        public static void Remember(double lat, double lon)
+        {
+            try { Preferences.Set(Key, JsonSerializer.Serialize(new Loc(lat, lon, DateTime.UtcNow))); } catch { }
+        }
+
+        /// <summary>Poloha, pokud není starší než maxAge.</summary>
+        public static (double Lat, double Lon)? Get(TimeSpan maxAge)
+        {
+            try
+            {
+                var json = Preferences.Get(Key, null as string);
+                if (string.IsNullOrEmpty(json) || JsonSerializer.Deserialize<Loc>(json) is not { } l) return null;
+                return DateTime.UtcNow - l.At <= maxAge ? (l.Lat, l.Lon) : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
     }
 
     /// <summary>

@@ -148,28 +148,80 @@ namespace Dezolati.Services
         {
             var dir = Path.Combine(FileSystem.CacheDirectory, "updates");
             Directory.CreateDirectory(dir);
-            foreach (var old in Directory.GetFiles(dir, "*.apk"))
-                try { File.Delete(old); } catch { }
-
             var path = Path.Combine(dir, $"dezolati-{release.Version}.apk");
-            using var resp = await Http.GetAsync(release.ApkUrl, HttpCompletionOption.ResponseHeadersRead);
-            resp.EnsureSuccessStatusCode();
-            var total = resp.Content.Headers.ContentLength ?? release.ApkSize;
+            foreach (var old in Directory.GetFiles(dir, "*.apk"))
+                if (old != path) try { File.Delete(old); } catch { }
 
-            await using (var src = await resp.Content.ReadAsStreamAsync())
-            await using (var dst = File.Create(path))
+            // Na mobilních datech se spojení umí utrhnout (na Androidu jako ObjectDisposed na Java.IO streamu).
+            // Proto několik pokusů a navázání tam, kde se skončilo (HTTP Range), ne stahování od nuly.
+            const int attempts = 5;
+            for (var attempt = 1; ; attempt++)
             {
-                var buffer = new byte[81920];
-                long done = 0;
-                int read;
-                while ((read = await src.ReadAsync(buffer)) > 0)
+                try
                 {
-                    await dst.WriteAsync(buffer.AsMemory(0, read));
-                    done += read;
-                    if (total > 0) progress?.Report((double)done / total);
+                    // pokud by telefon mezitím zhasl, Android rád utne síť – po dobu stahování nechat displej svítit
+                    MainThread.BeginInvokeOnMainThread(() => { try { DeviceDisplay.Current.KeepScreenOn = true; } catch { } });
+                    await DownloadPartAsync(release, path, progress);
+                    return path;
+                }
+                catch (Exception ex) when (attempt < attempts && IsTransient(ex))
+                {
+                    System.Diagnostics.Debug.WriteLine($"Stahování přerušeno ({attempt}/{attempts}): {ex.Message}");
+                    await Task.Delay(TimeSpan.FromSeconds(2 * attempt));
+                }
+                catch (Exception ex) when (IsTransient(ex))
+                {
+                    throw new IOException("Stahování se několikrát přerušilo – asi slabý signál. Zkus to znovu na Wi-Fi.", ex);
+                }
+                finally
+                {
+                    MainThread.BeginInvokeOnMainThread(() => { try { DeviceDisplay.Current.KeepScreenOn = false; } catch { } });
                 }
             }
-            return path;
+        }
+
+        private static bool IsTransient(Exception ex) =>
+            ex is ObjectDisposedException or IOException or TimeoutException || Net.IsNetworkError(ex);
+
+        /// <summary>Stáhne (nebo dotáhne) APK do souboru. Hotový soubor se pozná podle velikosti.</summary>
+        private static async Task DownloadPartAsync(AppRelease release, string path, IProgress<double>? progress)
+        {
+            long have = File.Exists(path) ? new FileInfo(path).Length : 0;
+            if (release.ApkSize > 0 && have == release.ApkSize) { progress?.Report(1); return; }
+            if (release.ApkSize > 0 && have > release.ApkSize) { File.Delete(path); have = 0; }
+
+            using var req = new HttpRequestMessage(HttpMethod.Get, release.ApkUrl);
+            if (have > 0) req.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(have, null);
+
+            using var resp = await Http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead);
+            if (have > 0 && resp.StatusCode == System.Net.HttpStatusCode.RequestedRangeNotSatisfiable)
+            {
+                // soubor už je celý (nebo nesedí) → začít znovu
+                File.Delete(path);
+                throw new IOException("Neplatný rozsah, stahuju znovu.");
+            }
+            resp.EnsureSuccessStatusCode();
+
+            // server rozsah nepodporuje (200 místo 206) → od začátku
+            var resumed = have > 0 && resp.StatusCode == System.Net.HttpStatusCode.PartialContent;
+            if (!resumed) have = 0;
+            var total = release.ApkSize > 0 ? release.ApkSize : have + (resp.Content.Headers.ContentLength ?? 0);
+
+            await using var src = await resp.Content.ReadAsStreamAsync();
+            await using var dst = new FileStream(path, resumed ? FileMode.Append : FileMode.Create, FileAccess.Write);
+            var buffer = new byte[81920];
+            long done = have;
+            int read;
+            while ((read = await src.ReadAsync(buffer)) > 0)
+            {
+                await dst.WriteAsync(buffer.AsMemory(0, read));
+                done += read;
+                if (total > 0) progress?.Report((double)done / total);
+            }
+            await dst.FlushAsync();
+
+            if (release.ApkSize > 0 && done < release.ApkSize)
+                throw new IOException("Stahování skončilo předčasně.");
         }
 
         /// <summary>

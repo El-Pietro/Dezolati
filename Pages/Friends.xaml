@@ -14,14 +14,17 @@
                                HorizontalOptions="Start" Margin="{DynamicResource TopBarMargin}" Clicked="OnZpetClicked" />
 
         <Border Grid.Row="1" Style="{StaticResource Listek}">
-            <Grid RowDefinitions="Auto, Auto, Auto, *, Auto, Auto" RowSpacing="8">
+            <Grid RowDefinitions="Auto, Auto, Auto, Auto, *, Auto, Auto" RowSpacing="8">
 
                 <Label Grid.Row="0" Text="Kámoši" Style="{StaticResource Title}" />
 
+                <!-- kdo mi připil na moje sezení -->
+                <Label Grid.Row="1" x:Name="CheersLabel" Style="{StaticResource Small}" IsVisible="False" />
+
                 <!-- Žádosti, které čekají na mě -->
-                <Label Grid.Row="1" x:Name="PendingHeader" Text="Chtějí se s tebou kamarádit:"
+                <Label Grid.Row="2" x:Name="PendingHeader" Text="Chtějí se s tebou kamarádit:"
                        Style="{StaticResource FieldLabel}" IsVisible="False" />
-                <CollectionView Grid.Row="2" x:Name="PendingRequestsList" SelectionMode="None"
+                <CollectionView Grid.Row="3" x:Name="PendingRequestsList" SelectionMode="None"
                                 IsVisible="False" MaximumHeightRequest="180">
                     <CollectionView.ItemTemplate>
                         <DataTemplate x:DataType="models:FriendsModel">
@@ -38,30 +41,17 @@
                     </CollectionView.ItemTemplate>
                 </CollectionView>
 
-                <!-- Seznam přátel -->
-                <CollectionView Grid.Row="3" x:Name="FriendsList" SelectionMode="None">
-                    <CollectionView.EmptyView>
-                        <Label Text="Zatím nikdo. Piješ sám?" Style="{StaticResource Heading}"
-                               HorizontalOptions="Center" Margin="0,20" />
-                    </CollectionView.EmptyView>
-                    <CollectionView.ItemTemplate>
-                        <DataTemplate x:DataType="models:UserModel">
-                            <Grid ColumnDefinitions="*, Auto" ColumnSpacing="8" Padding="0,4">
-                                <Label Text="{Binding Display}" Style="{StaticResource Heading}"
-                                       VerticalOptions="Center" LineBreakMode="TailTruncation" />
-                                <controls:PencilButton Grid.Column="1" Text="Statistiky" Variant="Secondary"
-                                                       FontSize="{DynamicResource FontButtonSmall}"
-                                                       HeightRequest="{DynamicResource ButtonHeightSmall}"
-                                                       WidthRequest="130"
-                                                       Clicked="OnViewStatsClicked" CommandParameter="{Binding .}" />
-                            </Grid>
-                        </DataTemplate>
-                    </CollectionView.ItemTemplate>
-                </CollectionView>
+                <!-- Seznam přátel: kdo pije, je nahoře s emoji a místem; ťuk na jméno = statistiky -->
+                <ScrollView Grid.Row="4">
+                    <VerticalStackLayout x:Name="FriendsStack" Spacing="2">
+                        <Label x:Name="EmptyLabel" Text="Zatím nikdo. Piješ sám?" Style="{StaticResource Heading}"
+                               HorizontalOptions="Center" Margin="0,20" IsVisible="False" />
+                    </VerticalStackLayout>
+                </ScrollView>
 
                 <!-- Přidání přítele -->
-                <Entry Grid.Row="4" x:Name="NicknameEntry" Placeholder="Přezdívka kámoše" />
-                <controls:PencilButton Grid.Row="5" x:Name="AddButton" Text="Poslat žádost" Variant="Primary"
+                <Entry Grid.Row="5" x:Name="NicknameEntry" Placeholder="Přezdívka kámoše" />
+                <controls:PencilButton Grid.Row="6" x:Name="AddButton" Text="Poslat žádost" Variant="Primary"
                                        Clicked="OnAddFriendClicked" />
             </Grid>
         </Border>

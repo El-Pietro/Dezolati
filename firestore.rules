@@ -124,6 +124,36 @@ service cloud.firestore {
       allow write: if signedIn() && me() == uid;
     }
 
+    // Připíjení: reakce 🍺 🍷 🥃 na kámošovo sezení – jedna na sezení (id = sezení_od), jen na běžící sezení.
+    match /Cheers/{cheerId} {
+      function c() { return request.resource.data; }
+      allow read: if signedIn() && (resource.data.To == me() || resource.data.From == me());
+      allow create: if signedIn()
+                    && c().keys().hasOnly(['From', 'FromNick', 'To', 'SessionId', 'Emoji', 'At'])
+                    && c().From == me()
+                    && c().To is string && c().To != me()
+                    && cheerId == c().SessionId + '_' + me()
+                    && c().Emoji in ['🍺', '🍷', '🥃']
+                    && c().FromNick is string && c().FromNick.size() <= 80
+                    && c().At == request.time
+                    && get(/databases/$(database)/documents/Users/$(c().To)).data.get('SessionId', '') == c().SessionId;
+      allow update, delete: if false;
+    }
+
+    // Pozvánky na drink: jen vytvořit (rozešle server), nikdo je nečte.
+    match /Invites/{id} {
+      function v() { return request.resource.data; }
+      allow create: if signedIn()
+                    && v().keys().hasOnly(['From', 'FromNick', 'PubId', 'PubName', 'Lat', 'Lon', 'At'])
+                    && v().From == me()
+                    && v().PubName is string && v().PubName.size() <= 120
+                    && v().FromNick is string && v().FromNick.size() <= 80
+                    && v().Lat is number && v().Lon is number
+                    && v().At == request.time;
+    }
+
+    // DrinkSessions (sezení pití) a PubPresence zapisuje jen server – z appky nic.
+
     // PubPresence (kdo už dnes v které hospodě oznámil, že sedí) zapisuje jen server – z appky nic.
 
     // Historie úprav: jen přidávat, nikdo nemaže ani nepřepisuje.

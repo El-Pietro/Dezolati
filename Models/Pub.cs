@@ -14,7 +14,8 @@
         string? Brewery,
         string? Hours,
         string? Website = null,
-        string? Phone = null)
+        string? Phone = null,
+        bool Light = false)   // stažené jen základní údaje (husté oblasti) – zbytek se dotáhne při otevření
     {
         public string KindText => Kind switch
         {

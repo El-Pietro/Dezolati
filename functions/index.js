@@ -4,7 +4,9 @@
  * Posílá oznámení na telefony kámošů (FCM). Appka sama posílat nesmí – musela by mít servisní klíč.
  *  - friendRequest:  nová žádost o přátelství  → adresátovi
  *  - friendAccepted: žádost přijata            → žadateli
- *  - atThePub:       první pivo v hospodě dne  → všem kámošům („Petr sedí v U Peťky“), jen při Drinks.SharePub
+ *  - atThePub:       první drink sezení (bez 3h pauzy) → kámošům „Žanet si právě dala pivo, připij si s ní!“
+ *  - cheer:          reakce 🍺 🍷 🥃 → „Petr si s tebou připíjí 🍺“
+ *  - invite:         pozvánka na drink → kámošům (telefon sám pozná, jestli je do 15 km)
  *
  * Tokeny telefonů: PushTokens/{hash} { Uid, Token }. Kdo nechce: Users/{uid}.NotifyFriends == false.
  *  - usage / usageWatch: přehled spotřeby proti bezplatným limitům (jen pro admina) + hlídání každou hodinu
@@ -18,7 +20,7 @@ const { defineString } = require("firebase-functions/params");
 const monitoring = require("@google-cloud/monitoring");
 const { setGlobalOptions, logger } = require("firebase-functions/v2");
 const { initializeApp } = require("firebase-admin/app");
-const { getFirestore, FieldValue } = require("firebase-admin/firestore");
+const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
 
 // MUSÍ sedět s umístěním databáze Firestore (Google Cloud → Firestore → Databases → Location).
@@ -102,37 +104,141 @@ exports.friendAccepted = onDocumentUpdated("Friends/{id}", async (event) => {
   await notify([after.UserId], "Žádost přijata", `${who} tě přijal(a) mezi kámoše. 🍺`, { type: "friend" });
 });
 
-// ---------------- „sedí v hospodě“ ----------------
+// ---------------- datové zprávy (oznámení si kreslí appka – kvůli tlačítkům reakcí) ----------------
+
+/** Pošle datovou zprávu (bez systémového oznámení) těm, kdo oznámení chtějí. Hodnoty musí být řetězce. */
+async function notifyData(uids, data) {
+  const wanting = await wantingNotifications(uids);
+  if (wanting.length === 0) return;
+  const tokens = await tokensOf(wanting);
+  if (tokens.length === 0) return;
+  const payload = {};
+  for (const [k, v] of Object.entries(data)) if (v !== undefined && v !== null) payload[k] = String(v);
+
+  const res = await getMessaging().sendEachForMulticast({
+    tokens: tokens.map((t) => t.token),
+    data: payload,
+    android: { priority: "high" },
+  });
+  const dead = [];
+  res.responses.forEach((r, i) => {
+    const code = r.error?.code;
+    if (code === "messaging/registration-token-not-registered" || code === "messaging/invalid-registration-token") {
+      dead.push(tokens[i].ref.delete());
+    }
+  });
+  await Promise.all(dead);
+  logger.info(`Zpráva ${payload.type} „${payload.title}“: ${res.successCount} ok, ${res.failureCount} chyb`);
+}
+
+/** Přijatí kámoši uživatele (jen array-contains → bez složeného indexu). */
+async function friendsOf(uid) {
+  const snap = await db.collection("Friends").where("Members", "array-contains", uid).get();
+  return snap.docs
+    .filter((f) => f.get("Status") === "Accepted")
+    .map((f) => (f.get("UserId") === uid ? f.get("FriendId") : f.get("UserId")))
+    .filter(Boolean);
+}
+
+/** „pivo“, „2 piva“, „víno a panáka“ … (4. pád). */
+function whatDrank(d) {
+  const n = (x) => Math.max(0, Number(x) || 0);
+  const form = (k, one, few, many) => (k === 1 ? one : k >= 2 && k <= 4 ? `${k} ${few}` : `${k} ${many}`);
+  const parts = [];
+  if (n(d.Pivo) > 0) parts.push(form(n(d.Pivo), "pivo", "piva", "piv"));
+  if (n(d.Vino) > 0) parts.push(form(n(d.Vino), "víno", "vína", "vín"));
+  if (n(d.Panaky) > 0) parts.push(form(n(d.Panaky), "panáka", "panáky", "panáků"));
+  if (parts.length === 0) return "něco";
+  return parts.length === 1 ? parts[0] : parts.slice(0, -1).join(", ") + " a " + parts[parts.length - 1];
+}
+
+// ---------------- sezení: „Žanet si právě dala pivo. Připij si s ní!“ ----------------
+//
+// Sezení = pití bez 3h pauzy. První drink sezení → kámošům oznámení (s tlačítky reakcí 🍺 🍷 🥃),
+// do profilu id sezení (na něj se reaguje). Ráno a večer = 2 sezení, nonstop = 1.
+// (Jméno funkce zůstává atThePub, ať se při nasazení nemusí mazat stará.)
+
+const SESSION_GAP_MS = 3 * 60 * 60 * 1000;
 
 exports.atThePub = onDocumentCreated("Drinks/{id}", async (event) => {
   const d = event.data?.data();
-  if (!d || !d.PubId || d.Correction || !d.UserId) return;
-  // hospodu si teď appka ukládá i pro statistiky; kámošům jen když ji hlásí
-  // (starší verze appky SharePub neposílaly a PubId měly jen při hlášení → undefined = hlásí)
-  if (d.SharePub === false) return;
+  if (!d || d.Correction || !d.UserId) return;
+  const total = (Number(d.Pivo) || 0) + (Number(d.Vino) || 0) + (Number(d.Panaky) || 0);
+  if (total <= 0) return;
 
-  // jen první zápis v té hospodě za hospodský den (další piva nikoho nespamují)
-  const key = `${d.UserId}_${d.Day || "x"}_${d.PubId}`;
-  try {
-    await db.doc(`PubPresence/${key}`).create({
-      UserId: d.UserId, PubId: d.PubId, PubName: d.PubName || null, Day: d.Day || null,
-      At: FieldValue.serverTimestamp(),
-    });
-  } catch (e) {
-    if (e.code === 6 /* ALREADY_EXISTS */) return;
-    throw e;
-  }
+  const at = d.DrinkAt?.toMillis ? d.DrinkAt.toMillis() : Date.now();
+  const sessionRef = db.doc(`DrinkSessions/${d.UserId}`);
+  let newSession = false;
+  await db.runTransaction(async (tx) => {
+    const s = await tx.get(sessionRef);
+    const last = s.exists ? s.get("LastAt")?.toMillis?.() ?? 0 : 0;
+    if (!s.exists || at - last > SESSION_GAP_MS) {
+      newSession = true;
+      tx.set(sessionRef, { LastAt: Timestamp.fromMillis(at), SessionId: event.params.id, StartedAt: Timestamp.fromMillis(at) });
+    } else if (at > last) {
+      tx.update(sessionRef, { LastAt: Timestamp.fromMillis(at) });
+    }
+  });
+  if (!newSession) return;
 
-  // jen array-contains (bez dalšího filtru) → není potřeba složený index; nepřijaté žádosti se odfiltrují tady
-  const friends = await db.collection("Friends").where("Members", "array-contains", d.UserId).get();
-  const others = friends.docs
-    .filter((f) => f.get("Status") === "Accepted")
-    .map((f) => (f.get("UserId") === d.UserId ? f.get("FriendId") : f.get("UserId")));
-  if (others.length === 0) return;
+  const userRef = db.doc(`Users/${d.UserId}`);
+  await userRef.set({ SessionId: event.params.id, SessionStartedAt: Timestamp.fromMillis(at) }, { merge: true });
 
-  const nick = d.Name || (await nickOf(d.UserId));
-  const pub = d.PubName || "Někde poblíž";
-  await notify(others, `${nick} sedí v hospodě`, `${pub} – přidáš se? 🍻`, { type: "pub", pubId: String(d.PubId) });
+  // hlásit? nové verze posílají ShareDrink, starší jen SharePub (= hlásil hospodu)
+  const share = d.ShareDrink === true || (d.ShareDrink === undefined && d.SharePub === true);
+  if (!share) return;
+
+  const friends = await friendsOf(d.UserId);
+  if (friends.length === 0) return;
+
+  const user = await userRef.get();
+  const nick = d.Name || user.get("Nickname") || "Někdo";
+  const gender = user.get("Gender");
+  const dal = gender === "Píčka" ? "dala" : gender === "Píč" ? "dal" : "dal(a)";
+  const sNim = gender === "Píčka" ? " s ní" : gender === "Píč" ? " s ním" : "";
+  const where = d.SharePub === true && d.PubName ? `${d.PubName} – ` : "";
+
+  await notifyData(friends, {
+    type: "drink",
+    title: `${nick} si právě ${dal} ${whatDrank(d)}`,
+    body: `${where}připij si${sNim}! 🍻`,
+    fromUid: d.UserId,
+    sessionId: event.params.id,
+    pubId: d.SharePub === true ? d.PubId : undefined,
+  });
+});
+
+// ---------------- připíjení: „Petr si s tebou připíjí 🍺“ ----------------
+
+exports.cheer = onDocumentCreated("Cheers/{id}", async (event) => {
+  const c = event.data?.data();
+  if (!c || !c.To || !c.From) return;
+  const from = c.FromNick || (await nickOf(c.From));
+  await notifyData([c.To], {
+    type: "cheer",
+    title: `${from} si s tebou připíjí ${c.Emoji || "🍻"}`,
+    body: "Na zdraví! 🍻",
+    fromUid: c.From,
+  });
+});
+
+// ---------------- pozvánka: „Petr tě zve na drink“ (telefon sám pozná, jestli je do 15 km) ----------------
+
+exports.invite = onDocumentCreated("Invites/{id}", async (event) => {
+  const v = event.data?.data();
+  if (!v || !v.From) return;
+  const friends = await friendsOf(v.From);
+  if (friends.length === 0) return;
+  const from = v.FromNick || (await nickOf(v.From));
+  await notifyData(friends, {
+    type: "invite",
+    title: `${from} tě zve na drink`,
+    body: `${v.PubName || "Do hospody"} – přidáš se? 🍻`,
+    fromUid: v.From,
+    pubId: v.PubId,
+    lat: v.Lat,
+    lon: v.Lon,
+  });
 });
 
 // ---------------- spotřeba (jen admin) ----------------

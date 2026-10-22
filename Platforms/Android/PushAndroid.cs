@@ -25,12 +25,39 @@ namespace Dezolati.Droid
         {
             base.OnMessageReceived(message);
             var n = message.GetNotification();
-            message.Data.TryGetValue("title", out var dataTitle);
-            message.Data.TryGetValue("body", out var dataBody);
-            PushAndroid.Show(this, n?.Title ?? dataTitle, n?.Body ?? dataBody);
+            string? D(string key) => message.Data.TryGetValue(key, out var v) ? v : null;
+            var type = D("type");
+            var title = n?.Title ?? D("title");
+            var body = n?.Body ?? D("body");
+
+            switch (type)
+            {
+                case "drink":
+                    // „Žanet si právě dala pivo“ + tlačítka reakcí (jen jednou na sezení)
+                    Services.FriendsNow.Invalidate();
+                    var session = D("sessionId");
+                    if (D("fromUid") is string from && session != null && !Services.Cheers.Reacted(session))
+                        PushAndroid.ShowWithCheers(this, title, body, from, session);
+                    else
+                        PushAndroid.Show(this, title, body);
+                    break;
+
+                case "invite":
+                    // pozvánka jen do 15 km (podle poslední polohy z appky; neznámá = ukázat)
+                    if (double.TryParse(D("lat"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var lat)
+                        && double.TryParse(D("lon"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var lon)
+                        && !Services.Invites.IsNearMe(lat, lon))
+                        break;
+                    PushAndroid.Show(this, title, body);
+                    break;
+
+                default:
+                    PushAndroid.Show(this, title, body);
+                    break;
+            }
 
             // žádost o přátelství → odznak na tlačítku Přátelé
-            if (message.Data.TryGetValue("type", out var type) && type == "friend")
+            if (type == "friend")
             {
                 Services.FriendBadge.Invalidate();
                 _ = Services.FriendBadge.RefreshAsync();
@@ -38,8 +65,111 @@ namespace Dezolati.Droid
         }
     }
 
+    /// <summary>
+    /// Ťuknutí na reakci 🍺 🍷 🥃 v oznámení: připít bez otevírání appky.
+    /// Proces appky může být „studený“ – MauiApplication se ale nastartuje i kvůli broadcastu,
+    /// takže přihlášení (AuthSession) je k dispozici.
+    /// </summary>
+    [BroadcastReceiver(Exported = false)]
+    public class CheerReceiver : BroadcastReceiver
+    {
+        public const string Action = "cz.elpietro.dezolati.CHEER";
+
+        public override void OnReceive(Context? context, Intent? intent)
+        {
+            if (context == null || intent == null) return;
+            var to = intent.GetStringExtra("to");
+            var session = intent.GetStringExtra("session");
+            var emoji = intent.GetStringExtra("emoji");
+            var notifId = intent.GetIntExtra("notif", 0);
+            var title = intent.GetStringExtra("title");
+            if (to == null || session == null || emoji == null) return;
+
+            var pending = GoAsync();
+            var appContext = context.ApplicationContext ?? context;
+            _ = Task.Run(async () =>
+            {
+                string text;
+                try
+                {
+                    text = await Services.Cheers.SendAsync(to, session, emoji)
+                        ? $"Připito {emoji}"
+                        : "Už jsi připil(a) 👍";
+                }
+                catch (Exception ex)
+                {
+                    text = Services.Net.IsNetworkError(ex) ? "Bez signálu – připij v appce" : $"Nepovedlo se: {ex.Message}";
+                }
+                finally
+                {
+                    pending?.Finish();
+                }
+                PushAndroid.Replace(appContext, notifId, title, text);
+            });
+        }
+    }
+
     public static class PushAndroid
     {
+        /// <summary>Oznámení „X si právě dal(a)…“ s tlačítky 🍺 🍷 🥃.</summary>
+        public static void ShowWithCheers(Context context, string? title, string? body, string fromUid, string sessionId)
+        {
+            try
+            {
+                EnsureChannel();
+                var notifId = Random.Shared.Next(10_000, 1_000_000);
+                var builder = Base(context, title, body);
+                var req = 0;
+                foreach (var emoji in Services.Cheers.Emojis)
+                {
+                    var intent = new Intent(context, typeof(CheerReceiver));
+                    intent.SetAction(CheerReceiver.Action);
+                    intent.PutExtra("to", fromUid);
+                    intent.PutExtra("session", sessionId);
+                    intent.PutExtra("emoji", emoji);
+                    intent.PutExtra("notif", notifId);
+                    intent.PutExtra("title", title);
+                    var pi = PendingIntent.GetBroadcast(context, notifId * 4 + req++, intent,
+                        PendingIntentFlags.Immutable | PendingIntentFlags.UpdateCurrent);
+                    builder.AddAction(0, emoji, pi);
+                }
+                NotificationManagerCompat.From(context).Notify(notifId, builder.Build());
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Push show: {ex.Message}");
+            }
+        }
+
+        /// <summary>Přepsat oznámení (po reakci) – bez tlačítek, samo zmizí po chvíli.</summary>
+        public static void Replace(Context context, int notifId, string? title, string body)
+        {
+            try
+            {
+                var builder = Base(context, title, body).SetTimeoutAfter(8000);
+                NotificationManagerCompat.From(context).Notify(notifId, builder.Build());
+            }
+            catch { }
+        }
+
+        private static NotificationCompat.Builder Base(Context context, string? title, string? body)
+        {
+            var intent = context.PackageManager?.GetLaunchIntentForPackage(context.PackageName ?? "");
+            intent?.AddFlags(ActivityFlags.ClearTop | ActivityFlags.SingleTop);
+            var pending = intent == null ? null : PendingIntent.GetActivity(context, 0, intent,
+                PendingIntentFlags.Immutable | PendingIntentFlags.UpdateCurrent);
+            var b = new NotificationCompat.Builder(context, ChannelId)
+                .SetSmallIcon(Resource.Drawable.ic_stat_beer)
+                .SetColor(unchecked((int)0xFF6B3E1E))
+                .SetContentTitle(title)
+                .SetContentText(body)
+                .SetStyle(new NotificationCompat.BigTextStyle().BigText(body))
+                .SetPriority(NotificationCompat.PriorityHigh)
+                .SetAutoCancel(true);
+            if (pending != null) b.SetContentIntent(pending);
+            return b;
+        }
+
         public const string ChannelId = "kamosi";
 
         private static Context Ctx => global::Android.App.Application.Context;
@@ -52,7 +182,7 @@ namespace Dezolati.Droid
             if (nm?.GetNotificationChannel(ChannelId) != null) return;
             nm?.CreateNotificationChannel(new NotificationChannel(ChannelId, "Kámoši", NotificationImportance.High)
             {
-                Description = "Žádosti o přátelství a kdo z kámošů sedí v hospodě"
+                Description = "Žádosti o přátelství, kdo z kámošů pije, připíjení a pozvánky"
             });
         }
 

@@ -1,4 +1,4 @@
-using Dezolati.Services;
+﻿using Dezolati.Services;
 
 namespace Dezolati.Controls
 {
@@ -8,7 +8,7 @@ namespace Dezolati.Controls
         private static AppRelease? _pending;   // nalezená, ale ještě nenainstalovaná verze
         private static bool _busy;
 
-        /// <summary>Při otevření lístku: zkontrolovat GitHub (max. jednou za 30 min) a případně nabídnout.</summary>
+        /// <summary>Při otevření lístku: zkontrolovat GitHub (max. jednou za 6 h) a případně nabídnout.</summary>
         public static async Task CheckAndOfferAsync(Page page)
         {
             if (_busy || !AppUpdater.IsSupported) return;
@@ -78,7 +78,11 @@ namespace Dezolati.Controls
             catch (Exception ex)
             {
                 busy?.Dispose();
-                await Listek.AlertAsync(page, "Nepovedlo se", $"Stažení selhalo: {ex.Message}");
+                var why = ex is IOException { InnerException: not null } ? ex.Message
+                    : Net.IsNetworkError(ex) || ex is ObjectDisposedException
+                        ? "Stahování se přerušilo – asi vypadl signál. Zkus to znovu (naváže se, kde skončilo)."
+                        : $"Stažení selhalo: {ex.Message}";
+                await Listek.AlertAsync(page, "Nepovedlo se", why);
                 return;
             }
             busy?.Dispose();
