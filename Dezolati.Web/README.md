@@ -10,9 +10,15 @@ Webová verze appky jako PWA na GitHub Pages: **https://el-pietro.github.io/Dezo
 
 ## Fáze
 1. ✅ přihlášení, registrace, lístek, zápis, škrtání, moje statistiky, nastavení
-2. kámoši + oznámení (web push)
+2. ✅ kámoši (žádosti, hledání, Možná znáš, kdo pije, připíjení, statistiky kámoše, tajný režim) + oznámení (web push)
 3. mapa hospod
 4. hry a zbytek
+
+## Oznámení (web push)
+- Token prohlížeče jde do `PushTokens` stejně jako token telefonu (`Platform = "Web"`), server (functions) se nemění.
+- Konfigurace: `wwwroot/js/push-config.js` (appId webové appky + VAPID klíč z Firebase konzole – obojí veřejné).
+- Zprávy přijímá `wwwroot/push-sw.js` (načítá ho service worker), připíjení spojuje do jednoho oznámení.
+- iPhone: jen z ikony na ploše, iOS 16.4+, zapíná se tlačítkem v Nastavení. Tlačítka reakcí v oznámení iPhone neumí → ťuk otevře Kámoše.
 
 ## Spuštění u sebe
 ```

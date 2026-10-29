@@ -343,19 +343,6 @@ namespace Dezolati.Services
             };
         }
 
-        /// <summary>Jednorázový úklid: smaže moje denní součty před daným dnem (testovací data). Vrací počet.</summary>
-        public async Task<int> DeleteMyDaysBefore(DateTime before)
-        {
-            var uid = AuthSession.Uid ?? throw new InvalidOperationException("Nejsi přihlášený.");
-            var docs = await FirestoreRest.QueryAsync("DailyDrinks", new[]
-            {
-                Filter.Eq("UserId", uid), Filter.Lt("Day", IsoDay(before))
-            });
-            await FirestoreRest.CommitAsync(docs.Select(d => FirestoreRest.DeleteWrite($"DailyDrinks/{d.Id}")));
-            LocalCache.MarkStale();
-            return docs.Count;
-        }
-
         /// <summary>Doplňková část statistik: chyba = null (a do logu), ne pád celé stránky.</summary>
         private static async Task<T?> Optional<T>(Task<T> task, string what) where T : class
         {

@@ -1,0 +1,389 @@
+@namespace Dezolati.Web.Pages
+@page "/pratele"
+@implements IDisposable
+@inject NavigationManager Nav
+
+@* Kámoši (Pages/Friends v appce). *@
+<BackBar To="" />
+
+<div class="listek grow">
+    <div class="stack">
+        <div class="title">Kámoši</div>
+
+        @if (myCheers.Count > 0)
+        {
+            <div class="small">
+                Připili si s tebou:
+                @for (var i = 0; i < myCheers.Count; i++)
+                {
+                    var c = myCheers[i];
+                    <a class="ink-link" @onclick="() => OpenFriend(c.FromUid, c.FromNick)">@c.FromNick @c.Emoji</a>@(i < myCheers.Count - 1 ? ", " : "")
+                }
+            </div>
+        }
+
+        @if (pushHint != null)
+        {
+            <div class="small soft">@pushHint <a class="ink-link" @onclick="@(() => Nav.NavigateTo("nastaveni"))">Nastavení</a></div>
+        }
+
+        @if (requests.Count > 0)
+        {
+            <div class="field-label">Chtějí se s tebou kamarádit:</div>
+            @foreach (var r in requests)
+            {
+                <div class="friend-row">
+                    <div class="body grow-1">@r.Display</div>
+                    <PencilButton Text="✔" Small="true" Style="width:56px" Disabled="busy" OnClick="() => Answer(r, true)" />
+                    <PencilButton Text="✖" Small="true" Variant="PencilVariant.Danger" Style="width:56px" Disabled="busy" OnClick="() => Answer(r, false)" />
+                </div>
+            }
+        }
+
+        @if (loading && friends.Count == 0)
+        {
+            <div class="spinner"></div>
+        }
+        else if (friends.Count == 0)
+        {
+            <div class="heading center" style="margin:20px 0">Zatím nikdo. Piješ sám?</div>
+        }
+
+        @foreach (var f in Ordered())
+        {
+            drinking.TryGetValue(f.UserId, out var now);
+            <div class="friend-row">
+                <div class="grow-1 friend-name" @onclick="() => OpenFriend(f.UserId, f.Display)">
+                    <span class="heading-inline">@(now != null ? $"{now.Emoji} {f.Display}" : f.Display)</span>
+                    @if (now != null)
+                    {
+                        <span class="small soft">&nbsp; (@(now.PubName ?? "pije"), @FriendsNow.Ago(now.LastDrinkAt))</span>
+                    }
+                </div>
+                @if (now?.SessionId is string session)
+                {
+                    @if (cheered.TryGetValue(session, out var done))
+                    {
+                        <span class="small">@done</span>
+                    }
+                    else if (Cheers.Reacted(session))
+                    {
+                        <span class="small">připito ✔</span>
+                    }
+                    else
+                    {
+                        <div class="cheer-buttons">
+                            @foreach (var emoji in Cheers.Emojis)
+                            {
+                                var e = emoji;
+                                <PencilButton Text="@e" Variant="PencilVariant.Secondary" Class="emoji-btn" Disabled="busy"
+                                              OnClick="() => Cheer(now, session, e)" />
+                            }
+                        </div>
+                    }
+                }
+            </div>
+        }
+
+        <div class="section-head" style="margin-top:14px" @onclick="ToggleSuggest">
+            <div class="field-label" style="margin:0">Možná znáš</div>
+            <span class="link">@(suggestOpen ? "(schovat)" : "(ukázat)")</span>
+        </div>
+        @if (suggestOpen)
+        {
+            @if (suggestions == null)
+            {
+                <div class="small">Hledám…</div>
+            }
+            else if (suggestions.Count == 0)
+            {
+                <div class="small">@(Net.IsOnline ? "Všechny už máš. Nebo tu kromě vás nikdo nepije." : "Bez signálu nic nevymyslím.")</div>
+            }
+            else
+            {
+                @foreach (var s in suggestions)
+                {
+                    <div class="friend-row">
+                        <div class="grow-1">
+                            <span class="body">@s.Nick</span>
+                            @if (s.Mutual > 0)
+                            {
+                                <span class="small soft">&nbsp; (@Cz.Plural(s.Mutual, "společný", "společní", "společných"))</span>
+                            }
+                        </div>
+                        @if (sent.Contains(s.Uid))
+                        {
+                            <span class="small">Posláno</span>
+                        }
+                        else
+                        {
+                            <PencilButton Text="Přidat" Variant="PencilVariant.Secondary" Small="true" Style="width:96px" Disabled="busy"
+                                          OnClick="() => Suggested(s)" />
+                        }
+                    </div>
+                }
+            }
+        }
+    </div>
+
+    <div class="stack" style="margin-top:auto;padding-top:12px">
+        @foreach (var hit in searchHits)
+        {
+            var nick = hit.Nick;
+            <div class="body search-hit" @onclick="() => { nickname = nick; searchHits = new(); }">@nick</div>
+        }
+        <input class="entry" placeholder="Přezdívka kámoše" autocomplete="off" autocapitalize="off"
+               @bind="nickname" @bind:event="oninput" @bind:after="Search" @onfocus="LoadDirectory" />
+        <PencilButton Text="Poslat žádost" Disabled="busy" OnClick="AddFriend" />
+    </div>
+</div>
+
+@code {
+    private readonly FirestoreService firestoreService = new();
+    private List<FriendsModel> requests = new();
+    private List<UserModel> friends = new();
+    private Dictionary<string, DrinkingFriend> drinking = new();
+    private readonly Dictionary<string, string> cheered = new();   // sezení → „připito 🍺“
+    private readonly List<CheerInfo> myCheers = new();
+    private string? mySession;
+    private bool loading = true, busy, suggestOpen;
+    private List<FriendSuggestion>? suggestions;
+    private readonly HashSet<string> sent = new();
+    private Dictionary<string, DirectoryEntry>? directory;
+    private List<DirectoryEntry> searchHits = new();
+    private string nickname = "";
+    private string? pushHint;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthSession.Uid == null)
+        {
+            Nav.NavigateTo("prihlaseni", replace: true);
+            return;
+        }
+        Cheers.Received += OnCheerReceived;
+        _ = ShowPushHintAsync();
+        await Load();
+    }
+
+    private async Task ShowPushHintAsync()
+    {
+        try
+        {
+            var state = await WebPush.GetStateAsync();
+            pushHint = state switch
+            {
+                WebPush.State.Off => "Oznámení od kámošů máš na tomhle zařízení vypnutá – zapneš je v",
+                WebPush.State.NeedsHomeScreen => "Oznámení na iPhonu jdou jen z ikony na ploše (Sdílet → Přidat na plochu). Pak je zapneš v",
+                _ => null
+            };
+            StateHasChanged();
+        }
+        catch { }
+    }
+
+    private async Task Load()
+    {
+        var userId = AuthSession.Uid!;
+        try
+        {
+            loading = true;
+            await UserSession.EnsureReadyAsync();
+            var (reqs, list) = await firestoreService.GetFriendsOverview(userId);
+            requests = reqs;
+            friends = list;
+            FriendBadge.Set(requests.Count);
+            FriendsNow.RememberFriends(friends);
+            _ = NickDirectory.PublishFriendsAsync(UserSession.Profile?.Nickname, friends);
+            loading = false;
+            StateHasChanged();
+            if (suggestOpen) _ = LoadSuggestionsAsync();
+            await LoadNowAsync();
+        }
+        catch (Exception ex)
+        {
+            loading = false;
+            await Note.AlertAsync("Chyba", Net.IsNetworkError(ex) ? "Bez signálu kámoše nenačtu." : $"Nepodařilo se načíst přátele: {ex.Message}");
+        }
+    }
+
+    private async Task LoadNowAsync()
+    {
+        try
+        {
+            var all = await FriendsNow.GetAsync(includeMe: true, force: true);
+            var me = all.FirstOrDefault(f => f.Uid == AuthSession.Uid);
+            drinking = all.Where(f => f.Uid != AuthSession.Uid).GroupBy(f => f.Uid).ToDictionary(g => g.Key, g => g.First());
+            myCheers.Clear();
+            mySession = me?.SessionId;
+            if (me?.SessionId is string session)
+                myCheers.AddRange(await Cheers.ForMeAsync(session));
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Teď pijí: {ex.Message}");
+        }
+    }
+
+    private IEnumerable<UserModel> Ordered() => friends
+        .OrderBy(f => drinking.ContainsKey(f.UserId) ? 0 : 1)
+        .ThenByDescending(f => drinking.TryGetValue(f.UserId, out var d) ? d.LastDrinkAt : DateTime.MinValue)
+        .ThenBy(f => f.Display, StringComparer.CurrentCultureIgnoreCase);
+
+    private void OnCheerReceived(CheerInfo cheer, string sessionId) => InvokeAsync(() =>
+    {
+        if (mySession != null && mySession != sessionId) myCheers.Clear();
+        mySession = sessionId;
+        myCheers.RemoveAll(c => c.FromUid == cheer.FromUid);
+        myCheers.Add(cheer);
+        StateHasChanged();
+    });
+
+    private void OpenFriend(string uid, string nick)
+    {
+        if (friends.All(f => f.UserId != uid)) return;   // jen kámoši
+        Nav.NavigateTo($"statistiky/{Uri.EscapeDataString(uid)}?nick={Uri.EscapeDataString(nick)}");
+    }
+
+    private async Task Cheer(DrinkingFriend friend, string session, string emoji)
+    {
+        busy = true;
+        try
+        {
+            var ok = await Cheers.SendAsync(friend.Uid, session, emoji);
+            cheered[session] = ok ? $"připito {emoji}" : "připito ✔";
+        }
+        catch (Exception ex)
+        {
+            await Note.AlertAsync("Nepovedlo se", Net.IsNetworkError(ex) ? "Bez signálu se připít nedá." : ex.Message);
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task Answer(FriendsModel r, bool accept)
+    {
+        busy = true;
+        try
+        {
+            await firestoreService.UpdateFriendRequest(r.RequestId, accept ? "Accepted" : "Rejected");
+            await Load();
+        }
+        catch (Exception ex)
+        {
+            await Note.AlertAsync("Chyba", ex.Message);
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    // ---------------- Možná znáš ----------------
+
+    private void ToggleSuggest()
+    {
+        suggestOpen = !suggestOpen;
+        if (suggestOpen) _ = LoadSuggestionsAsync();
+    }
+
+    private async Task LoadSuggestionsAsync()
+    {
+        suggestions = null;
+        StateHasChanged();
+        var dir = await NickDirectory.GetAsync();
+        suggestions = NickDirectory.Suggest(dir, friends.Select(f => f.UserId));
+        StateHasChanged();
+    }
+
+    private async Task Suggested(FriendSuggestion s)
+    {
+        if (await RequestAsync(new UserModel { Id = s.Uid, UserId = s.Uid, Nickname = s.Nick }))
+            sent.Add(s.Uid);
+    }
+
+    // ---------------- hledání a žádost ----------------
+
+    private async Task LoadDirectory()
+    {
+        directory ??= await NickDirectory.GetAsync();
+        Search();
+    }
+
+    private void Search()
+    {
+        var text = nickname ?? "";
+        var found = directory == null ? new List<DirectoryEntry>() : NickDirectory.Search(directory, text, 4);
+        var friendIds = friends.Select(f => f.UserId).ToHashSet();
+        searchHits = found.Where(f => !friendIds.Contains(f.Uid)
+                                      && !string.Equals(f.Nick, text.Trim(), StringComparison.Ordinal)).ToList();
+    }
+
+    private async Task<bool> RequestAsync(UserModel target)
+    {
+        if (AuthSession.Uid is not string userId) return false;
+        busy = true;
+        try
+        {
+            var problem = await firestoreService.SendFriendRequest(userId, target);
+            if (problem != null)
+            {
+                await Note.AlertAsync("Hmm", problem);
+                return false;
+            }
+            return true;
+        }
+        catch (Exception ex)
+        {
+            await Note.AlertAsync("Chyba", Net.IsNetworkError(ex) ? "Bez signálu to nepůjde." : ex.Message);
+            return false;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task AddFriend()
+    {
+        var nick = nickname?.Trim();
+        if (string.IsNullOrEmpty(nick))
+        {
+            await Note.AlertAsync("Chyba", "Zadej přezdívku.");
+            return;
+        }
+        try
+        {
+            busy = true;
+            var hit = directory?.Values.FirstOrDefault(d => string.Equals(d.Nick, nick, StringComparison.CurrentCultureIgnoreCase));
+            var friend = hit != null
+                ? new UserModel { Id = hit.Uid, UserId = hit.Uid, Nickname = hit.Nick }
+                : await firestoreService.FindUserByNickname(nick);
+            busy = false;
+            if (friend == null)
+            {
+                await Note.AlertAsync("Nic", $"Žádný dezolát „{nick}“ tu není.");
+                return;
+            }
+            if (await RequestAsync(friend))
+            {
+                nickname = "";
+                searchHits = new();
+                await Note.AlertAsync("Hotovo", "Žádost odeslána.");
+            }
+        }
+        catch (Exception ex)
+        {
+            await Note.AlertAsync("Chyba", ex.Message);
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    public void Dispose() => Cheers.Received -= OnCheerReceived;
+}

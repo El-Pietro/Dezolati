@@ -3,8 +3,17 @@
 @implements IDisposable
 @inject NavigationManager Nav
 
-@* Lístek (Pages/MainPage v appce). Kámoši, mapa a hry přijdou v dalších fázích. *@
-<div class="topbar"></div>
+@* Lístek (Pages/MainPage v appce). Mapa a hry přijdou v dalších fázích. *@
+<div class="topbar">
+    <div class="spacer"></div>
+    <div class="badge-wrap">
+        <PencilButton Variant="PencilVariant.Outline" Text="Přátelé" OnClick="@(() => Nav.NavigateTo("pratele"))" />
+        @if (FriendBadge.Count > 0)
+        {
+            <span class="badge">@(FriendBadge.Count > 9 ? "9+" : FriendBadge.Count.ToString())</span>
+        }
+    </div>
+</div>
 
 <div class="listek grow">
     <div class="title">Dezoláti!</div>
@@ -77,11 +86,18 @@
             return;
         }
         UserSession.DrinksChanged += OnDrinksChanged;
+        FriendBadge.Changed += OnBadgeChanged;
         WebPlatform.Changed += OnDrinksChanged;   // vrátil se signál → odeslat frontu a překreslit
         promileTimer = new Timer(_ => InvokeAsync(() => { UpdatePromile(); StateHasChanged(); }), null,
             TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
         await LoadData();
+
+        // čekající žádosti o přátelství (jen při spuštění / návratu / oznámení) a token pro oznámení
+        _ = FriendBadge.RefreshAsync();
+        _ = WebPush.RefreshAsync();
     }
+
+    private void OnBadgeChanged() => InvokeAsync(StateHasChanged);
 
     private void OnDrinksChanged() => InvokeAsync(async () => { await LoadData(); StateHasChanged(); });
 
@@ -229,6 +245,7 @@
     public void Dispose()
     {
         UserSession.DrinksChanged -= OnDrinksChanged;
+        FriendBadge.Changed -= OnBadgeChanged;
         WebPlatform.Changed -= OnDrinksChanged;
         promileTimer?.Dispose();
     }

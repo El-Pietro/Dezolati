@@ -444,3 +444,32 @@ button, input, select, textarea { font: inherit; color: inherit; }
     max-width: 640px;
 }
 .banner button { background: none; border: 0; text-decoration: underline; cursor: pointer; padding: 0 4px; }
+
+/* ---------------- kámoši ---------------- */
+
+.friend-row { display: flex; align-items: center; gap: 6px; min-height: 44px; }
+.grow-1 { flex: 1; min-width: 0; }
+.friend-name { cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.heading-inline { font-size: var(--f-heading); }
+.cheer-buttons { display: flex; gap: 3px; }
+.pencil.emoji-btn { width: 44px; min-width: 44px; height: 38px; font-size: 17px; padding: 0; font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif; }
+.ink-link { cursor: pointer; text-decoration: underline; color: var(--ink); }
+.search-hit { cursor: pointer; padding: 4px 6px; }
+
+/* odznak čekajících žádostí na tlačítku Přátelé */
+.badge-wrap { position: relative; display: inline-block; }
+.badge {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 5px;
+    border-radius: 11px;
+    background: #C0392B;
+    border: 2px solid #F4E7C5;
+    color: #fff;
+    font: 600 12px/18px system-ui, sans-serif;
+    text-align: center;
+    pointer-events: none;
+}

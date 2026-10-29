@@ -2,6 +2,7 @@
 @inherits LayoutComponentBase
 @implements IDisposable
 @inject IJSRuntime JS
+@inject NavigationManager Nav
 
 <div class="page">
     @if (WebPlatform.UpdateReady)
@@ -13,8 +14,17 @@
 <DialogHost />
 
 @code {
-    protected override void OnInitialized() => WebPlatform.Changed += OnChanged;
+    protected override void OnInitialized()
+    {
+        WebPlatform.Changed += OnChanged;
+        WebPlatform.OpenRequested += OnOpen;
+    }
     private void OnChanged() => InvokeAsync(StateHasChanged);
+    private void OnOpen(string url) => InvokeAsync(() => Nav.NavigateTo(url));
     private async Task Reload() => await JS.InvokeVoidAsync("dz.reload");
-    public void Dispose() => WebPlatform.Changed -= OnChanged;
+    public void Dispose()
+    {
+        WebPlatform.Changed -= OnChanged;
+        WebPlatform.OpenRequested -= OnOpen;
+    }
 }

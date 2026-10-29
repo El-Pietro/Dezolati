@@ -148,30 +148,6 @@ public partial class Spotreba : ContentPage
             VersionsList.Add(new Label { Text = Net.IsOnline ? "V adresáři zatím nikdo není." : "Bez signálu nic nenačtu.", Style = AppStyle("Small") });
     }
 
-    /// <summary>Jednorázově: smazat moje staré testovací dny (statistiky, průměry). Ve 3.11 tlačítko zmizí.</summary>
-    private async void OnCleanupClicked(object sender, EventArgs e)
-    {
-        var before = new DateTime(2026, 10, 1);
-        if (!await Listek.ConfirmAsync(this, "Smazat staré zápisy?",
-                "Smažou se tvoje denní součty před 1. 10. 2026 – zmizí ze statistik, součtů, rekordu i průměrů. " +
-                "Vrátit to nejde. Stojí to 1 čtení a 1 smazání za každý takový den.", "Smazat", danger: true))
-            return;
-        try
-        {
-            CleanupButton.IsEnabled = false;
-            var count = await new FirestoreService().DeleteMyDaysBefore(before);
-            await Listek.AlertAsync(this, "Hotovo", count == 0 ? "Nic starého tam nebylo." : $"Smazáno {Cz.Plural(count, "den", "dny", "dní")}.");
-        }
-        catch (Exception ex)
-        {
-            await Listek.AlertAsync(this, "Nepovedlo se", Net.IsNetworkError(ex) ? "Bez signálu to nepůjde." : ex.Message);
-        }
-        finally
-        {
-            CleanupButton.IsEnabled = true;
-        }
-    }
-
     private void OnZpetClicked(object sender, EventArgs e) => OnBackButtonPressed();
 
     protected override bool OnBackButtonPressed()

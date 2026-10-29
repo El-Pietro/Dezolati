@@ -49,6 +49,7 @@ namespace Microsoft.Maui.Storage
             foreach (var k in keys) Writer?.Invoke(Prefix + k, null);
         }
 
+        [return: System.Diagnostics.CodeAnalysis.NotNullIfNotNull(nameof(defaultValue))]
         public static string? Get(string key, string? defaultValue)
         {
             lock (Gate) return Values.TryGetValue(key, out var v) ? v : defaultValue;

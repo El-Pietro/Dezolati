@@ -18,5 +18,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)..\Services\Places.cs" Link="Shared\Services\Places.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)..\Services\PubDay.cs" Link="Shared\Services\PubDay.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)..\Services\UserSession.cs" Link="Shared\Services\UserSession.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\Services\Social.cs" Link="Shared\Services\Social.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\Services\FriendBadge.cs" Link="Shared\Services\FriendBadge.cs" />
   </ItemGroup>
 </Project>

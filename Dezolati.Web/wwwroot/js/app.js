@@ -41,6 +41,14 @@ window.dz = (function () {
                 if (document.visibilityState === 'visible') ref.invokeMethodAsync('OnResume');
             });
             if (updateWaiting) ref.invokeMethodAsync('OnUpdateReady');
+            // zprávy od service workeru: přišlo oznámení / ťuk na oznámení
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.addEventListener('message', function (e) {
+                    var m = e.data || {};
+                    if (m.dzPush) ref.invokeMethodAsync('OnPush', JSON.stringify(m.dzPush));
+                    if (m.dzOpen) ref.invokeMethodAsync('OnOpen', m.dzOpen);
+                });
+            }
         },
         updateReady: function () {
             updateWaiting = true;
@@ -54,6 +62,29 @@ window.dz = (function () {
                 reg.waiting.postMessage('skipWaiting');
             } else {
                 location.reload();
+            }
+        },
+
+        // ---- oznámení (web push) ----
+        pushSupported: function () {
+            return safe(function () {
+                return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+            }, false);
+        },
+        pushConfigured: function () {
+            var c = window.dzPushConfig || {};
+            return !!(c.appId && c.vapidKey);
+        },
+        pushPermission: function () {
+            return safe(function () { return 'Notification' in window ? Notification.permission : 'unsupported'; }, 'unsupported');
+        },
+        // vrací token, nebo „error:…“ (config / unsupported / denied / default / chyba)
+        pushToken: async function (askPermission) {
+            try {
+                var m = await import('./push.js');
+                return await m.getToken(askPermission);
+            } catch (e) {
+                return 'error:' + (e && e.message ? e.message : e);
             }
         },
 

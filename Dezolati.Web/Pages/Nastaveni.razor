@@ -29,6 +29,37 @@
         </div>
 
         <div class="section-head" style="margin-top:6px;cursor:default">
+            <div class="field-label" style="margin:0">Oznámení od kámošů:</div>
+            <button class="link" @onclick="@(() => Info("notify"))">(info)</button>
+        </div>
+        <div class="grid2">
+            <Chip Text="Chci" Selected="@notifyFriends" OnClick="@(() => SetNotify(true))" />
+            <Chip Text="Nechci" Selected="@(!notifyFriends)" OnClick="@(() => SetNotify(false))" />
+        </div>
+        @if (notifyFriends)
+        {
+            <div class="small" style="margin-top:4px">@pushText</div>
+            @if (pushState == WebPush.State.Off)
+            {
+                <PencilButton Text="Zapnout oznámení tady" Small="true" Disabled="pushBusy" OnClick="EnablePush" />
+            }
+            else if (pushState == WebPush.State.On)
+            {
+                <PencilButton Text="Vypnout oznámení tady" Small="true" Variant="PencilVariant.Secondary" Disabled="pushBusy" OnClick="DisablePush" />
+            }
+        }
+
+        <div class="section-head" style="margin-top:6px;cursor:default">
+            <div class="field-label" style="margin:0">Hlásit kámošům, že piju:</div>
+            <button class="link" @onclick="@(() => Info("share"))">(info)</button>
+        </div>
+        <div class="grid3">
+            <Chip Text="I kde" Selected="@(shareLevel == 2)" OnClick="@(() => SetShare(2))" />
+            <Chip Text="Že piju" Selected="@(shareLevel == 1)" OnClick="@(() => SetShare(1))" />
+            <Chip Text="Nehlásit" Selected="@(shareLevel == 0)" OnClick="@(() => SetShare(0))" />
+        </div>
+
+        <div class="section-head" style="margin-top:6px;cursor:default">
             <div class="field-label" style="margin:0">Moje obvyklé ceny:</div>
             <button class="link" @onclick="@(() => Info("prices"))">(info)</button>
         </div>
@@ -64,7 +95,7 @@
         <PencilButton Text="Uložit změny" Class="mt24" Disabled="saving" OnClick="Save" />
 
         <div class="small center" style="margin-top:18px">Dezoláti @AppInfo.Current.VersionString</div>
-        <div class="small soft center">Na webu zatím není: kámoši, oznámení, mapa hospod, hry a připomínky. Ty jsou v appce pro Android.</div>
+        <div class="small soft center">Na webu zatím není: mapa hospod, hry a připomínky. Ty jsou v appce pro Android.</div>
         <PencilButton Text="Odhlásit se" Variant="PencilVariant.Danger" Class="mt12" OnClick="Logout" />
     </div>
 </div>
@@ -74,6 +105,20 @@
     private string? name, nickname, gender, drinkerType;
     private string pricePivo = "", priceVino = "", pricePanak = "", weight = "";
     private bool saving;
+    private bool notifyFriends = true;
+    private int shareLevel = 2;
+    private WebPush.State pushState = WebPush.State.Unsupported;
+    private bool pushBusy;
+
+    private string pushText => pushState switch
+    {
+        WebPush.State.On => "Na tomhle zařízení chodí. ✔",
+        WebPush.State.Off => "Na tomhle zařízení zatím nechodí.",
+        WebPush.State.Denied => "Prohlížeč je zakázal – povol je v jeho nastavení (iPhone: Nastavení → Oznámení → Dezoláti).",
+        WebPush.State.NeedsHomeScreen => "Na iPhonu chodí jen z ikony na ploše: Sdílet → Přidat na plochu, pak otevřít odtamtud (iOS 16.4+).",
+        WebPush.State.NotConfigured => "Na webu se oznámení teprve chystají.",
+        _ => "Tenhle prohlížeč oznámení neumí."
+    };
 
     protected override async Task OnInitializedAsync()
     {
@@ -97,11 +142,83 @@
                 nickname = user.Nickname;
                 gender = user.Gender;
                 drinkerType = user.DrinkerType;
+                notifyFriends = user.NotifyFriends;
+                shareLevel = user.ShareLevel;
             }
         }
         catch (Exception ex)
         {
             await Note.AlertAsync("Chyba", $"Nepodařilo se načíst profil: {ex.Message}");
+        }
+        try { pushState = await WebPush.GetStateAsync(); } catch { }
+    }
+
+    private async Task EnablePush()
+    {
+        pushBusy = true;
+        try
+        {
+            var problem = await WebPush.EnableAsync();
+            if (problem != null) await Note.AlertAsync("Oznámení", problem);
+            pushState = await WebPush.GetStateAsync();
+        }
+        catch (Exception ex)
+        {
+            await Note.AlertAsync("Oznámení", Net.IsNetworkError(ex) ? "Bez signálu to nepůjde." : ex.Message);
+        }
+        finally
+        {
+            pushBusy = false;
+        }
+    }
+
+    private async Task DisablePush()
+    {
+        pushBusy = true;
+        try
+        {
+            await WebPush.DisableAsync();
+            pushState = await WebPush.GetStateAsync();
+        }
+        finally
+        {
+            pushBusy = false;
+        }
+    }
+
+    private async Task SetNotify(bool on)
+    {
+        if (on == notifyFriends) return;
+        notifyFriends = on;
+        await SavePrefsAsync();
+    }
+
+    private async Task SetShare(int level)
+    {
+        if (level == shareLevel) return;
+        shareLevel = level;
+        PushService.ShareLevel = level;
+        await SavePrefsAsync();
+    }
+
+    /// <summary>Oznámení a hlášení se ukládají hned do profilu (platí i pro appku v telefonu).</summary>
+    private async Task SavePrefsAsync()
+    {
+        if (AuthSession.Uid is not string uid) return;
+        try
+        {
+            await firestoreService.UpdateNotificationPrefs(uid, notifyFriends, shareLevel);
+            if (UserSession.Profile is { } p)
+            {
+                p.NotifyFriends = notifyFriends;
+                p.ShareLevel = shareLevel;
+                p.SharePub = shareLevel == 2;
+                UserSession.SetProfile(p);
+            }
+        }
+        catch (Exception ex)
+        {
+            await Note.AlertAsync("Chyba", Net.IsNetworkError(ex) ? "Bez signálu to neuložím." : $"Nastavení se nepodařilo uložit: {ex.Message}");
         }
     }
 
@@ -121,6 +238,14 @@
     {
         var (title, text) = what switch
         {
+            "notify" => ("Oznámení od kámošů",
+                "Žádosti o přátelství, kámoš si dal první drink, připil si s tebou nebo tě zve do hospody. " +
+                "Platí pro tvůj účet všude (appka i web). Na webu je pak ještě potřeba povolit je v prohlížeči tlačítkem níž."),
+            "share" => ("Hlásit kámošům",
+                "Při prvním drinku po 3h pauze přijde kámošům oznámení a uvidí tě v Kámoších.\n\n" +
+                "I kde – i hospoda / doma / venku (pozná to jen appka v telefonu, web zatím polohu nezná).\n" +
+                "Že piju – jen „X si právě dal pivo“.\n" +
+                "Nehlásit – kámošům nic nepřijde a mezi pijícími nebudeš.\n\nPlatí pro appku i web."),
             "prices" => ("Ceny",
                 "Z nich se počítá útrata ve statistikách. Když má hospoda v profilu vyplněné ceny, vezmou se ty. Tvoje ceny vidíš jen ty."),
             _ => ("Promile",
@@ -171,9 +296,9 @@
                 Gender = gender,
                 DrinkerType = drinkerType,
                 Email = AuthSession.Email,
-                NotifyFriends = old?.NotifyFriends ?? true,
-                SharePub = old?.SharePub ?? true,
-                ShareLevel = old?.ShareLevel ?? 2,
+                NotifyFriends = notifyFriends,
+                SharePub = shareLevel == 2,
+                ShareLevel = shareLevel,
                 FavoritePubs = old?.FavoritePubs ?? new(),
                 MaskFor = old?.MaskFor ?? new()
             };
@@ -196,8 +321,10 @@
         }
     }
 
-    private void Logout()
+    private async Task Logout()
     {
+        await PushService.UnregisterAsync();   // tenhle prohlížeč už nemá dostávat oznámení pro tenhle účet
+        FriendBadge.Reset();
         AuthSession.SignOut();
         Nav.NavigateTo("prihlaseni", replace: true);
     }

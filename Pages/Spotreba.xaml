@@ -51,10 +51,6 @@
                     </Grid>
                     <VerticalStackLayout x:Name="VersionsList" Spacing="2" IsVisible="False" />
 
-                    <!-- jednorázový úklid testovacích dat (ve 3.11 zase pryč) -->
-                    <controls:PencilButton x:Name="CleanupButton" Text="Smazat moje zápisy před 1. 10. 2026" Variant="Danger"
-                                           FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
-                                           Margin="0,24,0,0" Clicked="OnCleanupClicked" />
                 </VerticalStackLayout>
             </ScrollView>
         </Border>

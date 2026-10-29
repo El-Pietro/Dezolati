@@ -22,9 +22,15 @@ namespace Dezolati.Web
 
         public static readonly CultureInfo Cs = new("cs-CZ");
 
+        internal static IJSRuntime? Js { get; private set; }
+
+        /// <summary>Ťuk na oznámení, když už je web otevřený → přejít na stránku.</summary>
+        public static event Action<string>? OpenRequested;
+
         public static async Task InitAsync(IJSRuntime js)
         {
             if (_ready) return;
+            Js = js;
 
             CultureInfo.DefaultThreadCurrentCulture = Cs;
             CultureInfo.DefaultThreadCurrentUICulture = Cs;
@@ -63,7 +69,37 @@ namespace Dezolati.Web
             {
                 Services.LocalCache.MarkStale();
                 Services.UserSession.RaiseDrinksChanged();
+                Services.FriendBadge.Invalidate();               // mezitím mohla přijít žádost o přátelství
+                _ = Services.FriendBadge.RefreshAsync();
             }
+
+            /// <summary>Přišlo oznámení (web je otevřený) – stejně jako PushAndroid v appce, jen bez kreslení.</summary>
+            [JSInvokable]
+            public void OnPush(string json)
+            {
+                try
+                {
+                    var d = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(json) ?? new();
+                    string? G(string k) => d.TryGetValue(k, out var v) ? v : null;
+                    switch (G("type"))
+                    {
+                        case "cheer" when G("sessionId") is string session && G("fromUid") is string from:
+                            Services.Cheers.OnReceived(session, from, G("fromNick") ?? "?", G("emoji") ?? "🍻");
+                            break;
+                        case "friend":
+                            Services.FriendBadge.Invalidate();
+                            _ = Services.FriendBadge.RefreshAsync();
+                            break;
+                        case "drink":
+                            Services.FriendsNow.Invalidate();
+                            break;
+                    }
+                }
+                catch { /* oznámení není kritické */ }
+            }
+
+            [JSInvokable]
+            public void OnOpen(string url) => OpenRequested?.Invoke(url);
 
             [JSInvokable]
             public void OnUpdateReady()

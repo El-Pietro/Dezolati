@@ -77,8 +77,46 @@ namespace Dezolati.Services
             return info == null ? PlaceInfo.Unknown : new PlaceInfo(info.Place, info.PubId, info.PubName, info.Lat, info.Lon);
         }
 
+        // ---------------- web push (token prohlížeče do PushTokens, posílá server) ----------------
+
+        private const string KeyToken = "push_token";
+        private const string KeyTokenUid = "push_token_uid";
+
+        /// <summary>Na webu se token získává ve Web/WebPush.cs (potřebuje prohlížeč) – tady nic.</summary>
         public static Task InitAsync() => Task.CompletedTask;
-        public static Task UnregisterAsync() => Task.CompletedTask;
+
+        private static string DocId(string token) =>
+            Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(token))).ToLowerInvariant();
+
+        /// <summary>Token prohlížeče → PushTokens/{sha256} (stejně jako telefon). Uloží se jen při změně.</summary>
+        public static async Task SaveTokenAsync(string uid, string? token)
+        {
+            if (string.IsNullOrEmpty(token)) return;
+            if (Preferences.Get(KeyToken, "") == token && Preferences.Get(KeyTokenUid, "") == uid) return;
+
+            await FirestoreRest.PatchAsync($"PushTokens/{DocId(token)}", new()
+            {
+                ["Uid"] = uid,
+                ["Token"] = token,
+                ["Platform"] = "Web",
+                ["UpdatedAt"] = DateTime.UtcNow
+            });
+            Preferences.Set(KeyToken, token);
+            Preferences.Set(KeyTokenUid, uid);
+        }
+
+        public static bool HasToken => Preferences.Get(KeyToken, "").Length > 0;
+
+        /// <summary>Při odhlášení / vypnutí: tenhle prohlížeč už nemá dostávat oznámení.</summary>
+        public static async Task UnregisterAsync()
+        {
+            var token = Preferences.Get(KeyToken, "");
+            if (token.Length == 0) return;
+            try { await FirestoreRest.DeleteAsync($"PushTokens/{DocId(token)}"); }
+            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Push unregister: {ex.Message}"); }
+            Preferences.Remove(KeyToken);
+            Preferences.Remove(KeyTokenUid);
+        }
 
         /// <summary>Na webu zatím bez polohy (přijde s mapou ve fázi 3).</summary>
         public static Task<PlaceInfo> PlaceHereAsync() => Task.FromResult(PlaceInfo.Unknown);
@@ -98,6 +136,9 @@ namespace Dezolati.Services
     public static class PubService
     {
         public const int MaxPrice = 5000;
+
+        /// <summary>Jméno hospody (v appce s přejmenováním z profilu; na webu zatím jen z katalogu).</summary>
+        public static string NameOf(PubInfo pub) => pub.Name;
 
         public sealed class PubPrices
         {

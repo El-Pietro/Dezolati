@@ -1,16 +1,21 @@
 @namespace Dezolati.Web.Pages
 @page "/statistiky"
+@page "/statistiky/{UserId}"
 @inject NavigationManager Nav
 
-@* Moje statistiky (Pages/StatsFriend v appce). Statistiky kámošů přijdou s kámoši ve fázi 2. *@
-<BackBar To="" />
+@* Statistiky – moje i kámošovy (Pages/StatsFriend v appce). *@
+<BackBar To="@(isMe ? "" : "pratele")" />
 
 <div class="listek">
     <div class="stack">
-        <div class="title">Moje statistiky</div>
+        <div class="title">@(isMe ? "Moje statistiky" : $"Statistiky: {Nick}")</div>
         @if (nowText != null)
         {
             <div class="heading center">@nowText</div>
+        }
+        @if (promileText != null)
+        {
+            <div class="small center">@promileText</div>
         }
         @if (busy)
         {
@@ -60,11 +65,14 @@
                 }
             }
 
+            @if (isMe)
+            {
             <div class="section-head" @onclick="() => spendOpen = !spendOpen">
                 <div class="heading">Útrata</div>
                 <span class="link">@(spendOpen ? "(schovat)" : "(ukázat)")</span>
             </div>
-            @if (spendOpen)
+            }
+            @if (isMe && spendOpen)
             {
                 <div class="rows">
                     @foreach (var (label, value) in spend)
@@ -149,14 +157,25 @@
             }
 
             <div class="heading" style="margin-top:16px">Poslední tahy</div>
-            <div class="small">(ťukni na den a dopiš nebo škrtni, co chybí)</div>
+            @if (isMe)
+            {
+                <div class="small">(ťukni na den a dopiš nebo škrtni, co chybí)</div>
+            }
             @if (!s.Last30.Any(h => h.Total > 0))
             {
                 <div class="body">Zatím nic. Abstinent, nebo lhář?</div>
             }
             @foreach (var (date, text) in history)
             {
-                <div class="body history-day editable" @onclick="() => EditDayAsync(date)">@text</div>
+                <div class="body history-day @(isMe ? "editable" : "")" @onclick="() => EditDayAsync(date)">@text</div>
+            }
+
+            @if (!isMe)
+            {
+                <PencilButton Text="@(MaskOn ? "Tajný režim: zapnutý" : "Tajný režim: vypnutý")" Variant="PencilVariant.Secondary"
+                              Small="true" Class="mt24" Disabled="busyAction" OnClick="ToggleMask" />
+                <PencilButton Text="Odebrat z kámošů" Variant="PencilVariant.Danger" Class="mt12" Disabled="busyAction"
+                              OnClick="RemoveFriend" />
             }
         }
     </div>
@@ -167,11 +186,16 @@
     private static readonly string[] WeekShort = { "Po", "Út", "St", "Čt", "Pá", "So", "Ne" };
     private static readonly string[] WeekLong = { "pondělí", "úterý", "středa", "čtvrtek", "pátek", "sobota", "neděle" };
 
+    [Parameter] public string? UserId { get; set; }
+    [SupplyParameterFromQuery(Name = "nick")] public string? Nick { get; set; }
+
     private readonly FirestoreService firestoreService = new();
     private UserStats? stats;
     private string? userId;
-    private bool busy;
-    private string? nowText;
+    private bool isMe = true;
+    private bool busy, busyAction;
+    private string? nowText, promileText;
+    private string? loadedFor;
 
     private List<(string, string)> summary = new();
     private List<(string, string)> averages = new();
@@ -188,14 +212,21 @@
     private string daysMax = "", weekCaption = "";
     private List<(string, int, string)> ratioLabels = new();
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnParametersSetAsync()
     {
-        userId = AuthSession.Uid;
-        if (userId == null)
+        var me = AuthSession.Uid;
+        if (me == null)
         {
             Nav.NavigateTo("prihlaseni", replace: true);
             return;
         }
+        userId = string.IsNullOrEmpty(UserId) ? me : UserId;
+        isMe = userId == me;
+        if (loadedFor == userId) return;
+        loadedFor = userId;
+        stats = null;
+        months = new();
+        monthsOpen = spendOpen = false;
         await Load();
     }
 
@@ -280,7 +311,7 @@
             spend.Add(("30 dní", Kc(SumKc(h.Where(d => d.Day > today.AddDays(-30))))));
             spend.Add(("Celkem", Kc(s.TotalKc)));
         }
-        if (Prices.AnyDefault && s.Totals.Total > 0 && !Preferences.Get($"kc_estimated_{userId}", false))
+        if (isMe && Prices.AnyDefault && s.Totals.Total > 0 && !Preferences.Get($"kc_estimated_{userId}", false))
             _ = EstimateSpendAsync();
 
         // kde se pije
@@ -319,18 +350,22 @@
         return string.Join(" · ", parts);
     }
 
-    private static string PubInfo(PubStat p)
+    private string PubInfo(PubStat p)
     {
         var info = Cz.Plural(p.Count, "kousek", "kousky", "kousků");
         if (p.Visits > 0) info += $" · {Cz.Plural(p.Visits, "návštěva", "návštěvy", "návštěv")}";
         if (p.LastAt is DateTime at) info += $" · naposledy {at.ToLocalTime().ToString("d. M.", Cs)}";
-        if (p.Kc > 0) info += $" · {Kc(p.Kc)}";
+        if (isMe && p.Kc > 0) info += $" · {Kc(p.Kc)}";
         return info;
     }
 
     private void ShowNow(UserStats s)
     {
         nowText = null;
+        promileText = null;
+        // promile kámoše (u sebe je na lístku)
+        if (!isMe && Promile.FromShared(s.PromileValue, s.PromileAt) is { } p)
+            promileText = $"≈ {p.Promile.ToString("0.0", Cs)} ‰ · {Promile.SoberText(p.SoberAtLocal, s.Gender)}";
         if (string.IsNullOrWhiteSpace(s.CurrentPubName) || s.CurrentPubAt is not DateTime at) return;
         var ago = DateTime.UtcNow - at.ToUniversalTime();
         if (ago > TimeSpan.FromHours(3) || ago < TimeSpan.FromMinutes(-5)) return;
@@ -339,8 +374,8 @@
             : (int)ago.TotalHours == 1 ? "před hodinou"
             : $"před {(int)ago.TotalHours} hodinami";
         nowText = s.CurrentPubName is "doma" or "venku"
-            ? $"🍺 Teď piješ {s.CurrentPubName} ({when})"
-            : $"🍺 Teď sedíš: {s.CurrentPubName} ({when})";
+            ? $"🍺 {(isMe ? "Teď piješ" : "Teď pije")} {s.CurrentPubName} ({when})"
+            : $"🍺 {(isMe ? "Teď sedíš" : "Teď sedí")}: {s.CurrentPubName} ({when})";
     }
 
     private void DrawCharts(List<DailyDrinksModel> h, DateTime today, DailyDrinksModel celkem)
@@ -398,6 +433,67 @@
         finally
         {
             estimating = false;
+        }
+    }
+
+    // ---------------- tajný režim a odebrání (jen u kámoše) ----------------
+
+    private bool MaskOn => userId != null && UserSession.Profile?.MaskFor.Contains(userId) == true;
+
+    private async Task ToggleMask()
+    {
+        if (AuthSession.Uid is not string me || userId == null || userId == me) return;
+        await UserSession.EnsureReadyAsync();
+        if (UserSession.Profile is not { } profile) return;
+        var who = string.IsNullOrWhiteSpace(Nick) ? "Tenhle kámoš" : Nick;
+        var on = !MaskOn;
+        var ok = await Note.ConfirmAsync(on ? "Zapnout tajný režim?" : "Vypnout tajný režim?",
+            on ? $"{who} uvidí ve tvých statistikách jen asi třetinu, nedozví se, že piješ teď ani kde, " +
+                 "nepřijdou mu oznámení o tvém pití a neuvidí tvoje promile. Nic nepozná."
+               : $"{who} zase uvidí skutečná čísla, kdo teď pije, kde sedíš i oznámení.",
+            on ? "Zapnout" : "Vypnout");
+        if (!ok) return;
+
+        var list = profile.MaskFor.Where(id => id != userId).ToList();
+        if (on) list.Add(userId);
+        try
+        {
+            busyAction = true;
+            await FirestoreRest.PatchAsync($"Users/{me}", new() { ["MaskFor"] = list });
+            profile.MaskFor = list;
+            UserSession.SetProfile(profile);
+        }
+        catch (Exception ex)
+        {
+            await Note.AlertAsync("Nepovedlo se", Net.IsNetworkError(ex) ? "Bez signálu to nepůjde." : ex.Message);
+        }
+        finally
+        {
+            busyAction = false;
+        }
+    }
+
+    private async Task RemoveFriend()
+    {
+        if (AuthSession.Uid is not string me || userId == null || userId == me) return;
+        var who = string.IsNullOrWhiteSpace(Nick) ? "tohohle kámoše" : Nick;
+        var ok = await Note.ConfirmAsync("Odebrat z kámošů?",
+            $"{who} ti zmizí ze seznamu a ty jemu. Nic mu nepřijde, jen si toho časem všimne.",
+            "Odebrat", "Nechat", danger: true);
+        if (!ok) return;
+        try
+        {
+            busyAction = true;
+            await firestoreService.RemoveFriend(me, userId);
+            Nav.NavigateTo("pratele");
+        }
+        catch (Exception ex)
+        {
+            await Note.AlertAsync("Chyba", $"Odebrání se nepovedlo: {ex.Message}");
+        }
+        finally
+        {
+            busyAction = false;
         }
     }
 
@@ -459,7 +555,7 @@
 
     private async Task EditDayAsync(DateTime day)
     {
-        if (userId == null || stats == null) return;
+        if (!isMe || userId == null || stats == null) return;
         var s = stats;
         if (day.Date < s.Today.Date.AddDays(-30) || day.Date > s.Today.Date) return;
 

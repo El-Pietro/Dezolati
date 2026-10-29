@@ -1,6 +1,7 @@
 // Webová appka funguje i bez signálu: všechny soubory appky se uloží do prohlížeče.
 // Data (Firestore) se necachují – o ta se stará appka sama (fronta zápisů, lístek v úložišti).
 self.importScripts('./service-worker-assets.js');
+self.importScripts('./push-sw.js');
 self.addEventListener('install', event => event.waitUntil(onInstall(event)));
 self.addEventListener('activate', event => event.waitUntil(onActivate(event)));
 self.addEventListener('fetch', event => {
@@ -13,7 +14,7 @@ self.addEventListener('message', event => { if (event.data === 'skipWaiting') se
 const cacheNamePrefix = 'dezolati-';
 const cacheName = `${cacheNamePrefix}${self.assetsManifest.version}`;
 const offlineAssetsInclude = [/\.dll$/, /\.pdb$/, /\.wasm/, /\.html/, /\.js$/, /\.json$/, /\.css$/, /\.woff2?$/, /\.png$/, /\.jpe?g$/, /\.webp$/, /\.svg$/, /\.blat$/, /\.dat$/, /\.webmanifest$/];
-const offlineAssetsExclude = [/^service-worker\.js$/];
+const offlineAssetsExclude = [/^service-worker\.js$/, /^push-sw\.js$/];
 // GitHub Pages: appka žije v /Dezolati/ → základ = složka service workeru
 const baseUrl = new URL(self.registration.scope);
 const manifestUrlList = self.assetsManifest.assets.map(asset => new URL(asset.url, baseUrl).href);
