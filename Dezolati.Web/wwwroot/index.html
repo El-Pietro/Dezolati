@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover" />
+    <title>Dezoláti</title>
+    <base href="/" />
+    <script>
+        // na GitHub Pages žije web v /Dezolati/ (el-pietro.github.io/Dezolati/)
+        if (location.pathname.indexOf('/Dezolati/') === 0 || location.pathname === '/Dezolati')
+            document.querySelector('base').setAttribute('href', '/Dezolati/');
+    </script>
+    <meta name="theme-color" content="#24160E" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Dezoláti" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" type="image/png" href="favicon.png" />
+    <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+    <link rel="preload" href="fonts/caveat-regular.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="fonts/caveat-bold.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="css/app.css" />
+</head>
+<body>
+    <div id="app">
+        <!-- než se načte appka: lístek na stole -->
+        <div class="boot">
+            <div class="boot-card">
+                <div class="boot-title">Dezoláti!</div>
+                <div class="boot-text">Rovnám lístek…</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="blazor-error-ui" class="boot-error" style="display:none">
+        Něco se pokazilo. <a href="" class="reload">Načíst znovu</a>
+    </div>
+
+    <script src="js/app.js"></script>
+    <script src="_framework/blazor.webassembly.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('service-worker.js').then(function (reg) {
+                window.dzReg = reg;
+                if (reg.waiting && navigator.serviceWorker.controller) dz.updateReady();
+                // nová verze webu: po načtení se rovnou přepne (žádné „zavři všechny karty“)
+                reg.addEventListener('updatefound', function () {
+                    var w = reg.installing;
+                    if (!w) return;
+                    w.addEventListener('statechange', function () {
+                        if (w.state === 'installed' && navigator.serviceWorker.controller) dz.updateReady();
+                    });
+                });
+            }).catch(function () { });
+        }
+    </script>
+</body>
+</html>

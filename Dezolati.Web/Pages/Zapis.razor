@@ -1,0 +1,102 @@
+@namespace Dezolati.Web.Pages
+@page "/zapis"
+@inject NavigationManager Nav
+
+<BackBar To="" />
+
+<div class="listek">
+    <div class="stack">
+        <div class="title">Co to bude?</div>
+
+        @foreach (var row in rows)
+        {
+            <div class="field-label">@row.Label</div>
+            <input class="slider" type="range" min="0" max="10" step="1"
+                   style="--fill:@(row.Value * 10)%"
+                   value="@row.Value" @oninput="e => SetValue(row, e)" />
+            <div class="heading center">@row.Value</div>
+        }
+
+        <PencilButton Text="Zapsat" Class="mt12" Disabled="busy" OnClick="Zapsat" />
+        @if (busy)
+        {
+            <div class="spinner"></div>
+        }
+    </div>
+</div>
+
+@code {
+    private sealed class Row
+    {
+        public required string Label { get; init; }
+        public int Value { get; set; }
+    }
+
+    private readonly Row pivo = new() { Label = "Piva (velké 0,5 l):", Value = 1 };
+    private readonly Row vino = new() { Label = "Víno (sklenka 2 dcl):" };
+    private readonly Row panaky = new() { Label = "Panáky (jakékoli, 4 cl):" };
+    private Row[] rows => new[] { pivo, vino, panaky };
+    private bool busy;
+
+    private static void SetValue(Row row, ChangeEventArgs e) =>
+        row.Value = int.TryParse(e.Value?.ToString(), out var v) ? Math.Clamp(v, 0, 10) : 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!AuthSession.IsSignedIn)
+        {
+            Nav.NavigateTo("prihlaseni", replace: true);
+            return;
+        }
+        // výchozí zápis podle typu píče: pivopíč = 1 pivo, vínopíč = 1 víno, tvrdopíč = 1 panák
+        SetDefaults(UserSession.Profile?.DrinkerType);
+        try
+        {
+            await UserSession.EnsureReadyAsync();
+            SetDefaults(UserSession.Profile?.DrinkerType);
+        }
+        catch
+        {
+            // bez profilu prostě zůstane pivo
+        }
+    }
+
+    private void SetDefaults(string? drinkerType)
+    {
+        pivo.Value = drinkerType is "Vínopíč/ka" or "Tvrdopíč/ka" ? 0 : 1;
+        vino.Value = drinkerType == "Vínopíč/ka" ? 1 : 0;
+        panaky.Value = drinkerType == "Tvrdopíč/ka" ? 1 : 0;
+    }
+
+    private async Task Zapsat()
+    {
+        if (busy) return;
+        if (pivo.Value + vino.Value + panaky.Value == 0)
+        {
+            await Note.AlertAsync("Nula?", "Zapsat nic? To si napiš do deníku, ne na lístek.");
+            return;
+        }
+
+        var userId = AuthSession.Uid;
+        if (userId == null)
+        {
+            Nav.NavigateTo("prihlaseni");
+            return;
+        }
+
+        try
+        {
+            busy = true;
+            await new FirestoreService().RecordDrink(userId, AuthSession.DisplayName, pivo.Value, vino.Value, panaky.Value);
+            Nav.NavigateTo("");
+        }
+        catch (Exception ex)
+        {
+            await Note.AlertAsync("Chyba", $"Chyba při zápisu: {ex.Message}");
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}

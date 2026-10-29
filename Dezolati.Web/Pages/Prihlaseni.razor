@@ -1,0 +1,67 @@
+@namespace Dezolati.Web.Pages
+@page "/prihlaseni"
+@inject NavigationManager Nav
+
+<div class="listek center-v">
+    <form class="stack-12" @onsubmit="SignIn">
+        <div class="title">Dezoláti!</div>
+        <input class="entry" type="email" placeholder="E-mail" autocomplete="username" @bind="email" />
+        <input class="entry" type="password" placeholder="Heslo" autocomplete="current-password" @bind="password" />
+        <div class="error">@error</div>
+        @if (busy)
+        {
+            <div class="spinner"></div>
+        }
+        <PencilButton Type="submit" Text="Přihlásit se" Disabled="busy" />
+        <PencilButton Text="Nemáš účet? Zaregistruj se!" Variant="PencilVariant.Secondary" Small="true"
+                      OnClick="@(() => Nav.NavigateTo("registrace"))" />
+        @if (WebPlatform.IsIos && !WebPlatform.IsStandalone)
+        {
+            <div class="small soft center">Tip: Sdílet → „Přidat na plochu“ a Dezoláti budou mít vlastní ikonu jako appka.</div>
+        }
+    </form>
+</div>
+
+@code {
+    private string email = Preferences.Get("LastEmail", "") ?? "";
+    private string password = "";
+    private string error = "";
+    private bool busy;
+
+    protected override void OnInitialized()
+    {
+        if (AuthSession.IsSignedIn) Nav.NavigateTo("", replace: true);
+    }
+
+    private async Task SignIn()
+    {
+        if (busy) return;
+        error = "";
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrEmpty(password))
+        {
+            error = "Vyplň e-mail i heslo.";
+            return;
+        }
+        try
+        {
+            busy = true;
+            await AuthSession.SignInAsync(email.Trim(), password);
+            Preferences.Set("LastEmail", email.Trim());
+            password = "";
+            try { await UserSession.EnsureReadyAsync(); } catch { /* lístek případně ukáže chybu */ }
+            Nav.NavigateTo("", replace: true);
+        }
+        catch (AuthException ex)
+        {
+            error = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            error = Net.IsNetworkError(ex) ? "Bez signálu se nepřihlásíš." : "Přihlášení se nepovedlo: " + ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}

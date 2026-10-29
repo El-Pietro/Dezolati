@@ -1,0 +1,36 @@
+@namespace Dezolati.Web.Components
+@implements IDisposable
+
+@if (Note.Current is { } req)
+{
+    <div class="dim" @onclick="() => Outside(req)">
+        <div class="note" @onclick:stopPropagation="true">
+            <div class="heading">@req.Title</div>
+            @if (req.Busy)
+            {
+                <div class="spinner"></div>
+            }
+            @if (!string.IsNullOrEmpty(req.Message))
+            {
+                <div class="body">@req.Message</div>
+            }
+            @foreach (var (text, variant) in req.Buttons)
+            {
+                <PencilButton Text="@text" Variant="@variant" OnClick="() => Note.Close(req, text)" />
+            }
+        </div>
+    </div>
+}
+
+@code {
+    protected override void OnInitialized() => Note.Changed += OnChanged;
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    // ťuknutí mimo lístek = zavřít (kromě „pracuju…“)
+    private void Outside(Note.Request req)
+    {
+        if (!req.Busy) Note.Close(req, null);
+    }
+
+    public void Dispose() => Note.Changed -= OnChanged;
+}

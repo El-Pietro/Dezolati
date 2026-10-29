@@ -166,6 +166,7 @@ public partial class Settings : ContentPage
         SetChip(GenderPicka, gender == "Píčka");
         SetChip(TypePivo, drinkerType == "Pivopíč/ka");
         SetChip(TypeVino, drinkerType == "Vínopíč/ka");
+        SetChip(TypeTvrdo, drinkerType == "Tvrdopíč/ka");
     }
 
     /// <summary>Vysvětlivky schované pod „(info)“, ať nastavení není samý text.</summary>

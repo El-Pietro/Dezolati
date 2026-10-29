@@ -33,11 +33,13 @@
                     </Grid>
 
                     <Label Text="Typ píče:" Style="{StaticResource FieldLabel}" />
-                    <Grid ColumnDefinitions="*, *" ColumnSpacing="10">
+                    <Grid ColumnDefinitions="*, *, *" ColumnSpacing="6">
                         <controls:PencilButton x:Name="TypePivo" Grid.Column="0" Text="Pivopíč/ka"
                                                Variant="Secondary" CommandParameter="Pivopíč/ka" Clicked="OnTypeClicked" />
                         <controls:PencilButton x:Name="TypeVino" Grid.Column="1" Text="Vínopíč/ka"
                                                Variant="Secondary" CommandParameter="Vínopíč/ka" Clicked="OnTypeClicked" />
+                        <controls:PencilButton x:Name="TypeTvrdo" Grid.Column="2" Text="Tvrdopíč/ka"
+                                               Variant="Secondary" CommandParameter="Tvrdopíč/ka" Clicked="OnTypeClicked" />
                     </Grid>
 
                     <!-- připomínka po X minutách bez zápisu (ukládá se hned, jen v tomhle telefonu) -->

@@ -1,0 +1,44 @@
+@namespace Dezolati.Web
+@* Kořen appky: nejdřív načíst úložiště prohlížeče (přihlášení, fronta zápisů…), pak teprve stránky. *@
+@inject IJSRuntime JS
+
+@if (!WebPlatform.IsReady)
+{
+    <div class="boot">
+        <div class="boot-card">
+            <div class="boot-title">Dezoláti!</div>
+            <div class="boot-text">@(initError ?? "Rovnám lístek…")</div>
+        </div>
+    </div>
+}
+else
+{
+    <Router AppAssembly="@typeof(App).Assembly">
+        <Found Context="routeData">
+            <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
+        </Found>
+        <NotFound>
+            <LayoutView Layout="@typeof(MainLayout)">
+                <Redirect To="" />
+            </LayoutView>
+        </NotFound>
+    </Router>
+}
+
+@code {
+    private string? initError;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || WebPlatform.IsReady) return;
+        try
+        {
+            await WebPlatform.InitAsync(JS);
+        }
+        catch (Exception ex)
+        {
+            initError = "Prohlížeč nepustil appku k úložišti: " + ex.Message;
+        }
+        StateHasChanged();
+    }
+}

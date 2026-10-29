@@ -1,0 +1,235 @@
+@namespace Dezolati.Web.Pages
+@page "/"
+@implements IDisposable
+@inject NavigationManager Nav
+
+@* Lístek (Pages/MainPage v appce). Kámoši, mapa a hry přijdou v dalších fázích. *@
+<div class="topbar"></div>
+
+<div class="listek grow">
+    <div class="title">Dezoláti!</div>
+    <div class="body center pre">@souhrn</div>
+    @if (promile != null)
+    {
+        <div class="small soft center">@promile</div>
+    }
+
+    <div class="stack" style="margin-top:8px">
+        @foreach (var (kind, label, count, seed) in Rows)
+        {
+            <div class="tally-row" @onclick="() => RowTapped(kind)">
+                <div class="heading">@label</div>
+                <div class="carky">
+                    @foreach (var (src, cross) in Carky(count, seed))
+                    {
+                        <img src="img/@src" class="@(cross ? "cross" : "")" alt="" />
+                    }
+                </div>
+            </div>
+        }
+        <div class="small soft center" style="margin-top:12px">(ťukni na řádek a škrtni čárku)</div>
+    </div>
+</div>
+
+<div class="bottombar">
+    <PencilButton Variant="PencilVariant.Outline" Text="Statistiky" OnClick="@(() => Nav.NavigateTo("statistiky"))" />
+    <button class="coaster" aria-label="Zapsat" @onclick="@(() => Nav.NavigateTo("zapis"))"><i class="h"></i><i class="v"></i></button>
+    <PencilButton Variant="PencilVariant.Outline" Text="Nastavení" OnClick="@(() => Nav.NavigateTo("nastaveni"))" />
+</div>
+
+@code {
+    private static readonly CultureInfo Cs = WebPlatform.Cs;
+    private readonly FirestoreService firestoreService = new();
+
+    private string souhrn = "Načítám lístek…";
+    private string? promile;
+    private DateTime shownDay;
+    private int shownPivo, shownVino, shownPanaky;
+    private Timer? promileTimer;
+    private bool loading;
+
+    private IEnumerable<(string Kind, string Label, int Count, int Seed)> Rows => new[]
+    {
+        ("Pivo", "Pívo:", shownPivo, 1),
+        ("Vino", "Víno:", shownVino, 2),
+        ("Panaky", "Panáky:", shownPanaky, 3)
+    };
+
+    private static readonly string[] CarkyImages =
+    {
+        "carka1.png", "carka2.png", "carka3.png", "carka4.png", "carka5.png",
+        "carka6.png", "carka7.png", "carka8.png", "carka9.png", "carka10.png"
+    };
+
+    // pevný seed = čárky vypadají pokaždé stejně (a stejně jako v appce)
+    private static IEnumerable<(string Src, bool Cross)> Carky(int count, int seed)
+    {
+        var random = new Random(seed);
+        for (var i = 0; i < count; i++)
+            yield return (CarkyImages[random.Next(CarkyImages.Length)], i % 5 == 4);
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!AuthSession.IsSignedIn)
+        {
+            Nav.NavigateTo("prihlaseni", replace: true);
+            return;
+        }
+        UserSession.DrinksChanged += OnDrinksChanged;
+        WebPlatform.Changed += OnDrinksChanged;   // vrátil se signál → odeslat frontu a překreslit
+        promileTimer = new Timer(_ => InvokeAsync(() => { UpdatePromile(); StateHasChanged(); }), null,
+            TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
+        await LoadData();
+    }
+
+    private void OnDrinksChanged() => InvokeAsync(async () => { await LoadData(); StateHasChanged(); });
+
+    private void UpdatePromile()
+    {
+        var est = AuthSession.Uid is string uid ? Promile.Estimate(uid, UserSession.Profile?.Gender) : null;
+        promile = est is { } e
+            ? $"≈ {e.Promile.ToString("0.0", Cs)} ‰ · {Promile.SoberText(e.SoberAtLocal, UserSession.Profile?.Gender)} · jen odhad, neřiď podle toho"
+            : null;
+    }
+
+    private async Task LoadData()
+    {
+        if (loading) return;
+        var userId = AuthSession.Uid;
+        if (userId == null)
+        {
+            Nav.NavigateTo("prihlaseni", replace: true);
+            return;
+        }
+
+        loading = true;
+        try
+        {
+            await UserSession.EnsureReadyAsync();
+            var day = UserSession.CurrentPubDay;
+
+            await DrinkQueue.FlushAsync(userId);
+
+            DailyDrinksModel? today;
+            var offline = !Net.IsOnline;
+            if (offline || LocalCache.IsFresh(userId, day))
+            {
+                today = LocalCache.LoadDaily(userId, day);
+            }
+            else
+            {
+                try
+                {
+                    today = await firestoreService.GetDailyDrinks(userId, day);
+                    LocalCache.SaveDaily(userId, day, today);
+                    LocalCache.MarkFresh(userId, day);
+                }
+                catch (Exception ex) when (Net.IsNetworkError(ex))
+                {
+                    today = LocalCache.LoadDaily(userId, day);
+                    offline = true;
+                }
+            }
+
+            RenderWithPending(userId, day, today, offline);
+        }
+        catch (AuthException)
+        {
+            Nav.NavigateTo("prihlaseni", replace: true);
+        }
+        catch (Exception ex)
+        {
+            if (TryRenderFromCache(userId)) souhrn += "\n(nepodařilo se načíst ze serveru)";
+            else souhrn = "Lístek se nepodařilo načíst.";
+            if (!Net.IsNetworkError(ex))
+                await Note.AlertAsync("Chyba", "Chyba při načítání dat: " + ex.Message);
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private void RenderWithPending(string userId, DateTime day, DailyDrinksModel? today, bool offline)
+    {
+        var pending = DrinkQueue.PendingFor(userId, day);
+        shownDay = day;
+        Render(Math.Max(0, (today?.Pivo ?? 0) + pending.Pivo),
+               Math.Max(0, (today?.Vino ?? 0) + pending.Vino),
+               Math.Max(0, (today?.Panaky ?? 0) + pending.Panaky),
+               pending.Count, offline);
+    }
+
+    private bool TryRenderFromCache(string userId)
+    {
+        try
+        {
+            var day = UserSession.CurrentPubDay;
+            RenderWithPending(userId, day, LocalCache.LoadDaily(userId, day), offline: true);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private void Render(int pivo, int vino, int panaky, int pendingCount, bool offline)
+    {
+        shownPivo = pivo;
+        shownVino = vino;
+        shownPanaky = panaky;
+
+        var text = pivo + vino + panaky == 0
+            ? "Zatím čistý lístek."
+            : "Dnes: " + Cz.Souhrn(pivo, vino, panaky);
+
+        if (AuthSession.Uid is string uid && PushService.LastPubName(uid, shownDay) is string pub)
+            text += $"\n📍 {pub}";
+
+        if (pendingCount > 0)
+            text += $"\n({Cz.Plural(pendingCount, "zápis čeká", "zápisy čekají", "zápisů čeká")} na signál)";
+        else if (offline)
+            text += "\n(bez signálu)";
+
+        souhrn = text;
+        UpdatePromile();
+    }
+
+    /// <summary>Ťuknutí na řádek lístku → škrtnout jednu čárku.</summary>
+    private async Task RowTapped(string kind)
+    {
+        var userId = AuthSession.Uid;
+        if (userId == null) return;
+
+        var (count, name, one) = kind switch
+        {
+            "Pivo" => (shownPivo, "Pívo", "jedno pivo"),
+            "Vino" => (shownVino, "Víno", "jedno víno"),
+            _ => (shownPanaky, "Panáky", "jednoho panáka")
+        };
+        if (count <= 0) return;
+
+        var strike = await Note.ConfirmAsync($"{name}: {count}", "Škrtnout čárku z lístku?", $"Škrtnout {one}", "Nic", danger: true);
+        if (!strike) return;
+
+        try
+        {
+            await firestoreService.RecordCorrection(userId, shownDay,
+                kind == "Pivo" ? 1 : 0, kind == "Vino" ? 1 : 0, kind == "Panaky" ? 1 : 0);
+        }
+        catch (Exception ex)
+        {
+            await Note.AlertAsync("Chyba", "Škrtnutí se nepovedlo: " + ex.Message);
+        }
+        await LoadData();
+    }
+
+    public void Dispose()
+    {
+        UserSession.DrinksChanged -= OnDrinksChanged;
+        WebPlatform.Changed -= OnDrinksChanged;
+        promileTimer?.Dispose();
+    }
+}

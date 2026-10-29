@@ -1,0 +1,20 @@
+@namespace Dezolati.Web.Layout
+@inherits LayoutComponentBase
+@implements IDisposable
+@inject IJSRuntime JS
+
+<div class="page">
+    @if (WebPlatform.UpdateReady)
+    {
+        <div class="banner">Je tu nová verze. <button @onclick="Reload">Načíst</button></div>
+    }
+    @Body
+</div>
+<DialogHost />
+
+@code {
+    protected override void OnInitialized() => WebPlatform.Changed += OnChanged;
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+    private async Task Reload() => await JS.InvokeVoidAsync("dz.reload");
+    public void Dispose() => WebPlatform.Changed -= OnChanged;
+}

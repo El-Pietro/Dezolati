@@ -1,0 +1,22 @@
+<Project>
+  <!-- Soubory sdílené s Android appkou (jen odkazy, upravují se na jednom místě). -->
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)..\Models\DailyDrinksModel.cs" Link="Shared\Models\DailyDrinksModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\Models\DrinkModel.cs" Link="Shared\Models\DrinkModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\Models\FriendsModel.cs" Link="Shared\Models\FriendsModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\Models\Pub.cs" Link="Shared\Models\Pub.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\Models\UserModel.cs" Link="Shared\Models\UserModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\Services\Cz.cs" Link="Shared\Services\Cz.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\Services\DrinkQueue.cs" Link="Shared\Services\DrinkQueue.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\Services\FirestoreRest.cs" Link="Shared\Services\FirestoreRest.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\Services\FirestoreService.cs" Link="Shared\Services\FirestoreService.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\Services\LocalCache.cs" Link="Shared\Services\LocalCache.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\Services\Mask.cs" Link="Shared\Services\Mask.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\Services\Migration.cs" Link="Shared\Services\Migration.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\Services\Net.cs" Link="Shared\Services\Net.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\Services\NickDirectory.cs" Link="Shared\Services\NickDirectory.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\Services\Places.cs" Link="Shared\Services\Places.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\Services\PubDay.cs" Link="Shared\Services\PubDay.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\Services\UserSession.cs" Link="Shared\Services\UserSession.cs" />
+  </ItemGroup>
+</Project>

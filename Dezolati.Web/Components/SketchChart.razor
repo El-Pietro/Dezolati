@@ -1,0 +1,140 @@
+@namespace Dezolati.Web.Components
+@using System.Text
+@* Graf vyčmáraný pastelkou – stejný postup jako Controls/SketchChart.cs v appce, jen kreslí SVG. *@
+
+<svg class="chart" viewBox="0 0 @W.ToString(Inv) @Height.ToString(Inv)" role="img" aria-hidden="true">
+    @((MarkupString)Draw())
+</svg>
+
+@code {
+    public static readonly string[] Druhy = { "#C27A12", "#8E1B2A", "#4A4A55" };   // pivo, víno, panáky
+    private const string Tuha = "#6B3E1E";
+    private const float W = 360;
+    private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
+
+    /// <summary>Pro každý sloupec [pivo, víno, panáky].</summary>
+    [Parameter] public IReadOnlyList<int[]> Values { get; set; } = Array.Empty<int[]>();
+    [Parameter] public bool Ratio { get; set; }
+    [Parameter] public int Seed { get; set; } = 7;
+    [Parameter] public float Height { get; set; } = 150;
+
+    private StringBuilder sb = new();
+
+    private string Draw()
+    {
+        sb = new StringBuilder();
+        if (Ratio) DrawRatio(); else DrawColumns();
+        return sb.ToString();
+    }
+
+    private void DrawColumns()
+    {
+        var n = Values.Count;
+        if (n == 0) return;
+        float left = 0, right = W, top = 4, baseY = Height - 3;
+        var max = Math.Max(1, Values.Max(v => v.Sum()));
+        var slot = (right - left) / n;
+        var barW = Math.Max(2f, slot * 0.66f);
+
+        for (var i = 0; i < n; i++)
+        {
+            var rnd = new Random(Seed * 997 + i);
+            var x = left + i * slot + (slot - barW) / 2;
+            var vals = Values[i];
+            if (vals.Sum() == 0)
+            {
+                Line(x + barW * 0.25f, baseY - 2, x + barW * 0.75f, baseY - 2, Tuha, 0.3f, 1.2f);
+                continue;
+            }
+            var y = baseY;
+            for (var s = 0; s < vals.Length && s < Druhy.Length; s++)
+            {
+                if (vals[s] <= 0) continue;
+                var h = (baseY - top) * vals[s] / max;
+                Scribble(x, y - h, barW, h, Druhy[s], rnd);
+                y -= h;
+            }
+        }
+        WobblyLine(left, baseY + 1, right, baseY + 1, new Random(Seed));
+    }
+
+    private void DrawRatio()
+    {
+        var vals = Values.Count > 0 ? Values[0] : Array.Empty<int>();
+        var total = vals.Sum();
+        var rnd = new Random(Seed);
+        float bx = 1, by = 3, bw = W - 2, bh = Height - 6;
+        if (total <= 0)
+        {
+            Path(WobblyRect(bx, by, bw, bh, rnd), Tuha, 0.4f, 1.1f);
+            return;
+        }
+        var x = bx;
+        for (var s = 0; s < vals.Length && s < Druhy.Length; s++)
+        {
+            if (vals[s] <= 0) continue;
+            var w = bw * vals[s] / total;
+            Scribble(x, by, w, bh, Druhy[s], rnd);
+            x += w;
+        }
+    }
+
+    private static float J(Random rnd, float amount) => (float)(rnd.NextDouble() * 2 - 1) * amount;
+
+    private void Scribble(float x, float y, float w, float h, string color, Random rnd)
+    {
+        if (w < 0.5f || h < 0.5f) return;
+        var p = new StringBuilder();
+        const float step = 2.6f;
+        if (h >= w)
+        {
+            var yy = y + h;
+            var right = true;
+            p.Append($"M{F(x + J(rnd, 0.6f))} {F(yy)}");
+            while (yy > y)
+            {
+                yy = Math.Max(y, yy - step * (0.7f + (float)rnd.NextDouble() * 0.6f));
+                p.Append($" L{F((right ? x + w : x) + J(rnd, 0.8f))} {F(yy)}");
+                right = !right;
+            }
+        }
+        else
+        {
+            var xx = x;
+            var down = true;
+            p.Append($"M{F(xx)} {F(y + J(rnd, 0.6f))}");
+            while (xx < x + w)
+            {
+                xx = Math.Min(x + w, xx + step * (0.7f + (float)rnd.NextDouble() * 0.6f));
+                p.Append($" L{F(xx)} {F((down ? y + h : y) + J(rnd, 0.8f))}");
+                down = !down;
+            }
+        }
+        Path(p.ToString(), color, 0.75f, 1.3f);
+        Path(WobblyRect(x, y, w, h, rnd), color, 0.95f, 1.1f);
+    }
+
+    private static string WobblyRect(float x, float y, float w, float h, Random rnd)
+    {
+        const float j = 0.7f;
+        return $"M{F(x + J(rnd, j))} {F(y + h + J(rnd, j))} L{F(x + J(rnd, j))} {F(y + J(rnd, j))} " +
+               $"L{F(x + w + J(rnd, j))} {F(y + J(rnd, j))} L{F(x + w + J(rnd, j))} {F(y + h + J(rnd, j))} Z";
+    }
+
+    private void WobblyLine(float x1, float y1, float x2, float y2, Random rnd)
+    {
+        var p = new StringBuilder($"M{F(x1)} {F(y1 + J(rnd, 0.6f))}");
+        const int parts = 6;
+        for (var i = 1; i <= parts; i++)
+            p.Append($" L{F(x1 + (x2 - x1) * i / parts)} {F(y1 + (y2 - y1) * i / parts + J(rnd, 0.9f))}");
+        Path(p.ToString(), Tuha, 0.7f, 1.4f);
+    }
+
+    private void Line(float x1, float y1, float x2, float y2, string color, float alpha, float width) =>
+        Path($"M{F(x1)} {F(y1)} L{F(x2)} {F(y2)}", color, alpha, width);
+
+    private void Path(string d, string color, float alpha, float width) =>
+        sb.Append($"<path d=\"{d}\" fill=\"none\" stroke=\"{color}\" stroke-opacity=\"{F(alpha)}\" stroke-width=\"{F(width)}\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>");
+
+    private static string F(float v) => v.ToString("0.##", Inv);
+}

@@ -1,0 +1,204 @@
+@namespace Dezolati.Web.Pages
+@page "/nastaveni"
+@inject NavigationManager Nav
+
+@* Nastavení (Pages/Settings v appce). Oznámení, poloha a domov přijdou s dalšími fázemi. *@
+<BackBar To="" />
+
+<div class="listek">
+    <div class="stack">
+        <div class="title">Nastavení píče</div>
+
+        <div class="field-label">Jméno:</div>
+        <input class="entry" placeholder="Tvoje jméno" @bind="name" />
+
+        <div class="field-label">Přezdívka:</div>
+        <input class="entry" placeholder="Podle ní tě najdou kámoši" @bind="nickname" />
+
+        <div class="field-label">Pohlaví:</div>
+        <div class="grid2">
+            <Chip Text="Píč" Selected="@(gender == "Píč")" OnClick="@(() => gender = "Píč")" />
+            <Chip Text="Píčka" Selected="@(gender == "Píčka")" OnClick="@(() => gender = "Píčka")" />
+        </div>
+
+        <div class="field-label">Typ píče:</div>
+        <div class="grid3">
+            <Chip Text="Pivopíč/ka" Selected="@(drinkerType == "Pivopíč/ka")" OnClick="@(() => drinkerType = "Pivopíč/ka")" />
+            <Chip Text="Vínopíč/ka" Selected="@(drinkerType == "Vínopíč/ka")" OnClick="@(() => drinkerType = "Vínopíč/ka")" />
+            <Chip Text="Tvrdopíč/ka" Selected="@(drinkerType == "Tvrdopíč/ka")" OnClick="@(() => drinkerType = "Tvrdopíč/ka")" />
+        </div>
+
+        <div class="section-head" style="margin-top:6px;cursor:default">
+            <div class="field-label" style="margin:0">Moje obvyklé ceny:</div>
+            <button class="link" @onclick="@(() => Info("prices"))">(info)</button>
+        </div>
+        <div class="grid3">
+            <input class="entry" inputmode="numeric" maxlength="4" placeholder="pivo 0,5" @bind="pricePivo" @bind:after="SavePrices" />
+            <input class="entry" inputmode="numeric" maxlength="4" placeholder="víno 2 dcl" @bind="priceVino" @bind:after="SavePrices" />
+            <input class="entry" inputmode="numeric" maxlength="4" placeholder="panák" @bind="pricePanak" @bind:after="SavePrices" />
+        </div>
+
+        <div class="section-head" style="margin-top:6px;cursor:default">
+            <div class="field-label" style="margin:0">Promile na lístku:</div>
+            <button class="link" @onclick="@(() => Info("promile"))">(info)</button>
+        </div>
+        <div class="grid2">
+            <Chip Text="Počítat" Selected="@Promile.Enabled" OnClick="@(() => Promile.Enabled = true)" />
+            <Chip Text="Nepočítat" Selected="@(!Promile.Enabled)" OnClick="@(() => Promile.Enabled = false)" />
+        </div>
+        @if (Promile.Enabled)
+        {
+            <div style="display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:center">
+                <div class="small">Váha (kg):</div>
+                <input class="entry" inputmode="numeric" maxlength="3" placeholder="80" @bind="weight" @bind:after="SaveWeight" />
+            </div>
+            <div class="grid3">
+                @foreach (var deg in new[] { 10, 11, 12 })
+                {
+                    var d = deg;
+                    <Chip Text="@($"{d}°")" Selected="@(Promile.BeerDegrees == d)" OnClick="@(() => Promile.BeerDegrees = d)" />
+                }
+            </div>
+        }
+
+        <PencilButton Text="Uložit změny" Class="mt24" Disabled="saving" OnClick="Save" />
+
+        <div class="small center" style="margin-top:18px">Dezoláti @AppInfo.Current.VersionString</div>
+        <div class="small soft center">Na webu zatím není: kámoši, oznámení, mapa hospod, hry a připomínky. Ty jsou v appce pro Android.</div>
+        <PencilButton Text="Odhlásit se" Variant="PencilVariant.Danger" Class="mt12" OnClick="Logout" />
+    </div>
+</div>
+
+@code {
+    private readonly FirestoreService firestoreService = new();
+    private string? name, nickname, gender, drinkerType;
+    private string pricePivo = "", priceVino = "", pricePanak = "", weight = "";
+    private bool saving;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthSession.Uid == null)
+        {
+            Nav.NavigateTo("prihlaseni", replace: true);
+            return;
+        }
+        static string P(int v) => v > 0 ? v.ToString(CultureInfo.InvariantCulture) : "";
+        pricePivo = P(Prices.Pivo);
+        priceVino = P(Prices.Vino);
+        pricePanak = P(Prices.Panak);
+        weight = P(Promile.WeightKg);
+
+        try
+        {
+            await UserSession.EnsureReadyAsync();
+            if (UserSession.Profile is { } user)
+            {
+                name = user.Name;
+                nickname = user.Nickname;
+                gender = user.Gender;
+                drinkerType = user.DrinkerType;
+            }
+        }
+        catch (Exception ex)
+        {
+            await Note.AlertAsync("Chyba", $"Nepodařilo se načíst profil: {ex.Message}");
+        }
+    }
+
+    private static int ParseNum(string? text) =>
+        int.TryParse((text ?? "").Trim(), out var n) && n > 0 ? n : 0;
+
+    private void SavePrices()
+    {
+        Prices.Pivo = Math.Min(ParseNum(pricePivo), PubService.MaxPrice);
+        Prices.Vino = Math.Min(ParseNum(priceVino), PubService.MaxPrice);
+        Prices.Panak = Math.Min(ParseNum(pricePanak), PubService.MaxPrice);
+    }
+
+    private void SaveWeight() => Promile.WeightKg = ParseNum(weight);
+
+    private async Task Info(string what)
+    {
+        var (title, text) = what switch
+        {
+            "prices" => ("Ceny",
+                "Z nich se počítá útrata ve statistikách. Když má hospoda v profilu vyplněné ceny, vezmou se ty. Tvoje ceny vidíš jen ty."),
+            _ => ("Promile",
+                "Odhad ze vzorce (Widmark) podle váhy, pohlaví a časů zápisů. Bez vyplněné váhy se nepočítá. Skutečnost se může lišit klidně o půl promile – podle toho NIKDY neřiď. Váha zůstává jen v tomhle prohlížeči, a počítají se jen zápisy z něj.")
+        };
+        await Note.AlertAsync(title, text);
+    }
+
+    private async Task Save()
+    {
+        var userId = AuthSession.Uid;
+        if (userId == null)
+        {
+            Nav.NavigateTo("prihlaseni");
+            return;
+        }
+        var nick = nickname?.Trim();
+        if (string.IsNullOrEmpty(nick))
+        {
+            await Note.AlertAsync("Chyba", "Přezdívka je povinná, podle ní tě najdou kámoši.");
+            return;
+        }
+
+        try
+        {
+            saving = true;
+            SavePrices();
+            SaveWeight();
+            var old = UserSession.Profile;
+            var nicknameChanged = !string.Equals(old?.Nickname, nick, StringComparison.Ordinal);
+            if (nicknameChanged)
+            {
+                var taken = await firestoreService.FindUserByNickname(nick);
+                if (taken != null && taken.UserId != userId)
+                {
+                    await Note.AlertAsync("Zabráno", $"Přezdívku „{nick}“ už má někdo jiný.");
+                    return;
+                }
+            }
+
+            // hlášení kámošům, oznámení a oblíbené se na webu nemění → zůstávají z profilu
+            var profile = new UserModel
+            {
+                Id = userId,
+                UserId = userId,
+                Name = name?.Trim(),
+                Nickname = nick,
+                Gender = gender,
+                DrinkerType = drinkerType,
+                Email = AuthSession.Email,
+                NotifyFriends = old?.NotifyFriends ?? true,
+                SharePub = old?.SharePub ?? true,
+                ShareLevel = old?.ShareLevel ?? 2,
+                FavoritePubs = old?.FavoritePubs ?? new(),
+                MaskFor = old?.MaskFor ?? new()
+            };
+            await firestoreService.UpdateUserData(userId, profile);
+            UserSession.SetProfile(profile);
+            _ = NickDirectory.PublishNickAsync(nick);
+            if (nicknameChanged)
+                await firestoreService.PropagateNickname(userId, nick);
+
+            await Note.AlertAsync("Hotovo", "Změny byly uloženy.");
+            Nav.NavigateTo("");
+        }
+        catch (Exception ex)
+        {
+            await Note.AlertAsync("Chyba", Net.IsNetworkError(ex) ? "Bez signálu to neuložím." : $"Uložení se nepovedlo: {ex.Message}");
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private void Logout()
+    {
+        AuthSession.SignOut();
+        Nav.NavigateTo("prihlaseni", replace: true);
+    }
+}

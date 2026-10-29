@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+
+  <!--
+    Webová verze Dezolátů (hlavně pro iPhone, jako PWA na GitHub Pages).
+    Logiku (Firestore, fronta zápisů, statistiky, promile) bere ze stejných souborů jako Android
+    – jen je sem nalinkuje, nic v Android projektu se kvůli webu nemění.
+    Co je jen pro telefon (Preferences, Connectivity…), nahrazují malé náhražky ve složce Shims.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Dezolati</RootNamespace>
+    <AssemblyName>Dezolati.Web</AssemblyName>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <BlazorWebAssemblyLoadAllGlobalizationData>true</BlazorWebAssemblyLoadAllGlobalizationData>
+    <!-- GitHub Pages si soubory komprimuje samo, .br/.gz kopie by jen nafukovaly nasazení -->
+    <CompressionEnabled>false</CompressionEnabled>
+    <ServiceWorkerAssetsManifest>service-worker-assets.js</ServiceWorkerAssetsManifest>
+    <NoWarn>$(NoWarn);CS1570;CS1998</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="8.0.11" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="8.0.11" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ServiceWorker Include="wwwroot\service-worker.js" PublishedContent="wwwroot\service-worker.published.js" />
+  </ItemGroup>
+
+  <Import Project="Shared.props" />
+
+</Project>

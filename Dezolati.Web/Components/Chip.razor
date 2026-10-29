@@ -1,0 +1,10 @@
+@namespace Dezolati.Web.Components
+@* Volba v nastavení: vybraná = hnědá pastelka, nevybraná = bledá tužka (SetChip v appce). *@
+<PencilButton Text="@Text" Small="true" Variant="@(Selected ? PencilVariant.Primary : PencilVariant.Secondary)"
+              Off="@(!Selected)" OnClick="OnClick" />
+
+@code {
+    [Parameter] public string Text { get; set; } = "";
+    [Parameter] public bool Selected { get; set; }
+    [Parameter] public EventCallback OnClick { get; set; }
+}

@@ -130,6 +130,8 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
             }
             Avg("Průměrná spotřeba", mesic.Total, celkem.Total);
             Avg("Průměrná spotřeba piva", mesic.Pivo, celkem.Pivo);
+            Avg("Průměrná spotřeba vína", mesic.Vino, celkem.Vino);
+            Avg("Průměrná spotřeba panáků", mesic.Panaky, celkem.Panaky);
         }
         MonthsBox.IsVisible = celkem.Total > 0;
 

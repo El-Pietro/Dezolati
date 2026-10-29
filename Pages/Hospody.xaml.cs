@@ -616,8 +616,9 @@ public partial class Hospody : ContentPage, IQueryAttributable
 
     private void HideFriendCard() => FriendCard.IsVisible = false;
 
-    private static Style? AppStyle(string key) =>
-        Application.Current?.Resources.TryGetValue(key, out var s) == true ? s as Style : null;
+    // Style je i v Mapsui → plné jméno
+    private static Microsoft.Maui.Controls.Style? AppStyle(string key) =>
+        Application.Current?.Resources.TryGetValue(key, out var s) == true ? s as Microsoft.Maui.Controls.Style : null;
 
     private void ShowCard(PubInfo pub, double? distanceMeters)
     {

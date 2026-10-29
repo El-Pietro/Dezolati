@@ -1,0 +1,20 @@
+@namespace Dezolati.Web.Components
+@* Horní lišta podstránek: na iPhonu není systémové Zpět → tlačítko jako ve Windows verzi appky. *@
+@inject NavigationManager Nav
+<div class="topbar">
+    <PencilButton Variant="PencilVariant.Outline" Text="Zpět" OnClick="Back" />
+    <div class="spacer"></div>
+    @ChildContent
+</div>
+
+@code {
+    [Parameter] public string To { get; set; } = "";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public EventCallback OnBack { get; set; }
+
+    private async Task Back()
+    {
+        if (OnBack.HasDelegate) await OnBack.InvokeAsync();
+        else Nav.NavigateTo(To);
+    }
+}

@@ -1,0 +1,78 @@
+@namespace Dezolati.Web.Pages
+@page "/registrace"
+@inject NavigationManager Nav
+
+<div class="listek center-v">
+    <form class="stack-12" @onsubmit="SignUp">
+        <div class="title">Nový dezolát</div>
+        <input class="entry" type="email" placeholder="E-mail" autocomplete="username" @bind="email" />
+        <input class="entry" type="text" placeholder="Přezdívka (podle ní tě najdou)" autocomplete="nickname" @bind="nickname" />
+        <input class="entry" type="password" placeholder="Heslo (min. 6 znaků)" autocomplete="new-password" @bind="password" />
+        <div class="error">@error</div>
+        @if (busy)
+        {
+            <div class="spinner"></div>
+        }
+        <PencilButton Type="submit" Text="Registrace" Disabled="busy" />
+        <PencilButton Text="Už máš účet? Přihlaš se!" Variant="PencilVariant.Secondary" Small="true"
+                      OnClick="@(() => Nav.NavigateTo("prihlaseni"))" />
+    </form>
+</div>
+
+@code {
+    private string email = "";
+    private string nickname = "";
+    private string password = "";
+    private string error = "";
+    private bool busy;
+
+    private async Task SignUp()
+    {
+        if (busy) return;
+        error = "";
+        var mail = email.Trim();
+        var nick = nickname.Trim();
+        if (mail.Length == 0 || nick.Length == 0 || password.Length == 0)
+        {
+            error = "Vyplň e-mail, přezdívku i heslo.";
+            return;
+        }
+        if (password.Length < 6)
+        {
+            error = "Heslo musí mít aspoň 6 znaků.";
+            return;
+        }
+        try
+        {
+            busy = true;
+            await AuthSession.SignUpAsync(mail, password, nick);
+            password = "";
+            Preferences.Set("LastEmail", mail);
+
+            // přezdívka musí být jedinečná, jinak by tě kámoši nenašli (stejně jako v appce)
+            var fs = new FirestoreService();
+            var uid = AuthSession.Uid!;
+            var taken = await fs.FindUserByNickname(nick);
+            var final = nick;
+            if (taken != null && taken.UserId != uid)
+                final = $"{nick}{Random.Shared.Next(100, 999)}";
+            await fs.EnsureUserDoc(uid, mail, final);
+            if (final != nick)
+                await Note.AlertAsync("Přezdívka zabraná",
+                    $"„{nick}“ už někdo má, dostal jsi „{final}“. Změnit si ji můžeš v Nastavení.");
+            Nav.NavigateTo("", replace: true);
+        }
+        catch (AuthException ex)
+        {
+            error = ex.Code == "INVALID_EMAIL" ? "Tohle není platný e-mail." : ex.Message;
+        }
+        catch (Exception ex)
+        {
+            error = Net.IsNetworkError(ex) ? "Bez signálu se nezaregistruješ." : "Registrace se nepovedla: " + ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}

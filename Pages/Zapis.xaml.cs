@@ -16,8 +16,8 @@ public partial class Zapis : ContentPage
     {
         base.OnAppearing();
 
-        // výchozí zápis podle typu píče: pivopíč = 1 pivo, vínopíč = 1 víno (2 dcl)
-        SetDefaults(wine: false);
+        // výchozí zápis podle typu píče: pivopíč = 1 pivo, vínopíč = 1 víno (2 dcl), tvrdopíč = 1 panák
+        SetDefaults(UserSession.Profile?.DrinkerType);
 
         var userId = AuthSession.Uid;
         if (userId == null) return;
@@ -25,8 +25,7 @@ public partial class Zapis : ContentPage
         try
         {
             await UserSession.EnsureReadyAsync(); // z paměti, žádné čtení navíc
-            if (UserSession.Profile?.DrinkerType == "Vínopíč/ka")
-                SetDefaults(wine: true);
+            SetDefaults(UserSession.Profile?.DrinkerType);
         }
         catch
         {
@@ -34,11 +33,11 @@ public partial class Zapis : ContentPage
         }
     }
 
-    private void SetDefaults(bool wine)
+    private void SetDefaults(string? drinkerType)
     {
-        PivaSlider.Value = wine ? 0 : 1;
-        VinoSlider.Value = wine ? 1 : 0;
-        PanakySlider.Value = 0;
+        PivaSlider.Value = drinkerType is "Vínopíč/ka" or "Tvrdopíč/ka" ? 0 : 1;
+        VinoSlider.Value = drinkerType == "Vínopíč/ka" ? 1 : 0;
+        PanakySlider.Value = drinkerType == "Tvrdopíč/ka" ? 1 : 0;
     }
 
     private void OnSliderValueChanged(object sender, ValueChangedEventArgs e)
