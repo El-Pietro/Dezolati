@@ -14,12 +14,13 @@
                                HorizontalOptions="Start" Margin="{DynamicResource TopBarMargin}" Clicked="OnZpetClicked" />
 
         <Border Grid.Row="1" Style="{StaticResource Listek}">
-            <Grid RowDefinitions="Auto, Auto, Auto, Auto, *, Auto, Auto" RowSpacing="8">
+            <Grid RowDefinitions="Auto, Auto, Auto, Auto, *, Auto, Auto, Auto" RowSpacing="8">
 
                 <Label Grid.Row="0" Text="Kámoši" Style="{StaticResource Title}" />
 
                 <!-- kdo mi připil na moje sezení -->
-                <Label Grid.Row="1" x:Name="CheersLabel" Style="{StaticResource Small}" IsVisible="False" />
+                <!-- jména jdou rozkliknout (statistiky), nová připití se připisují hned z oznámení -->
+                <FlexLayout Grid.Row="1" x:Name="CheersBox" Wrap="Wrap" AlignItems="Center" IsVisible="False" />
 
                 <!-- Žádosti, které čekají na mě -->
                 <Label Grid.Row="2" x:Name="PendingHeader" Text="Chtějí se s tebou kamarádit:"
@@ -43,15 +44,32 @@
 
                 <!-- Seznam přátel: kdo pije, je nahoře s emoji a místem; ťuk na jméno = statistiky -->
                 <ScrollView Grid.Row="4">
-                    <VerticalStackLayout x:Name="FriendsStack" Spacing="2">
-                        <Label x:Name="EmptyLabel" Text="Zatím nikdo. Piješ sám?" Style="{StaticResource Heading}"
-                               HorizontalOptions="Center" Margin="0,20" IsVisible="False" />
+                    <VerticalStackLayout Spacing="2">
+                        <VerticalStackLayout x:Name="FriendsStack" Spacing="2">
+                            <Label x:Name="EmptyLabel" Text="Zatím nikdo. Piješ sám?" Style="{StaticResource Heading}"
+                                   HorizontalOptions="Center" Margin="0,20" IsVisible="False" />
+                        </VerticalStackLayout>
+
+                        <!-- Možná znáš: kámoši kámošů (z adresáře, sbalené) -->
+                        <Grid ColumnDefinitions="*, Auto" Margin="0,14,0,0">
+                            <Grid.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnSuggestTapped" />
+                            </Grid.GestureRecognizers>
+                            <Label Text="Možná znáš" Style="{StaticResource FieldLabel}" />
+                            <Label x:Name="SuggestToggle" Grid.Column="1" Text="(ukázat)" Style="{StaticResource Small}"
+                                   TextColor="{StaticResource InkSoft}" VerticalOptions="End" Padding="12,0,4,2" />
+                        </Grid>
+                        <VerticalStackLayout x:Name="SuggestStack" Spacing="2" IsVisible="False" />
                     </VerticalStackLayout>
                 </ScrollView>
 
+                <!-- našeptávač přezdívek (hledá se v telefonu) -->
+                <VerticalStackLayout Grid.Row="5" x:Name="SearchList" Spacing="0" IsVisible="False" />
+
                 <!-- Přidání přítele -->
-                <Entry Grid.Row="5" x:Name="NicknameEntry" Placeholder="Přezdívka kámoše" />
-                <controls:PencilButton Grid.Row="6" x:Name="AddButton" Text="Poslat žádost" Variant="Primary"
+                <Entry Grid.Row="6" x:Name="NicknameEntry" Placeholder="Přezdívka kámoše"
+                       Focused="OnNickFocused" TextChanged="OnNickTextChanged" />
+                <controls:PencilButton Grid.Row="7" x:Name="AddButton" Text="Poslat žádost" Variant="Primary"
                                        Clicked="OnAddFriendClicked" />
             </Grid>
         </Border>

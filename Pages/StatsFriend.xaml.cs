@@ -41,10 +41,17 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
         SummaryGrid.Clear();
         SummaryGrid.RowDefinitions.Clear();
         HistoryList.Clear();
-        NowLabel.IsVisible = false;
+        NowLabel.IsVisible = PromileLabel.IsVisible = false;
+        AvgBox.Clear();
+        MonthsBox.IsVisible = false;
+        MonthsGrid.Clear();
+        MonthsGrid.RowDefinitions.Clear();
+        MonthsGrid.IsVisible = monthsOpen = false;
+        MonthsToggle.Text = "(ukázat)";
         SpendBox.IsVisible = PlacesBox.IsVisible = PubsBox.IsVisible = false;
         isMe = userId == AuthSession.Uid;
-        RemoveFriendButton.IsVisible = !string.IsNullOrEmpty(userId) && !isMe;
+        RemoveFriendButton.IsVisible = MaskButton.IsVisible = !string.IsNullOrEmpty(userId) && !isMe;
+        RenderMaskButton();
         EditHint.IsVisible = isMe;
         stats = null;
 
@@ -91,7 +98,6 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
         var tyden = Sum(history.Where(h => h.Day > today.AddDays(-7)));
         var mesic = Sum(history.Where(h => h.Day > today.AddDays(-30)));
         var celkem = stats.Totals;
-        var drinkingDays = stats.Days;
         var record = stats.Record;
 
         string fav = celkem.Total == 0 ? "—"
@@ -103,12 +109,29 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
         AddRow(SummaryGrid, "7 dní", Cz.Souhrn(tyden.Pivo, tyden.Vino, tyden.Panaky));
         AddRow(SummaryGrid, "30 dní", Cz.Souhrn(mesic.Pivo, mesic.Vino, mesic.Panaky));
         AddRow(SummaryGrid, "Celkem", Cz.Souhrn(celkem.Pivo, celkem.Vino, celkem.Panaky));
-        AddRow(SummaryGrid, "Dní v akci", drinkingDays.ToString());
         AddRow(SummaryGrid, "Rekord", record == null ? "—"
             : $"{record.Day.ToString("d. M. yyyy", Cs)} ({Cz.Plural(record.Total, "kousek", "kousky", "kousků")})");
         AddRow(SummaryGrid, "Srdcovka", fav);
-        if (drinkingDays > 0)
-            AddRow(SummaryGrid, "Průměr / tah", (celkem.Total / (double)drinkingDays).ToString("0.0", Cs));
+        // průměry na den (i dny bez pití): posledních 30 dní a celkem od prvního zápisu
+        AvgBox.Clear();
+        if (stats.FirstDay is DateTime first && celkem.Total > 0)
+        {
+            var daysAll = Math.Max(1, (today.Date - first.Date).Days + 1);
+            var days30 = Math.Min(30, daysAll);
+            string A(int n, int d) => (n / (double)d).ToString("0.0", Cs);
+            void Avg(string title, int n30, int nAll)
+            {
+                AvgBox.Add(new Label { Text = title, Style = AppStyle("FieldLabel") });
+                AvgBox.Add(new Label
+                {
+                    Text = $"30 dní: {A(n30, days30)} / den · celkem: {A(nAll, daysAll)} / den",
+                    Style = AppStyle("Body"), Margin = new Thickness(16, 0, 0, 4)
+                });
+            }
+            Avg("Průměrná spotřeba", mesic.Total, celkem.Total);
+            Avg("Průměrná spotřeba piva", mesic.Pivo, celkem.Pivo);
+        }
+        MonthsBox.IsVisible = celkem.Total > 0;
 
         RenderSpend(stats);
         RenderPlaces(stats);
@@ -161,47 +184,43 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
             AddRow(SpendGrid, "Celkem", Kc(stats.TotalKc));
         }
 
-        var estimated = Preferences.Get($"kc_estimated_{userId}", false);
-        if (!Prices.AnyDefault)
-        {
-            SpendNote.Text = "Vyplň si v Nastavení, kolik u vás stojí pivo, víno a panák – útrata se pak počítá sama. V hospodě s vyplněnými cenami se vezmou ty.";
-            SpendNote.IsVisible = true;
-        }
-        else
-        {
-            SpendNote.Text = "Počítá se od verze 3.7 cenami hospody (jsou-li vyplněné), jinak tvými výchozími.";
-            SpendNote.IsVisible = !estimated;
-        }
-        EstimateButton.IsVisible = Prices.AnyDefault && !estimated && stats.Totals.Total > 0;
+        SpendNote.Text = "Vyplň si v Nastavení obvyklé ceny.";
+        SpendNote.IsVisible = !Prices.AnyDefault;
+        SpendDetail.IsVisible = spendOpen;
+        SpendToggle.Text = spendOpen ? "(schovat)" : "(ukázat)";
+
+        // dny z doby před útratou se dopočítají samy (jednou) podle obvyklých cen
+        if (Prices.AnyDefault && stats.Totals.Total > 0 && !Preferences.Get($"kc_estimated_{userId}", false))
+            _ = EstimateSpendAsync();
     }
 
-    private async void OnEstimateClicked(object sender, EventArgs e)
+    private bool spendOpen;
+    private bool estimating;
+
+    private void OnSpendTapped(object? sender, TappedEventArgs e)
     {
-        if (userId == null || !isMe) return;
-        var ok = await Listek.ConfirmAsync(this, "Útrata zpětně",
-            $"Dny bez útraty dostanou odhad podle tvých výchozích cen (pivo {Prices.Pivo} Kč, víno {Prices.Vino} Kč, panák {Prices.Panak} Kč). " +
-            "Kolik jsi kde skutečně utratil, už nikdo nezjistí – je to odhad." +
-            // technická poznámka jen pro správce, ostatní to nezajímá
-            (UsageService.IsAdmin ? " Stojí to jedno čtení a jeden zápis za každý den s pitím." : ""),
-            "Dopočítat");
-        if (!ok) return;
+        spendOpen = !spendOpen;
+        SpendDetail.IsVisible = spendOpen;
+        SpendToggle.Text = spendOpen ? "(schovat)" : "(ukázat)";
+    }
+
+    private async Task EstimateSpendAsync()
+    {
+        if (estimating || userId == null || !isMe) return;
+        estimating = true;
         try
         {
-            EstimateButton.IsEnabled = false;
-            var (days, kc) = await firestoreService.EstimatePastSpend(userId);
+            var (days, _) = await firestoreService.EstimatePastSpend(userId);
             Preferences.Set($"kc_estimated_{userId}", true);
-            await Listek.AlertAsync(this, "Hotovo", days == 0
-                ? "Nebylo co dopočítat."
-                : $"Dopočítáno {Cz.Plural(days, "den", "dny", "dní")}, odhadem {Kc(kc)}. Na játra se radši nedívej.");
-            await Load();
+            if (days > 0) await Load();
         }
         catch (Exception ex)
         {
-            await Listek.AlertAsync(this, "Chyba", ex.Message);
+            System.Diagnostics.Debug.WriteLine($"Útrata zpětně: {ex.Message}");   // zkusí se příště
         }
         finally
         {
-            EstimateButton.IsEnabled = true;
+            estimating = false;
         }
     }
 
@@ -335,6 +354,13 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
     /// <summary>„Teď sedí: U Peťky (před 40 min)“ – jen když tam zapisoval v posledních 3 hodinách.</summary>
     private void ShowNow(UserStats stats, bool isMe)
     {
+        // promile kámoše (u sebe je na lístku)
+        if (!isMe && Promile.FromShared(stats.PromileValue, stats.PromileAt) is { } p)
+        {
+            PromileLabel.Text = $"≈ {p.Promile.ToString("0.0", Cs)} ‰ · {Promile.SoberText(p.SoberAtLocal, stats.Gender)}";
+            PromileLabel.IsVisible = true;
+        }
+
         if (string.IsNullOrWhiteSpace(stats.CurrentPubName) || stats.CurrentPubAt is not DateTime at) return;
         var ago = DateTime.UtcNow - at.ToUniversalTime();
         if (ago > TimeSpan.FromHours(3) || ago < TimeSpan.FromMinutes(-5)) return;
@@ -343,8 +369,116 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
             : ago.TotalMinutes < 60 ? $"před {(int)ago.TotalMinutes} min"
             : (int)ago.TotalHours == 1 ? "před hodinou"
             : $"před {(int)ago.TotalHours} hodinami";
-        NowLabel.Text = $"🍺 {(isMe ? "Teď sedíš" : "Teď sedí")}: {stats.CurrentPubName} ({when})";
+        NowLabel.Text = stats.CurrentPubName is "doma" or "venku"
+            ? $"🍺 {(isMe ? "Teď piješ" : "Teď pije")} {stats.CurrentPubName} ({when})"
+            : $"🍺 {(isMe ? "Teď sedíš" : "Teď sedí")}: {stats.CurrentPubName} ({when})";
         NowLabel.IsVisible = true;
+    }
+
+    // ---------------- po měsících ----------------
+
+    private bool monthsOpen;
+    private bool monthsLoading;
+
+    private async void OnMonthsTapped(object? sender, TappedEventArgs e)
+    {
+        monthsOpen = !monthsOpen;
+        MonthsGrid.IsVisible = monthsOpen;
+        MonthsToggle.Text = monthsOpen ? "(schovat)" : "(ukázat)";
+        if (monthsOpen && MonthsGrid.Children.Count == 0) await LoadMonthsAsync();
+    }
+
+    private record MonthCache(int Pivo, int Vino, int Panaky);
+
+    /// <summary>
+    /// Posledních 12 měsíců (ne dřív než první zápis). Uzavřené měsíce (starší než 31 dní, už nejdou upravit)
+    /// se drží v telefonu → čtou se jen jednou; aktuální se čtou při každém rozbalení (1 čtení za den s pitím).
+    /// </summary>
+    private async Task LoadMonthsAsync()
+    {
+        if (monthsLoading || stats == null || string.IsNullOrEmpty(userId)) return;
+        monthsLoading = true;
+        var s = stats;
+        var uid = userId;
+        try
+        {
+            MonthsGrid.Clear();
+            MonthsGrid.RowDefinitions.Clear();
+            var first = s.FirstDay ?? s.Today;
+            var firstMonth = new DateTime(first.Year, first.Month, 1);
+            var month = new DateTime(s.Today.Year, s.Today.Month, 1);
+            for (var i = 0; i < 12 && month >= firstMonth; i++, month = month.AddMonths(-1))
+            {
+                var closed = month.AddMonths(1) < DateTime.Today.AddDays(-31);
+                var key = $"month_{uid}_{month:yyyy-MM}_{(s.Masked ? "m" : "r")}";
+                DailyDrinksModel total;
+                MonthCache? cached = null;
+                if (closed)
+                    try { cached = System.Text.Json.JsonSerializer.Deserialize<MonthCache>(Preferences.Get(key, "")); } catch { }
+                if (cached != null)
+                    total = new DailyDrinksModel { Pivo = cached.Pivo, Vino = cached.Vino, Panaky = cached.Panaky };
+                else
+                {
+                    total = await firestoreService.GetMonthTotal(uid, month.Year, month.Month, s.Masked);
+                    if (closed)
+                        Preferences.Set(key, System.Text.Json.JsonSerializer.Serialize(new MonthCache(total.Pivo, total.Vino, total.Panaky)));
+                }
+                if (stats != s) return;   // mezitím se přepnulo jinam
+                AddRow(MonthsGrid, month.ToString("MMMM yyyy", Cs),
+                    total.Total == 0 ? "čistý měsíc" : Cz.Souhrn(total.Pivo, total.Vino, total.Panaky));
+            }
+        }
+        catch (Exception ex)
+        {
+            MonthsGrid.Clear();
+            MonthsGrid.RowDefinitions.Clear();
+            AddRow(MonthsGrid, "", Net.IsNetworkError(ex) ? "Bez signálu nic nenačtu." : $"Nepovedlo se: {ex.Message}");
+        }
+        finally
+        {
+            monthsLoading = false;
+        }
+    }
+
+    // ---------------- tajný režim ----------------
+
+    private bool MaskOn => userId != null && UserSession.Profile?.MaskFor.Contains(userId) == true;
+
+    private void RenderMaskButton() =>
+        MaskButton.Text = MaskOn ? "Tajný režim: zapnutý" : "Tajný režim: vypnutý";
+
+    private async void OnMaskClicked(object sender, EventArgs e)
+    {
+        if (AuthSession.Uid is not string me || string.IsNullOrEmpty(userId) || userId == me) return;
+        await UserSession.EnsureReadyAsync();
+        if (UserSession.Profile is not { } profile) return;
+        var who = string.IsNullOrWhiteSpace(nick) ? "Tenhle kámoš" : nick;
+        var on = !MaskOn;
+        var ok = await Listek.ConfirmAsync(this, on ? "Zapnout tajný režim?" : "Vypnout tajný režim?",
+            on ? $"{who} uvidí ve tvých statistikách jen asi třetinu, nedozví se, že piješ teď ani kde, " +
+                 "nepřijdou mu oznámení o tvém pití a neuvidí tvoje promile. Nic nepozná."
+               : $"{who} zase uvidí skutečná čísla, kdo teď pije, kde sedíš i oznámení.",
+            on ? "Zapnout" : "Vypnout");
+        if (!ok) return;
+
+        var list = profile.MaskFor.Where(id => id != userId).ToList();
+        if (on) list.Add(userId);
+        try
+        {
+            MaskButton.IsEnabled = false;
+            await FirestoreRest.PatchAsync($"Users/{me}", new() { ["MaskFor"] = list });
+            profile.MaskFor = list;
+            UserSession.SetProfile(profile);
+            RenderMaskButton();
+        }
+        catch (Exception ex)
+        {
+            await Listek.AlertAsync(this, "Nepovedlo se", Net.IsNetworkError(ex) ? "Bez signálu to nepůjde." : ex.Message);
+        }
+        finally
+        {
+            MaskButton.IsEnabled = true;
+        }
     }
 
     private async void OnRemoveFriendClicked(object sender, EventArgs e)

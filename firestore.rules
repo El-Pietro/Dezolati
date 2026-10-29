@@ -152,6 +152,37 @@ service cloud.firestore {
                     && v().At == request.time;
     }
 
+    // Adresář pro hledání kámošů a „Možná znáš“: jeden dokument Directory/users { uid: { N: přezdívka, F: [uid kámošů], V: verze appky } }.
+    // Číst může každý přihlášený, každý mění jen svůj řádek.
+    match /Directory/{doc} {
+      function v() { return request.resource.data; }
+      function old() { return resource == null ? {} : resource.data; }
+      allow read: if signedIn() && doc == 'users';
+      allow create, update: if signedIn() && doc == 'users'
+                            && v().diff(old()).affectedKeys().hasOnly([me()])
+                            && v()[me()] is map
+                            && v()[me()].keys().hasOnly(['N', 'F', 'V'])
+                            && (!('V' in v()[me()]) || (v()[me()].V is string && v()[me()].V.size() <= 20))
+                            && v()[me()].N is string && v()[me()].N.size() > 0 && v()[me()].N.size() <= 60
+                            && (!('F' in v()[me()]) || (v()[me()].F is list && v()[me()].F.size() <= 500));
+    }
+
+    // Návrhy poznámek do OpenStreetMap: vytvořit může kdokoli (za sebe), číst a vyřizovat jen správce.
+    match /OsmReports/{id} {
+      function v() { return request.resource.data; }
+      allow create: if signedIn()
+                    && v().keys().hasOnly(['PubId', 'Name', 'Kind', 'Lat', 'Lon', 'What', 'By', 'ByNick', 'At'])
+                    && v().By == me()
+                    && v().What in ['closed', 'reopened', 'added']
+                    && v().PubId is string && v().PubId.size() <= 60
+                    && v().Name is string && v().Name.size() <= 120
+                    && v().Kind is string && v().Kind.size() <= 20
+                    && v().ByNick is string && v().ByNick.size() <= 80
+                    && v().Lat is number && v().Lon is number
+                    && v().At == request.time;
+      allow read, delete: if signedIn() && me() == 'rB2bUxNHHzbfyHx3mYW4JW61l3N2';   // správce (UsageService.AdminUid)
+    }
+
     // DrinkSessions (sezení pití) a PubPresence zapisuje jen server – z appky nic.
 
     // PubPresence (kdo už dnes v které hospodě oznámil, že sedí) zapisuje jen server – z appky nic.

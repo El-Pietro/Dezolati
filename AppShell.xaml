@@ -50,5 +50,25 @@
         Title="Spotřeba"
         ContentTemplate="{DataTemplate pages:Spotreba}"
         Route="Spotreba" />
+    <ShellContent
+        Title="Hry"
+        ContentTemplate="{DataTemplate pages:Hry}"
+        Route="Hry" />
+    <ShellContent
+        Title="Šipky"
+        ContentTemplate="{DataTemplate pages:Sipky}"
+        Route="Sipky" />
+    <ShellContent
+        Title="Kostky"
+        ContentTemplate="{DataTemplate pages:Kostky}"
+        Route="Kostky" />
+    <ShellContent
+        Title="Kostky zjednodušené"
+        ContentTemplate="{DataTemplate pages:Kostky2}"
+        Route="Kostky2" />
+    <ShellContent
+        Title="Návrhy do OSM"
+        ContentTemplate="{DataTemplate pages:OsmNavrhy}"
+        Route="OsmNavrhy" />
 
 </Shell>

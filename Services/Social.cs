@@ -64,9 +64,16 @@ namespace Dezolati.Services
     public sealed record DrinkingFriend(
         string Uid, string Nick, DateTime LastDrinkAt,
         string? PubName, double? PubLat, double? PubLon,
-        string? SessionId, string? Gender, string? LastKind = null)
+        string? SessionId, string? Gender, string? LastKind = null,
+        double? PromileValue = null, DateTime? PromileAt = null, DateTime? LastDrinkDay = null)
     {
         public bool HasPubLocation => PubLat != null && PubLon != null;
+
+        /// <summary>Jeho aktuální hospodský den (kvůli „dnes vypito“).</summary>
+        public DateTime PubDayNow => PubDay.Resolve(DateTime.Now, LastDrinkAt.ToLocalTime(), LastDrinkDay);
+
+        /// <summary>Promile teď (z odhadu při jeho zápisu, s odbouráváním). null = nesdílí / střízlivý.</summary>
+        public (double Promile, DateTime SoberAtLocal)? PromileNow => Promile.FromShared(PromileValue, PromileAt);
 
         /// <summary>Co si zapsal naposledy (starší verze appky to neposílají → pivo).</summary>
         public string Emoji => LastKind switch { "vino" => "🍷", "panak" => "🥃", _ => "🍺" };
@@ -142,8 +149,9 @@ namespace Dezolati.Services
                     {
                         var uid = d.Str("UserId") ?? d.Id;
                         var level = d.Has("ShareLevel") ? (int)d.Int("ShareLevel")
-                            : d.Fields["SharePub"]?["booleanValue"]?.GetValue<bool>() == true ? 2 : 1;
+                            : 2;   // výchozí vše zapnuté
                         if (level == 0 && uid != me) continue;   // nechce, aby se vědělo, že pije
+                        if (Mask.AppliesTo(d)) continue;          // tajný režim: pro mě „nepije“
 
                         var pubAt = d.Time("CurrentPubAt");
                         var pubFresh = level == 2 && pubAt is DateTime pa && DateTime.UtcNow - pa < Window;
@@ -157,7 +165,10 @@ namespace Dezolati.Services
                             pubFresh ? Dbl("CurrentPubLon") : null,
                             d.Str("SessionId"),
                             d.Str("Gender"),
-                            d.Str("LastDrinkKind")));
+                            d.Str("LastDrinkKind"),
+                            FirestoreService.PromileOf(d).Value,
+                            FirestoreService.PromileOf(d).At,
+                            PubDay.Parse(d.Str("LastDrinkDay"))));
                     }
                 }
             }
@@ -251,6 +262,32 @@ namespace Dezolati.Services
             MarkReacted(sessionId);
             FriendsNow.Invalidate();
             return true;
+        }
+
+        // ---------------- přijatá připití (z oznámení, bez čtení) ----------------
+
+        private const string KeyReceived = "cheers_received";
+
+        /// <summary>Přišlo připití (oznámení) – stránka Kámoši si ho připíše hned. Může přijít z jiného vlákna.</summary>
+        public static event Action<CheerInfo, string>? Received;
+
+        private sealed record ReceivedCheer(string Session, string FromUid, string FromNick, string Emoji, DateTime At);
+
+        /// <summary>
+        /// Uložit přijaté připití (pro spojené oznámení) a dát vědět stránce. Vrací všechna připití
+        /// k tomuhle sezení (nové sezení po 3h pauze = jiné id → začíná se znovu).
+        /// </summary>
+        public static List<CheerInfo> OnReceived(string sessionId, string fromUid, string fromNick, string emoji)
+        {
+            List<ReceivedCheer> list;
+            try { list = JsonSerializer.Deserialize<List<ReceivedCheer>>(Preferences.Get(KeyReceived, "[]")) ?? new(); }
+            catch { list = new(); }
+            list = list.Where(c => c.Session == sessionId && c.FromUid != fromUid).ToList();
+            list.Add(new ReceivedCheer(sessionId, fromUid, fromNick, emoji, DateTime.UtcNow));
+            try { Preferences.Set(KeyReceived, JsonSerializer.Serialize(list)); } catch { }
+            var info = new CheerInfo(fromUid, fromNick, emoji, DateTime.UtcNow);
+            try { Received?.Invoke(info, sessionId); } catch { }
+            return list.Select(c => new CheerInfo(c.FromUid, c.FromNick, c.Emoji, c.At)).ToList();
         }
 
         /// <summary>Kdo mi připil na moje sezení (čtení = počet reakcí, min. 1).</summary>

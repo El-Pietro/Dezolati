@@ -113,20 +113,30 @@ namespace Dezolati.Services
         /// <summary>
         /// Hospodský den + hospoda, kde dotyčný naposledy zapisoval (jen když ji hlásí). 1 čtení (u sebe 0).
         /// </summary>
-        private async Task<(DateTime Day, string? PubName, DateTime? PubAt, Dictionary<string, FavoritePub> Favorites)> GetDayAndPubOf(string userId)
+        private async Task<(DateTime Day, string? PubName, DateTime? PubAt, Dictionary<string, FavoritePub> Favorites, FsDoc? User)> GetDayAndPubOf(string userId)
         {
             if (userId == AuthSession.Uid)
             {
                 await UserSession.EnsureReadyAsync();
                 var day = UserSession.CurrentPubDay;
                 return (day, PushService.LastPubName(userId, day), UserSession.LastDrinkAt,
-                    UserSession.Profile?.FavoritePubs ?? new());
+                    UserSession.Profile?.FavoritePubs ?? new(), null);
             }
 
             var user = await FirestoreRest.GetAsync($"Users/{userId}");
             var friendDay = PubDay.Resolve(DateTime.Now, user?.Time("LastDrinkAt")?.ToLocalTime(), PubDay.Parse(user?.Str("LastDrinkDay")));
             return (friendDay, user?.Str("CurrentPubName"), user?.Time("CurrentPubAt"),
-                user == null ? new() : ParseFavorites(user));
+                user == null ? new() : ParseFavorites(user), user);
+        }
+
+        /// <summary>Odhad promile uložený v profilu (null = nesdílí).</summary>
+        internal static (double? Value, DateTime? At) PromileOf(FsDoc? user)
+        {
+            if (user == null) return (null, null);
+            var node = user.Fields["PromileValue"];
+            double? v = node?["doubleValue"]?.GetValue<double>()
+                        ?? (node?["integerValue"] != null ? (double?)FsDoc.ValueToLong(node) : null);
+            return (v, user.Time("PromileAt"));
         }
 
         /// <summary>
@@ -148,20 +158,32 @@ namespace Dezolati.Services
             var newVisit = place.PubId != null && place.PubId != last.PubId;
             var kc = await Prices.ForDrinkAsync(pivo, vino, panaky, place.PubId);
 
+            Promile.Log(userId, day, now, pivo, vino, panaky);   // dřív než zápis – odhad promile jde s ním
             DrinkQueue.Enqueue(userId, new PendingDrink(Guid.NewGuid().ToString("N"), now, day,
                 pivo, vino, panaky, Correction: false, Name: name ?? UserSession.Profile?.Nickname,
                 PubId: place.PubId, PubName: place.PubName, SharePub: PushService.SharePub,
                 Place: place.Place, Kc: kc, NewVisit: newVisit,
-                ShareDrink: PushService.ShareDrink, PubLat: place.Lat, PubLon: place.Lon));
+                ShareDrink: PushService.ShareDrink, PubLat: place.Lat, PubLon: place.Lon,
+                PromileSet: true, PromileValue: SharedPromile(userId)));
             if (PushService.DetectPub && place.Place != null)
                 PushService.RememberPlace(userId, day, place);   // pro lístek: „📍 U Peťky“
-            Promile.Log(userId, day, now, pivo, vino, panaky);
             UserSession.OnDrinkRecorded(now, day);
 
             // další připomínka za X minut (lokální notifikace)
             try { await Reminders.OnDrinkRecordedAsync(day, pivo, vino, panaky, fromReminder); } catch { }
 
             return await DrinkQueue.FlushAsync(userId);
+        }
+
+        /// <summary>
+        /// Odhad promile pro kámoše (zapíše se s pitím do profilu). Jen když počítám promile a hlásím, že piju;
+        /// jinak null = v profilu se smaže. Váha nikam neodchází, jen výsledek.
+        /// </summary>
+        private static double? SharedPromile(string userId)
+        {
+            if (!PushService.ShareDrink) return null;
+            var est = Promile.Estimate(userId, UserSession.Profile?.Gender);
+            return est is { } e ? Math.Round(e.Promile, 3) : null;
         }
 
         /// <summary>
@@ -177,12 +199,13 @@ namespace Dezolati.Services
 
             // škrtnutí ubere i z místa, kde se ten den pilo naposledy – jinak by „Kde se pije“ nesedělo
             // (2 piva na lístku, ale 6 kousků v místech)
+            var isToday = day.Date == UserSession.CurrentPubDay.Date;
+            if (isToday)
+                Promile.Log(userId, day, DateTime.UtcNow, -pivo, -vino, -panaky);
             DrinkQueue.Enqueue(userId, new PendingDrink(Guid.NewGuid().ToString("N"), DateTime.UtcNow, day.Date,
                 -pivo, -vino, -panaky, Correction: true, Name: UserSession.Profile?.Nickname, Kc: -kc,
-                Place: last.Place));
+                Place: last.Place, PromileSet: isToday, PromileValue: isToday ? SharedPromile(userId) : null));
             Reminders.OnCorrection(day, pivo, vino, panaky);
-            if (day.Date == UserSession.CurrentPubDay.Date)
-                Promile.Log(userId, day, DateTime.UtcNow, -pivo, -vino, -panaky);
 
             return await DrinkQueue.FlushAsync(userId);
         }
@@ -195,13 +218,15 @@ namespace Dezolati.Services
         {
             if (day.Date < DateTime.Today.AddDays(-31)) throw new InvalidOperationException("Upravit jde jen posledních 30 dní.");
             var kc = Prices.Default(pivo, vino, panaky);
-            DrinkQueue.Enqueue(userId, new PendingDrink(Guid.NewGuid().ToString("N"), DateTime.UtcNow, day.Date,
-                pivo, vino, panaky, Correction: true, Name: UserSession.Profile?.Nickname, Kc: kc));
-            if (day.Date == UserSession.CurrentPubDay.Date)
+            var isToday = day.Date == UserSession.CurrentPubDay.Date;
+            if (isToday)
             {
                 Reminders.Adjust(day, pivo, vino, panaky);
                 Promile.Log(userId, day, DateTime.UtcNow, pivo, vino, panaky);
             }
+            DrinkQueue.Enqueue(userId, new PendingDrink(Guid.NewGuid().ToString("N"), DateTime.UtcNow, day.Date,
+                pivo, vino, panaky, Correction: true, Name: UserSession.Profile?.Nickname, Kc: kc,
+                PromileSet: isToday, PromileValue: isToday ? SharedPromile(userId) : null));
             return await DrinkQueue.FlushAsync(userId);
         }
 
@@ -211,7 +236,7 @@ namespace Dezolati.Services
         /// </summary>
         public async Task<UserStats> GetStats(string userId)
         {
-            var (today, pubName, pubAt, favorites) = await GetDayAndPubOf(userId);
+            var (today, pubName, pubAt, favorites, userDoc) = await GetDayAndPubOf(userId);
             var since = IsoDay(today.AddDays(-29));
             var byUser = new[] { Filter.Eq("UserId", userId) };
 
@@ -234,8 +259,11 @@ namespace Dezolati.Services
             var placesTask = Optional(FirestoreRest.AggregateAsync("DailyDrinks", byUser,
                 new Dictionary<string, string> { ["home"] = "PlaceHome", ["other"] = "PlaceOther", ["pub"] = "PlacePub" }), "místa");
             var pubsTask = Optional(GetPubStats(userId), "hospody");
+            // první zápis (průměr na den) – index UserId + Day vzestupně
+            var firstTask = Optional(FirestoreRest.QueryAsync("DailyDrinks", byUser,
+                orderBy: "Day", descending: false, limit: 3), "první den");
 
-            await Task.WhenAll(aggTask, lastTask, recordTask, kcTask, placesTask, pubsTask);
+            await Task.WhenAll(aggTask, lastTask, recordTask, kcTask, placesTask, pubsTask, firstTask);
 
             var agg = aggTask.Result;
             long Get(string k) => agg.TryGetValue(k, out var v) ? v : 0;
@@ -243,11 +271,16 @@ namespace Dezolati.Services
             foreach (var kv in (kcTask.Result ?? new()).Concat(placesTask.Result ?? new())) agg2[kv.Key] = kv.Value;
             long Get2(string k) => agg2.TryGetValue(k, out var v) ? v : 0;
 
-            return new UserStats
+            var (promile, promileAt) = PromileOf(userDoc);
+            var stats = new UserStats
             {
                 Today = today,
+                Gender = userId == AuthSession.Uid ? UserSession.Profile?.Gender : userDoc?.Str("Gender"),
+                PromileValue = promile,
+                PromileAt = promileAt,
                 Totals = new DailyDrinksModel { Pivo = (int)Get("pivo"), Vino = (int)Get("vino"), Panaky = (int)Get("panaky") },
                 Days = (int)Get("days"),
+                FirstDay = firstTask.Result?.Select(ToDaily).FirstOrDefault(d => d.Total > 0)?.Day,
                 Record = recordTask.Result.Select(ToDaily).FirstOrDefault(r => r.Total > 0),
                 Last30 = lastTask.Result.Select(ToDaily).OrderByDescending(d => d.Day).ToList(),
                 CurrentPubName = pubName,
@@ -259,6 +292,68 @@ namespace Dezolati.Services
                 Pubs = pubsTask.Result ?? new(),
                 FavoritePubs = favorites
             };
+            if (Mask.AppliesTo(userDoc)) ApplyMask(stats);
+            return stats;
+        }
+
+        /// <summary>Tajný režim: třetina každého dne, součty z toho, nic „kde teď sedí“ ani promile.</summary>
+        private static void ApplyMask(UserStats s)
+        {
+            var raw30 = new DailyDrinksModel
+            {
+                Pivo = s.Last30.Sum(d => d.Pivo), Vino = s.Last30.Sum(d => d.Vino), Panaky = s.Last30.Sum(d => d.Panaky)
+            };
+            s.Last30 = s.Last30.Select(Mask.Day).ToList();
+            // celkem = zamaskovaných 30 dní + třetina zbytku (ať „celkem“ nikdy není míň než „30 dní“)
+            var rest = Mask.Shrink(new DailyDrinksModel
+            {
+                Pivo = s.Totals.Pivo - raw30.Pivo, Vino = s.Totals.Vino - raw30.Vino, Panaky = s.Totals.Panaky - raw30.Panaky
+            });
+            s.Totals = new DailyDrinksModel
+            {
+                Pivo = s.Last30.Sum(d => d.Pivo) + rest.Pivo,
+                Vino = s.Last30.Sum(d => d.Vino) + rest.Vino
+            };
+            if (s.Record != null) s.Record = Mask.Day(s.Record);
+            if (s.Record != null && s.Last30.FirstOrDefault(d => d.Total > s.Record.Total) is { } higher) s.Record = higher;
+            s.Pubs = s.Pubs.Select(p => p with { Count = Mask.Count(p.Count), Kc = 0 }).ToList();
+            s.CurrentPubName = null;
+            s.CurrentPubAt = null;
+            s.PromileValue = null;
+            s.PromileAt = null;
+            s.Masked = true;
+        }
+
+        /// <summary>
+        /// Dny jednoho měsíce (statistika po měsících). Čtení = dny s pitím v tom měsíci.
+        /// Tajný režim se uplatní stejně jako ve statistikách.
+        /// </summary>
+        public async Task<DailyDrinksModel> GetMonthTotal(string userId, int year, int month, bool masked)
+        {
+            var from = new DateTime(year, month, 1);
+            var docs = await FirestoreRest.QueryAsync("DailyDrinks", new[]
+            {
+                Filter.Eq("UserId", userId), Filter.Gte("Day", IsoDay(from)), Filter.Lt("Day", IsoDay(from.AddMonths(1)))
+            });
+            var days = docs.Select(ToDaily).Select(d => masked ? Mask.Day(d) : d).ToList();
+            return new DailyDrinksModel
+            {
+                Day = from,
+                Pivo = days.Sum(d => d.Pivo), Vino = days.Sum(d => d.Vino), Panaky = days.Sum(d => d.Panaky)
+            };
+        }
+
+        /// <summary>Jednorázový úklid: smaže moje denní součty před daným dnem (testovací data). Vrací počet.</summary>
+        public async Task<int> DeleteMyDaysBefore(DateTime before)
+        {
+            var uid = AuthSession.Uid ?? throw new InvalidOperationException("Nejsi přihlášený.");
+            var docs = await FirestoreRest.QueryAsync("DailyDrinks", new[]
+            {
+                Filter.Eq("UserId", uid), Filter.Lt("Day", IsoDay(before))
+            });
+            await FirestoreRest.CommitAsync(docs.Select(d => FirestoreRest.DeleteWrite($"DailyDrinks/{d.Id}")));
+            LocalCache.MarkStale();
+            return docs.Count;
         }
 
         /// <summary>Doplňková část statistik: chyba = null (a do logu), ne pád celé stránky.</summary>
@@ -518,10 +613,10 @@ namespace Dezolati.Services
             Email = d.Str("Email"),
             NotifyFriends = d.Fields["NotifyFriends"]?["booleanValue"]?.GetValue<bool>() ?? true,
             SharePub = d.Fields["SharePub"]?["booleanValue"]?.GetValue<bool>() ?? false,
-            // starší profily úroveň nemají: kdo hlásil hospodu = 2, jinak výchozí 1 (hlásit, že piju)
-            ShareLevel = d.Has("ShareLevel") ? (int)Math.Clamp(d.Int("ShareLevel"), 0, 2)
-                : d.Fields["SharePub"]?["booleanValue"]?.GetValue<bool>() == true ? 2 : 1,
-            FavoritePubs = ParseFavorites(d)
+            // starší profily úroveň nemají: výchozí 2 (vše zapnuté, kdo nechce, vypne)
+            ShareLevel = d.Has("ShareLevel") ? (int)Math.Clamp(d.Int("ShareLevel"), 0, 2) : 2,
+            FavoritePubs = ParseFavorites(d),
+            MaskFor = d.StrArray("MaskFor")
         };
 
         /// <summary>FavoritePubs: mapa id → { Name, Kind, Lat, Lon }.</summary>

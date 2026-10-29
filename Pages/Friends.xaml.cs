@@ -16,7 +16,58 @@ public partial class Friends : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
+        Cheers.Received += OnCheerReceived;
         await LoadFriendsAndRequests();
+    }
+
+    protected override void OnDisappearing()
+    {
+        base.OnDisappearing();
+        Cheers.Received -= OnCheerReceived;
+    }
+
+    // ---------------- kdo mi připil ----------------
+
+    private readonly List<CheerInfo> myCheers = new();
+    private string? mySession;
+
+    /// <summary>Připití z oznámení → hned nahoru (bez čtení).</summary>
+    private void OnCheerReceived(CheerInfo cheer, string sessionId) => MainThread.BeginInvokeOnMainThread(() =>
+    {
+        if (mySession != null && mySession != sessionId) myCheers.Clear();   // nové sezení
+        mySession = sessionId;
+        myCheers.RemoveAll(c => c.FromUid == cheer.FromUid);
+        myCheers.Add(cheer);
+        RenderCheers();
+    });
+
+    /// <summary>„Připili si s tebou: Bílas 🍺, Mates 🥃“ – ťuk na jméno otevře jeho statistiky.</summary>
+    private void RenderCheers()
+    {
+        CheersBox.Clear();
+        CheersBox.IsVisible = myCheers.Count > 0;
+        if (myCheers.Count == 0) return;
+        CheersBox.Add(new Label { Text = "Připili si s tebou: ", Style = AppStyle("Small") });
+        for (var i = 0; i < myCheers.Count; i++)
+        {
+            var c = myCheers[i];
+            var label = new Label
+            {
+                Text = $"{c.FromNick} {c.Emoji}{(i < myCheers.Count - 1 ? ", " : "")}",
+                Style = AppStyle("Small"), TextDecorations = TextDecorations.Underline
+            };
+            var tap = new TapGestureRecognizer();
+            tap.Tapped += async (_, _) =>
+            {
+                if (friends.All(f => f.UserId != c.FromUid)) return;   // jen kámoši
+                await Shell.Current.GoToAsync("//StatsFriend", new Dictionary<string, object>
+                {
+                    ["userId"] = c.FromUid, ["nick"] = c.FromNick, ["back"] = "//Friends"
+                });
+            };
+            label.GestureRecognizers.Add(tap);
+            CheersBox.Add(label);
+        }
     }
 
     private List<UserModel> friends = new();
@@ -40,6 +91,9 @@ public partial class Friends : ContentPage
             FriendBadge.Set(requests.Count);   // odznak na lístku bez dalšího čtení
             FriendsNow.RememberFriends(friends);
             RenderFriends(new());               // hned seznam, kdo pije se doplní
+            // můj řádek v adresáři (přezdívka + kámoši) – zapíše se jen, když se něco změnilo
+            _ = NickDirectory.PublishFriendsAsync(UserSession.Profile?.Nickname, friends);
+            if (SuggestStack.IsVisible) _ = LoadSuggestionsAsync();
             _ = LoadNowAsync();
         }
         catch (Exception ex)
@@ -59,16 +113,11 @@ public partial class Friends : ContentPage
             RenderFriends(all.Where(f => f.Uid != AuthSession.Uid).ToList());
 
             // kdo mi připil na moje sezení (sezení končí 3h pauzou → pak už tu nic není)
-            CheersLabel.IsVisible = false;
+            myCheers.Clear();
+            mySession = me?.SessionId;
             if (me?.SessionId is string session)
-            {
-                var cheers = await Cheers.ForMeAsync(session);
-                if (cheers.Count > 0)
-                {
-                    CheersLabel.Text = "Připili si s tebou: " + string.Join(", ", cheers.Select(c => $"{c.FromNick} {c.Emoji}"));
-                    CheersLabel.IsVisible = true;
-                }
-            }
+                myCheers.AddRange(await Cheers.ForMeAsync(session));
+            RenderCheers();
         }
         catch (Exception ex)
         {
@@ -186,6 +235,119 @@ public partial class Friends : ContentPage
     private static Style? AppStyle(string key) =>
         Application.Current?.Resources.TryGetValue(key, out var s) == true ? s as Style : null;
 
+    // ---------------- Možná znáš ----------------
+
+    private void OnSuggestTapped(object? sender, TappedEventArgs e)
+    {
+        SuggestStack.IsVisible = !SuggestStack.IsVisible;
+        SuggestToggle.Text = SuggestStack.IsVisible ? "(schovat)" : "(ukázat)";
+        if (SuggestStack.IsVisible) _ = LoadSuggestionsAsync();
+    }
+
+    private async Task LoadSuggestionsAsync()
+    {
+        SuggestStack.Clear();
+        SuggestStack.Add(new Label { Text = "Hledám…", Style = AppStyle("Small") });
+        var dir = await NickDirectory.GetAsync();
+        var list = NickDirectory.Suggest(dir, friends.Select(f => f.UserId));
+        SuggestStack.Clear();
+        if (list.Count == 0)
+        {
+            SuggestStack.Add(new Label
+            {
+                Text = dir.Count == 0 && !Net.IsOnline ? "Bez signálu nic nevymyslím." : "Všechny už máš. Nebo tu kromě vás nikdo nepije.",
+                Style = AppStyle("Small")
+            });
+            return;
+        }
+        foreach (var s in list)
+        {
+            var row = new Grid
+            {
+                ColumnDefinitions = new ColumnDefinitionCollection(new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto)),
+                ColumnSpacing = 6
+            };
+            var text = new FormattedString();
+            text.Spans.Add(InkSpan(s.Nick, "FontLabel", "Ink"));
+            if (s.Mutual > 0)
+                text.Spans.Add(InkSpan($"  ({s.Mutual} {Cz.Plural(s.Mutual, "společný", "společní", "společných")})", "FontSmall", "InkSoft"));
+            row.Add(new Label { FormattedText = text, VerticalOptions = LayoutOptions.Center, LineBreakMode = LineBreakMode.TailTruncation, MaxLines = 1 }, 0, 0);
+            var add = new PencilButton
+            {
+                Text = "Přidat", Variant = PencilVariant.Secondary, WidthRequest = 96, HeightRequest = 38, FontSize = 17
+            };
+            var suggestion = s;
+            add.Clicked += async (_, _) =>
+            {
+                add.IsEnabled = false;
+                if (await RequestAsync(new UserModel { Id = suggestion.Uid, UserId = suggestion.Uid, Nickname = suggestion.Nick }))
+                    add.Text = "Posláno";
+                else
+                    add.IsEnabled = true;
+            };
+            row.Add(add, 1, 0);
+            SuggestStack.Add(row);
+        }
+    }
+
+    // ---------------- hledání přezdívky (v telefonu) ----------------
+
+    private Dictionary<string, DirectoryEntry>? directory;
+
+    private async void OnNickFocused(object? sender, FocusEventArgs e)
+    {
+        directory = await NickDirectory.GetAsync();   // 1 čtení max. 3× denně, jinak z telefonu
+        RenderSearch();
+    }
+
+    private void OnNickTextChanged(object? sender, TextChangedEventArgs e) => RenderSearch();
+
+    private void RenderSearch()
+    {
+        SearchList.Clear();
+        var text = NicknameEntry.Text ?? "";
+        var found = directory == null ? new List<DirectoryEntry>() : NickDirectory.Search(directory, text, 4);
+        var friendIds = friends.Select(f => f.UserId).ToHashSet();
+        found = found.Where(f => !friendIds.Contains(f.Uid)
+                                 && !string.Equals(f.Nick, text.Trim(), StringComparison.Ordinal)).ToList();
+        SearchList.IsVisible = found.Count > 0;
+        foreach (var f in found)
+        {
+            var label = new Label { Text = f.Nick, Style = AppStyle("Body"), Padding = new Thickness(6, 4) };
+            var tap = new TapGestureRecognizer();
+            var nick = f.Nick;
+            tap.Tapped += (_, _) =>
+            {
+                NicknameEntry.Text = nick;   // pak „Poslat žádost“
+                SearchList.Clear();
+                SearchList.IsVisible = false;
+            };
+            label.GestureRecognizers.Add(tap);
+            SearchList.Add(label);
+        }
+    }
+
+    /// <summary>Poslat žádost; true = odesláno.</summary>
+    private async Task<bool> RequestAsync(UserModel target)
+    {
+        if (AuthSession.Uid is not string userId) return false;
+        try
+        {
+            var problem = await firestoreService.SendFriendRequest(userId, target);
+            if (problem != null)
+            {
+                await Listek.AlertAsync(this, "Hmm", problem);
+                return false;
+            }
+            return true;
+        }
+        catch (Exception ex)
+        {
+            await Listek.AlertAsync(this, "Chyba", Net.IsNetworkError(ex) ? "Bez signálu to nepůjde." : ex.Message);
+            return false;
+        }
+    }
+
     private async void OnAddFriendClicked(object sender, EventArgs e)
     {
         var nickname = NicknameEntry.Text?.Trim();
@@ -201,10 +363,14 @@ public partial class Friends : ContentPage
         {
             AddButton.IsEnabled = false;
 
-            var friend = await firestoreService.FindUserByNickname(nickname);
+            // z adresáře v telefonu (bez čtení), jinak přesná shoda na serveru (starší verze appky v adresáři nejsou)
+            var hit = directory?.Values.FirstOrDefault(d => string.Equals(d.Nick, nickname, StringComparison.CurrentCultureIgnoreCase));
+            var friend = hit != null
+                ? new UserModel { Id = hit.Uid, UserId = hit.Uid, Nickname = hit.Nick }
+                : await firestoreService.FindUserByNickname(nickname);
             if (friend == null)
             {
-                await Listek.AlertAsync(this, "Nic", $"Žádný dezolát „{nickname}“ tu není. Pozor na velká/malá písmena.");
+                await Listek.AlertAsync(this, "Nic", $"Žádný dezolát „{nickname}“ tu není.");
                 return;
             }
 
@@ -216,6 +382,8 @@ public partial class Friends : ContentPage
             }
 
             NicknameEntry.Text = "";
+            SearchList.Clear();
+            SearchList.IsVisible = false;
             await Listek.AlertAsync(this, "Hotovo", "Žádost odeslána.");
         }
         catch (Exception ex)

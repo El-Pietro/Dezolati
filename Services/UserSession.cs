@@ -79,6 +79,8 @@ namespace Dezolati.Services
             }
 
             Profile = FirestoreService.ToUser(doc);
+            PushService.ShareLevel = Profile.ShareLevel;   // hlášení platí i bez otevření Nastavení (třeba po přeinstalaci)
+            _ = NickDirectory.PublishNickAsync(Profile.Nickname);   // v adresáři pro hledání (zapíše se jen poprvé / při změně)
             LastDrinkAt = doc.Time("LastDrinkAt");
             LastDrinkDay = PubDay.Parse(doc.Str("LastDrinkDay"));
             ApplyPendingLastDrink(uid);

@@ -21,7 +21,9 @@ namespace Dezolati.Services
         bool NewVisit = false,  // první zápis dne v téhle hospodě (statistika návštěv)
         bool ShareDrink = false,// hlásit kámošům, že piju (server pošle „X si dala pivo“ při novém sezení)
         double? PubLat = null,  // poloha hospody – kámoši ji uvidí na mapě (jen při hlášení i s polohou)
-        double? PubLon = null);
+        double? PubLon = null,
+        bool PromileSet = false,       // zapsat odhad promile do profilu (kámoši ho uvidí); null hodnota = smazat
+        double? PromileValue = null);
 
     /// <summary>
     /// Fronta zápisů v telefonu. Každý zápis jde nejdřív sem a hned se zkusí odeslat.
@@ -203,25 +205,42 @@ namespace Dezolati.Services
             //    + hospoda pro kámoše („teď sedí v …“) – jen když ji hlásí, jinak se smaže
             if (!d.Correction)
             {
-                var shared = d.SharePub && d.PubId != null;
+                // „I kde“: hospoda, nebo doma / venku i s polohou (kámoši to chtějí vidět na mapě)
+                var placeName = d.PubId != null ? d.PubName
+                    : d.Place == Services.Place.Home ? "doma"
+                    : d.Place == Services.Place.Other ? "venku" : null;
+                var shared = d.SharePub && placeName != null;
                 // emoji u jména v Kámoších: čeho bylo v zápisu nejvíc (remíza → tvrdší)
                 var kind = d.Panaky > 0 && d.Panaky >= d.Pivo && d.Panaky >= d.Vino ? "panak"
                          : d.Vino > 0 && d.Vino >= d.Pivo ? "vino" : "pivo";
-                writes.Add(FirestoreRest.SetWrite($"Users/{uid}",
-                    new()
-                    {
-                        ["UserId"] = uid,          // „kdo teď pije“ hledá kámoše podle UserId
-                        ["LastDrinkAt"] = d.At,
-                        ["LastDrinkDay"] = key,
-                        ["LastDrinkKind"] = kind,
-                        ["CurrentPubId"] = shared ? d.PubId : null,
-                        ["CurrentPubName"] = shared ? d.PubName : null,
-                        ["CurrentPubAt"] = shared ? d.At : null,
-                        ["CurrentPubLat"] = shared ? d.PubLat : null,
-                        ["CurrentPubLon"] = shared ? d.PubLon : null
-                    },
-                    mask: new[] { "UserId", "LastDrinkAt", "LastDrinkDay", "LastDrinkKind", "CurrentPubId", "CurrentPubName", "CurrentPubAt",
-                                  "CurrentPubLat", "CurrentPubLon" }));
+                var userFields = new Dictionary<string, object?>
+                {
+                    ["UserId"] = uid,          // „kdo teď pije“ hledá kámoše podle UserId
+                    ["LastDrinkAt"] = d.At,
+                    ["LastDrinkDay"] = key,
+                    ["LastDrinkKind"] = kind,
+                    ["CurrentPubId"] = shared ? d.PubId : null,
+                    ["CurrentPubName"] = shared ? placeName : null,
+                    ["CurrentPubAt"] = shared ? d.At : null,
+                    ["CurrentPubLat"] = shared ? d.PubLat : null,
+                    ["CurrentPubLon"] = shared ? d.PubLon : null
+                };
+                if (d.PromileSet)
+                {
+                    userFields["PromileValue"] = d.PromileValue;
+                    userFields["PromileAt"] = d.PromileValue != null ? d.At : null;
+                }
+                writes.Add(FirestoreRest.SetWrite($"Users/{uid}", userFields, mask: userFields.Keys.ToList()));
+            }
+            else if (d.PromileSet)
+            {
+                // škrtnutí / dopsání dneška → opravit i odhad promile, který vidí kámoši
+                var promile = new Dictionary<string, object?>
+                {
+                    ["PromileValue"] = d.PromileValue,
+                    ["PromileAt"] = d.PromileValue != null ? d.At : null
+                };
+                writes.Add(FirestoreRest.SetWrite($"Users/{uid}", promile, mask: promile.Keys.ToList()));
             }
 
             // 4) statistika hospod (kde nejčastěji piju) – jen u skutečného pití v hospodě

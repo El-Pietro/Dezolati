@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:controls="clr-namespace:Dezolati.Controls"
+             x:Class="Dezolati.Pages.Kostky"
+             Title="Kostky">
+    <Grid RowDefinitions="Auto, *">
+        <Image Grid.RowSpan="2" Source="{AppThemeBinding Light=woodlight.jpg, Dark=wooddark.jpg}" Aspect="AspectFill" />
+
+        <BoxView Grid.Row="0" HeightRequest="0" Color="Transparent" InputTransparent="True" Margin="{DynamicResource TopBarMargin}" />
+        <controls:PencilButton Grid.Row="0" Variant="Outline" Text="Zpět" IsVisible="{OnPlatform Default=True, Android=False}"
+                               HorizontalOptions="Start" Margin="{DynamicResource TopBarMargin}" Clicked="OnZpetClicked" />
+
+        <Border Grid.Row="1" Style="{StaticResource Listek}">
+            <ScrollView>
+                <VerticalStackLayout Spacing="6">
+                    <Label x:Name="TitleLabel" Text="Kostky" Style="{StaticResource Title}" />
+
+                    <VerticalStackLayout x:Name="Board" Spacing="2" />
+                    <Label x:Name="EventLabel" Style="{StaticResource Small}" HorizontalTextAlignment="Center" />
+                    <Label x:Name="FinalLabel" Style="{StaticResource FieldLabel}" HorizontalTextAlignment="Center" IsVisible="False" />
+
+                    <!-- tah -->
+                    <Label x:Name="TurnLabel" Style="{StaticResource Heading}" HorizontalTextAlignment="Center" Margin="0,8,0,0" />
+                    <Label x:Name="TurnInfo" Style="{StaticResource Body}" HorizontalTextAlignment="Center" />
+                    <Label x:Name="HintLabel" Style="{StaticResource Small}" HorizontalTextAlignment="Center" />
+
+                    <VerticalStackLayout x:Name="PlayBox" Spacing="6">
+                        <!-- hod appkou (když nejsou kostky): ťuknutím se kostka odloží -->
+                        <HorizontalStackLayout x:Name="RollStack" Spacing="4" HorizontalOptions="Center" />
+                        <controls:PencilButton x:Name="RollButton" Text="Hodit za mě" Variant="Secondary"
+                                               FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                               Clicked="OnRollClicked" />
+
+                        <!-- co odkládám: ťukání na čísla (skutečné kostky) -->
+                        <Label x:Name="SelectionLabel" Style="{StaticResource FieldLabel}" HorizontalTextAlignment="Center" />
+                        <Grid x:Name="PadGrid" ColumnDefinitions="*, *, *, *, *, *, Auto" ColumnSpacing="4" />
+
+                        <controls:PencilButton Text="Odložit a házet dál" Variant="Primary" Clicked="OnKeepClicked" />
+                        <Grid ColumnDefinitions="*, *" ColumnSpacing="10">
+                            <controls:PencilButton Text="Zapsat body" Variant="Secondary" Clicked="OnBankClicked" />
+                            <controls:PencilButton Grid.Column="1" Text="Nic nepadlo" Variant="Danger" Clicked="OnNothingClicked" />
+                        </Grid>
+                    </VerticalStackLayout>
+
+                    <Grid ColumnDefinitions="*, *" ColumnSpacing="10" Margin="0,10,0,0">
+                        <controls:PencilButton x:Name="UndoButton" Text="Zpět o krok" Variant="Secondary"
+                                               FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                               Clicked="OnUndoClicked" />
+                        <controls:PencilButton Grid.Column="1" Text="Konec hry" Variant="Danger"
+                                               FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                               Clicked="OnEndClicked" />
+                    </Grid>
+                </VerticalStackLayout>
+            </ScrollView>
+        </Border>
+    </Grid>
+</ContentPage>

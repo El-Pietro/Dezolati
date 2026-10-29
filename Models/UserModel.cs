@@ -18,9 +18,11 @@
         public bool SharePub { get; set; }
 
         /// <summary>Kámošům: 0 nehlásit, 1 hlásit že piju, 2 i kde (hospoda). SharePub = úroveň 2.</summary>
-        public int ShareLevel { get; set; } = 1;
+        public int ShareLevel { get; set; } = 2;
         /// <summary>Oblíbené hospody (id → název a poloha, ať jsou vidět i mimo stažené čtverce mapy).</summary>
         public Dictionary<string, FavoritePub> FavoritePubs { get; set; } = new();
+        /// <summary>Tajný režim: kámoši (uid), kterým se ukazuje jen třetina pití a nic „kdo teď pije“.</summary>
+        public List<string> MaskFor { get; set; } = new();
 
         public string Display => string.IsNullOrWhiteSpace(Nickname) ? "(bez přezdívky)" : Nickname!;
     }

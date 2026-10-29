@@ -11,21 +11,45 @@
                Source="{AppThemeBinding Light=woodlight.jpg, Dark=wooddark.jpg}"
                Aspect="AspectFill" />
 
-        <!-- Horní lišta: Nastavení vpravo -->
-        <controls:PencilButton Grid.Row="0"
-                               Variant="Outline"
-                               Text="Nastavení"
-                               HorizontalOptions="End"
-                               Margin="{DynamicResource TopBarMargin}"
-                               Clicked="OnSettingsClicked" />
-
-        <!-- Horní lišta: Hospody vlevo -->
-        <controls:PencilButton Grid.Row="0"
-                               Variant="Outline"
-                               Text="Hospody"
-                               HorizontalOptions="Start"
-                               Margin="{DynamicResource TopBarMargin}"
-                               Clicked="OnPubsClicked" />
+        <!-- Horní lišta: Hospody | Hry | Přátelé -->
+        <Grid Grid.Row="0" ColumnDefinitions="Auto, *, Auto" ColumnSpacing="6" Margin="{DynamicResource TopBarMargin}">
+            <controls:PencilButton Grid.Column="0"
+                                   Variant="Outline"
+                                   Text="Hospody"
+                                   Clicked="OnPubsClicked" />
+            <controls:PencilButton Grid.Column="1"
+                                   Variant="Outline"
+                                   Text="Hry"
+                                   HorizontalOptions="Center"
+                                   Clicked="OnGamesClicked" />
+            <!-- Přátelé + odznak s počtem čekajících žádostí -->
+            <Grid Grid.Column="2" HorizontalOptions="End" VerticalOptions="Center">
+                <controls:PencilButton Variant="Outline"
+                                       Text="Přátelé"
+                                       Clicked="OnFriendsClicked" />
+                <Border x:Name="FriendBadgeView"
+                        IsVisible="False"
+                        InputTransparent="True"
+                        BackgroundColor="#C0392B"
+                        Stroke="#F4E7C5"
+                        StrokeThickness="2"
+                        StrokeShape="RoundRectangle 11"
+                        MinimumWidthRequest="22"
+                        HeightRequest="22"
+                        Padding="5,0"
+                        HorizontalOptions="End"
+                        VerticalOptions="Start"
+                        TranslationX="8"
+                        TranslationY="-8">
+                    <Label x:Name="FriendBadgeLabel"
+                           TextColor="White"
+                           FontFamily="OpenSansSemibold"
+                           FontSize="12"
+                           HorizontalTextAlignment="Center"
+                           VerticalTextAlignment="Center" />
+                </Border>
+            </Grid>
+        </Grid>
 
         <!-- Lístek -->
         <Border Grid.Row="1" Style="{StaticResource Listek}" Margin="16,0,16,12">
@@ -91,7 +115,7 @@
             </Grid>
         </Border>
 
-        <!-- Spodní lišta: Statistiky | tácek | Přátelé -->
+        <!-- Spodní lišta: Statistiky | tácek | Nastavení -->
         <Grid Grid.Row="2"
               ColumnDefinitions="*, Auto, *"
               ColumnSpacing="8"
@@ -129,33 +153,13 @@
                 </Grid>
             </Border>
 
-            <!-- Přátelé + odznak s počtem čekajících žádostí -->
-            <Grid Grid.Column="2" HorizontalOptions="End" VerticalOptions="Center">
-                <controls:PencilButton Variant="Outline"
-                                       Text="Přátelé"
-                                       Clicked="OnFriendsClicked" />
-                <Border x:Name="FriendBadgeView"
-                        IsVisible="False"
-                        InputTransparent="True"
-                        BackgroundColor="#C0392B"
-                        Stroke="#F4E7C5"
-                        StrokeThickness="2"
-                        StrokeShape="RoundRectangle 11"
-                        MinimumWidthRequest="22"
-                        HeightRequest="22"
-                        Padding="5,0"
-                        HorizontalOptions="End"
-                        VerticalOptions="Start"
-                        TranslationX="8"
-                        TranslationY="-8">
-                    <Label x:Name="FriendBadgeLabel"
-                           TextColor="White"
-                           FontFamily="OpenSansSemibold"
-                           FontSize="12"
-                           HorizontalTextAlignment="Center"
-                           VerticalTextAlignment="Center" />
-                </Border>
-            </Grid>
+            <!-- Nastavení -->
+            <controls:PencilButton Grid.Column="2"
+                                   Variant="Outline"
+                                   Text="Nastavení"
+                                   HorizontalOptions="End"
+                                   VerticalOptions="Center"
+                                   Clicked="OnSettingsClicked" />
         </Grid>
     </Grid>
 </ContentPage>

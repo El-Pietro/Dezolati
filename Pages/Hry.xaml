@@ -1,0 +1,84 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:controls="clr-namespace:Dezolati.Controls"
+             x:Class="Dezolati.Pages.Hry"
+             Title="Hry">
+    <Grid RowDefinitions="Auto, *">
+        <Image Grid.RowSpan="2" Source="{AppThemeBinding Light=woodlight.jpg, Dark=wooddark.jpg}" Aspect="AspectFill" />
+
+        <BoxView Grid.Row="0" HeightRequest="0" Color="Transparent" InputTransparent="True" Margin="{DynamicResource TopBarMargin}" />
+        <controls:PencilButton Grid.Row="0" Variant="Outline" Text="Zpět" IsVisible="{OnPlatform Default=True, Android=False}"
+                               HorizontalOptions="Start" Margin="{DynamicResource TopBarMargin}" Clicked="OnZpetClicked" />
+
+        <Border Grid.Row="1" Style="{StaticResource Listek}">
+            <ScrollView>
+                <VerticalStackLayout Spacing="6">
+                    <Label Text="Hry" Style="{StaticResource Title}" />
+
+                    <!-- hráči u stolu (jen jména, v telefonu) -->
+                    <Label Text="Hráči (v pořadí, jak se hraje):" Style="{StaticResource FieldLabel}" />
+                    <VerticalStackLayout x:Name="PlayersStack" Spacing="2" />
+                    <Grid ColumnDefinitions="*, Auto" ColumnSpacing="8">
+                        <Entry x:Name="NewPlayerEntry" Placeholder="Jméno hráče" ReturnType="Done" Completed="OnAddPlayerClicked" />
+                        <controls:PencilButton Grid.Column="1" Text="Přidat" Variant="Secondary" WidthRequest="110"
+                                               FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                               Clicked="OnAddPlayerClicked" />
+                    </Grid>
+                    <controls:PencilButton Text="Zamíchat pořadí" Variant="Secondary"
+                                           FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                           Clicked="OnShuffleClicked" />
+
+                    <!-- šipky – zatím schované (doladí se) -->
+                    <VerticalStackLayout IsVisible="False" Spacing="6">
+                    <Label Text="Šipky" Style="{StaticResource Heading}" Margin="0,16,0,0" />
+                    <Grid ColumnDefinitions="*, *" ColumnSpacing="10">
+                        <controls:PencilButton x:Name="Start501" Text="501" Variant="Secondary" CommandParameter="501"
+                                               FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                               Clicked="OnStartScoreClicked" />
+                        <controls:PencilButton x:Name="Start301" Grid.Column="1" Text="301" Variant="Secondary" CommandParameter="301"
+                                               FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                               Clicked="OnStartScoreClicked" />
+                    </Grid>
+                    <Grid ColumnDefinitions="*, *" ColumnSpacing="10">
+                        <controls:PencilButton x:Name="DoubleOn" Text="Double out" Variant="Secondary" CommandParameter="1"
+                                               FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                               Clicked="OnDoubleClicked" />
+                        <controls:PencilButton x:Name="DoubleOff" Grid.Column="1" Text="Bez double" Variant="Secondary" CommandParameter="0"
+                                               FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                               Clicked="OnDoubleClicked" />
+                    </Grid>
+                    <controls:PencilButton Text="Hrát šipky" Variant="Primary" Clicked="OnDartsClicked" />
+                    <controls:PencilButton x:Name="ContinueDarts" Text="Pokračovat v rozehraných" Variant="Secondary"
+                                           IsVisible="False" Clicked="OnContinueDartsClicked" />
+
+                    </VerticalStackLayout>
+
+                    <!-- kostky -->
+                    <Label Text="Kostky" Style="{StaticResource Heading}" Margin="0,16,0,0" />
+                    <Grid ColumnDefinitions="Auto, *" ColumnSpacing="10">
+                        <Label Text="Hraje se do:" Style="{StaticResource FieldLabel}" VerticalOptions="Center" />
+                        <Entry x:Name="TargetEntry" Grid.Column="1" Keyboard="Numeric" MaxLength="6" Placeholder="10000" />
+                    </Grid>
+                    <Grid ColumnDefinitions="*, *" ColumnSpacing="10">
+                        <controls:PencilButton x:Name="PairsOn" Text="Dvojičky" Variant="Secondary" CommandParameter="1"
+                                               FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                               Clicked="OnPairsClicked" />
+                        <controls:PencilButton x:Name="PairsOff" Grid.Column="1" Text="Bez dvojiček" Variant="Secondary" CommandParameter="0"
+                                               FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                               Clicked="OnPairsClicked" />
+                    </Grid>
+                    <controls:PencilButton Text="Kostky zjednodušené" Variant="Primary" Clicked="OnDice2Clicked" />
+                    <controls:PencilButton x:Name="ContinueDice2" Text="Pokračovat v rozehraných" Variant="Secondary"
+                                           IsVisible="False" Clicked="OnContinueDice2Clicked" />
+                    <Label Text="Jen kalkulačka – hody a pravidla si hlídáte sami." Style="{StaticResource Small}" />
+                    <controls:PencilButton Text="Kostky rozšířené" Variant="Primary" Clicked="OnDiceClicked" Margin="0,8,0,0" />
+                    <controls:PencilButton x:Name="ContinueDice" Text="Pokračovat v rozehraných" Variant="Secondary"
+                                           IsVisible="False" Clicked="OnContinueDiceClicked" />
+                    <Label Text="Rozšířené hlídají pravidla: 1 = 100, 5 = 50, trojice = číslo × 100 (tři jedničky 1 000), čtyři stejné ×2, pět ×4, šest ×8, postupka 1–6 = 1 500, tři dvojice = 1 000. V každém tahu do 3 hodů aspoň 300, jinak nic. Když nic nepadne, body z tahu propadnou. Odložíš všech 6 → házíš znovu všemi. Kdo přehodí cíl, kolo se dohraje."
+                           Style="{StaticResource Small}" Margin="0,8,0,0" />
+                </VerticalStackLayout>
+            </ScrollView>
+        </Border>
+    </Grid>
+</ContentPage>

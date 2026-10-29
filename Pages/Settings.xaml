@@ -41,7 +41,15 @@
                     </Grid>
 
                     <!-- připomínka po X minutách bez zápisu (ukládá se hned, jen v tomhle telefonu) -->
-                    <Label Text="Připomínat, když nic nezapíšu:" Style="{StaticResource FieldLabel}" />
+                    <Grid ColumnDefinitions="*, Auto">
+                        <Label Text="Připomínat, když nic nezapíšu:" Style="{StaticResource FieldLabel}" />
+                        <Label Grid.Column="1" Text="(info)" Style="{StaticResource Small}" TextColor="{StaticResource InkSoft}"
+                               VerticalOptions="End" Padding="12,0,4,2">
+                            <Label.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnInfoTapped" CommandParameter="reminder" />
+                            </Label.GestureRecognizers>
+                        </Label>
+                    </Grid>
                     <Grid ColumnDefinitions="*, *, *, *" ColumnSpacing="6">
                         <controls:PencilButton x:Name="Rem0" Grid.Column="0" Text="Vyp" Variant="Secondary"
                                                FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
@@ -58,7 +66,15 @@
                     </Grid>
 
                     <!-- oznámení od kámošů (posílá server) a „kde sedím“ – ukládá se hned do profilu -->
-                    <Label Text="Oznámení od kámošů:" Style="{StaticResource FieldLabel}" />
+                    <Grid ColumnDefinitions="*, Auto">
+                        <Label Text="Oznámení od kámošů:" Style="{StaticResource FieldLabel}" />
+                        <Label Grid.Column="1" Text="(info)" Style="{StaticResource Small}" TextColor="{StaticResource InkSoft}"
+                               VerticalOptions="End" Padding="12,0,4,2">
+                            <Label.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnInfoTapped" CommandParameter="notify" />
+                            </Label.GestureRecognizers>
+                        </Label>
+                    </Grid>
                     <Grid ColumnDefinitions="*, *" ColumnSpacing="10">
                         <controls:PencilButton x:Name="NotifyOn" Grid.Column="0" Text="Chci" Variant="Secondary"
                                                FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
@@ -68,7 +84,15 @@
                                                CommandParameter="0" Clicked="OnNotifyClicked" />
                     </Grid>
 
-                    <Label Text="Poznávat hospodu podle polohy:" Style="{StaticResource FieldLabel}" />
+                    <Grid ColumnDefinitions="*, Auto">
+                        <Label Text="Poznávat hospodu podle polohy:" Style="{StaticResource FieldLabel}" />
+                        <Label Grid.Column="1" Text="(info)" Style="{StaticResource Small}" TextColor="{StaticResource InkSoft}"
+                               VerticalOptions="End" Padding="12,0,4,2">
+                            <Label.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnInfoTapped" CommandParameter="detect" />
+                            </Label.GestureRecognizers>
+                        </Label>
+                    </Grid>
                     <Grid ColumnDefinitions="*, *" ColumnSpacing="10">
                         <controls:PencilButton x:Name="DetectOn" Grid.Column="0" Text="Poznávat" Variant="Secondary"
                                                FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
@@ -77,10 +101,16 @@
                                                FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
                                                CommandParameter="0" Clicked="OnDetectClicked" />
                     </Grid>
-                    <Label Text="Při zápisu se podívá, jestli jsi do 60 m od hospody (nebo doma). Uvidíš to na lístku, ve statistikách „kde nejčastěji piješ“ to uvidí i kámoši. Poloha se nikam neukládá."
-                           Style="{StaticResource Small}" />
 
-                    <Label Text="Hlásit kámošům, že piju:" Style="{StaticResource FieldLabel}" />
+                    <Grid ColumnDefinitions="*, Auto">
+                        <Label Text="Hlásit kámošům, že piju:" Style="{StaticResource FieldLabel}" />
+                        <Label Grid.Column="1" Text="(info)" Style="{StaticResource Small}" TextColor="{StaticResource InkSoft}"
+                               VerticalOptions="End" Padding="12,0,4,2">
+                            <Label.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnInfoTapped" CommandParameter="share" />
+                            </Label.GestureRecognizers>
+                        </Label>
+                    </Grid>
                     <Grid ColumnDefinitions="*, *, *" ColumnSpacing="8">
                         <controls:PencilButton x:Name="ShareWhere" Grid.Column="0" Text="I kde" Variant="Secondary"
                                                FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
@@ -92,11 +122,17 @@
                                                FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
                                                CommandParameter="0" Clicked="OnShareClicked" />
                     </Grid>
-                    <Label x:Name="ShareHint" Style="{StaticResource Small}" />
 
                     <!-- domov: poloha jen v telefonu, nastavuje se na mapě -->
-                    <Label Text="Domov:" Style="{StaticResource FieldLabel}" />
-                    <Label x:Name="HomeLabel" Style="{StaticResource Small}" />
+<Grid ColumnDefinitions="*, Auto">
+                        <Label Text="Domov:" Style="{StaticResource FieldLabel}" />
+                        <Label Grid.Column="1" Text="(info)" Style="{StaticResource Small}" TextColor="{StaticResource InkSoft}"
+                               VerticalOptions="End" Padding="12,0,4,2">
+                            <Label.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnInfoTapped" CommandParameter="home" />
+                            </Label.GestureRecognizers>
+                        </Label>
+                    </Grid>
                     <Grid ColumnDefinitions="*, *" ColumnSpacing="10">
                         <controls:PencilButton x:Name="HomeSetButton" Grid.Column="0" Text="Nastavit domov" Variant="Secondary"
                                                FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
@@ -107,7 +143,15 @@
                     </Grid>
 
                     <!-- ceny pro útratu (jen v telefonu) -->
-                    <Label Text="Moje obvyklé ceny v Kč (útrata):" Style="{StaticResource FieldLabel}" />
+                    <Grid ColumnDefinitions="*, Auto">
+                        <Label Text="Moje obvyklé ceny:" Style="{StaticResource FieldLabel}" />
+                        <Label Grid.Column="1" Text="(info)" Style="{StaticResource Small}" TextColor="{StaticResource InkSoft}"
+                               VerticalOptions="End" Padding="12,0,4,2">
+                            <Label.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnInfoTapped" CommandParameter="prices" />
+                            </Label.GestureRecognizers>
+                        </Label>
+                    </Grid>
                     <Grid ColumnDefinitions="*, *, *" ColumnSpacing="8">
                         <Entry x:Name="PricePivoEntry" Grid.Column="0" Placeholder="pivo 0,5" Keyboard="Numeric" MaxLength="4"
                                TextChanged="OnPriceChanged" />
@@ -116,11 +160,17 @@
                         <Entry x:Name="PricePanakEntry" Grid.Column="2" Placeholder="panák" Keyboard="Numeric" MaxLength="4"
                                TextChanged="OnPriceChanged" />
                     </Grid>
-                    <Label Text="Když má hospoda v profilu vyplněné ceny, vezmou se ty. Tvoje ceny vidíš jen ty."
-                           Style="{StaticResource Small}" />
 
                     <!-- orientační promile (vše jen v telefonu) -->
-                    <Label Text="Orientační promile na lístku:" Style="{StaticResource FieldLabel}" />
+                    <Grid ColumnDefinitions="*, Auto">
+                        <Label Text="Promile na lístku:" Style="{StaticResource FieldLabel}" />
+                        <Label Grid.Column="1" Text="(info)" Style="{StaticResource Small}" TextColor="{StaticResource InkSoft}"
+                               VerticalOptions="End" Padding="12,0,4,2">
+                            <Label.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnInfoTapped" CommandParameter="promile" />
+                            </Label.GestureRecognizers>
+                        </Label>
+                    </Grid>
                     <Grid ColumnDefinitions="*, *" ColumnSpacing="10">
                         <controls:PencilButton x:Name="PromileOn" Grid.Column="0" Text="Počítat" Variant="Secondary"
                                                FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
@@ -146,8 +196,6 @@
                                                    FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
                                                    CommandParameter="12" Clicked="OnDegreesClicked" />
                         </Grid>
-                        <Label Text="Odhad ze vzorce (Widmark) podle váhy, pohlaví a časů zápisů. Skutečnost se může lišit klidně o půl promile – podle toho NIKDY neřiď. Váha zůstává jen v telefonu."
-                               Style="{StaticResource Small}" />
                     </VerticalStackLayout>
 
                     <controls:PencilButton Text="Uložit změny" Variant="Primary" Clicked="OnSaveClicked" Margin="0,24,0,0" />
@@ -161,6 +209,8 @@
                     <!-- jen pro správce: spotřeba Firebase proti bezplatným limitům -->
                     <controls:PencilButton x:Name="UsageButton" Text="Spotřeba" Variant="Secondary"
                                            IsVisible="False" Clicked="OnUsageClicked" />
+                    <controls:PencilButton x:Name="OsmButton" Text="Návrhy do OSM" Variant="Secondary"
+                                           IsVisible="False" Clicked="OnOsmClicked" />
 
                     <controls:PencilButton x:Name="LogoutButton" Text="Odhlásit se" Variant="Danger"
                                            Margin="0,10,0,0" Clicked="OnLogoutClicked" />

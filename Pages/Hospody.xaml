@@ -123,6 +123,11 @@
             </VerticalStackLayout>
         </Border>
 
+        <!-- kartička kámošů na vybraném místě (ťuk na modrou značku) -->
+        <Border x:Name="FriendCard" Grid.Row="2" Style="{StaticResource Listek}" IsVisible="False" Margin="12,0,12,16">
+            <VerticalStackLayout x:Name="FriendCardList" Spacing="10" />
+        </Border>
+
         <!-- kartička vybrané hospody -->
         <Border x:Name="PubCard" Grid.Row="2" Style="{StaticResource Listek}" IsVisible="False" Margin="12,0,12,16">
             <Grid RowDefinitions="Auto, Auto" ColumnDefinitions="*, Auto" ColumnSpacing="10" RowSpacing="6">

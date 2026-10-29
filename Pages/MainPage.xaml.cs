@@ -81,7 +81,7 @@ namespace Dezolati.Pages
                 PromileLabel.IsVisible = false;
                 return;
             }
-            PromileLabel.Text = $"≈ {e.Promile.ToString("0.0", Cs)} ‰ · střízlivý kolem {e.SoberAtLocal:H:mm} · jen odhad, neřiď podle toho";
+            PromileLabel.Text = $"≈ {e.Promile.ToString("0.0", Cs)} ‰ · {Promile.SoberText(e.SoberAtLocal, UserSession.Profile?.Gender)} · jen odhad, neřiď podle toho";
             PromileLabel.IsVisible = true;
         }
 
@@ -322,6 +322,9 @@ namespace Dezolati.Pages
         {
             await Shell.Current.GoToAsync("//Settings");
         }
+
+        private async void OnGamesClicked(object sender, EventArgs e) =>
+            await Shell.Current.GoToAsync("//Hry");
 
         private async void OnPubsClicked(object sender, EventArgs e)
         {

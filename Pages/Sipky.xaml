@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:controls="clr-namespace:Dezolati.Controls"
+             x:Class="Dezolati.Pages.Sipky"
+             Title="Šipky">
+    <Grid RowDefinitions="Auto, *">
+        <Image Grid.RowSpan="2" Source="{AppThemeBinding Light=woodlight.jpg, Dark=wooddark.jpg}" Aspect="AspectFill" />
+
+        <BoxView Grid.Row="0" HeightRequest="0" Color="Transparent" InputTransparent="True" Margin="{DynamicResource TopBarMargin}" />
+        <controls:PencilButton Grid.Row="0" Variant="Outline" Text="Zpět" IsVisible="{OnPlatform Default=True, Android=False}"
+                               HorizontalOptions="Start" Margin="{DynamicResource TopBarMargin}" Clicked="OnZpetClicked" />
+
+        <Border Grid.Row="1" Style="{StaticResource Listek}">
+            <ScrollView>
+                <VerticalStackLayout Spacing="6">
+                    <Label x:Name="TitleLabel" Text="Šipky" Style="{StaticResource Title}" />
+
+                    <!-- tabulka: kolik zbývá, průměr na 3 šipky -->
+                    <VerticalStackLayout x:Name="Board" Spacing="2" />
+
+                    <Label x:Name="InfoLabel" Style="{StaticResource FieldLabel}" HorizontalTextAlignment="Center" Margin="0,8,0,0" />
+                    <Label x:Name="TurnLabel" Style="{StaticResource Heading}" HorizontalTextAlignment="Center" />
+                    <Label x:Name="CheckoutLabel" Style="{StaticResource Small}" HorizontalTextAlignment="Center" />
+
+                    <VerticalStackLayout x:Name="InputBox" Spacing="6">
+                        <Grid ColumnDefinitions="*, Auto" ColumnSpacing="8">
+                            <Entry x:Name="PointsEntry" Placeholder="Body za 3 šipky" Keyboard="Numeric" MaxLength="3"
+                                   ReturnType="Done" Completed="OnSubmitClicked" />
+                            <controls:PencilButton Grid.Column="1" Text="Zapsat" Variant="Primary" WidthRequest="120"
+                                                   Clicked="OnSubmitClicked" />
+                        </Grid>
+                        <!-- rychlé hodnoty -->
+                        <Grid x:Name="QuickGrid" ColumnDefinitions="*, *, *, *" RowDefinitions="Auto, Auto" ColumnSpacing="6" RowSpacing="6" />
+                    </VerticalStackLayout>
+
+                    <Grid ColumnDefinitions="*, *" ColumnSpacing="10" Margin="0,10,0,0">
+                        <controls:PencilButton x:Name="UndoButton" Text="Zpět o hod" Variant="Secondary"
+                                               FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                               Clicked="OnUndoClicked" />
+                        <controls:PencilButton Grid.Column="1" Text="Konec hry" Variant="Danger"
+                                               FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                               Clicked="OnEndClicked" />
+                    </Grid>
+                </VerticalStackLayout>
+            </ScrollView>
+        </Border>
+    </Grid>
+</ContentPage>

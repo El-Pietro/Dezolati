@@ -11,8 +11,8 @@ public partial class Settings : ContentPage
     private string? gender;
     private string? drinkerType;
     private bool notifyFriends = true;
-    private int shareLevel = 1;   // 0 nehlásit, 1 že piju, 2 i kde
-    private bool detectPub;
+    private int shareLevel = 2;   // 0 nehlásit, 1 že piju, 2 i kde
+    private bool detectPub = true;
 
     public Settings()
     {
@@ -23,7 +23,7 @@ public partial class Settings : ContentPage
     {
         base.OnAppearing();
         VersionLabel.Text = $"Dezoláti {AppUpdater.CurrentVersionText}";
-        UsageButton.IsVisible = UsageService.IsAdmin;
+        UsageButton.IsVisible = OsmButton.IsVisible = UsageService.IsAdmin;
         LoadLocalSettings();
         await LoadUserData();
     }
@@ -89,9 +89,6 @@ public partial class Settings : ContentPage
     private void LoadLocalSettings()
     {
         loadingLocal = true;
-        HomeLabel.Text = HomePlace.IsSet
-            ? "Nastavený (poloha jen v tomhle telefonu). Pití do 80 m se počítá jako „doma“."
-            : "Nenastavený – pití doma se počítá jako „jinde“.";
         HomeClearButton.IsVisible = HomePlace.IsSet;
         HomeSetButton.Text = HomePlace.IsSet ? "Přestěhovat" : "Nastavit domov";
 
@@ -158,12 +155,6 @@ public partial class Settings : ContentPage
         SetChip(ShareWhere, shareLevel == 2);
         SetChip(ShareYes, shareLevel == 1);
         SetChip(ShareNo, shareLevel == 0);
-        ShareHint.Text = shareLevel switch
-        {
-            2 => "Při prvním drinku po 3h pauze přijde kámošům „X si právě dal pivo v U Peťky“, uvidí tě na mapě a v „Teď pijí“. Ukládá se jen hospoda, poloha nikam.",
-            1 => "Při prvním drinku po 3h pauze přijde kámošům „X si právě dal pivo“ a uvidí tě v „Teď pijí“ – bez hospody.",
-            _ => "Kámošům nic nepřijde a v „Teď pijí“ nebudeš."
-        };
 
         var rem = Reminders.Minutes;
         SetChip(Rem0, rem == 0);
@@ -175,6 +166,34 @@ public partial class Settings : ContentPage
         SetChip(GenderPicka, gender == "Píčka");
         SetChip(TypePivo, drinkerType == "Pivopíč/ka");
         SetChip(TypeVino, drinkerType == "Vínopíč/ka");
+    }
+
+    /// <summary>Vysvětlivky schované pod „(info)“, ať nastavení není samý text.</summary>
+    private async void OnInfoTapped(object? sender, TappedEventArgs e)
+    {
+        var (title, text) = (e.Parameter as string) switch
+        {
+            "reminder" => ("Připomínka",
+                "Když po zápisu tolik minut nic nezapíšeš, přijde připomínka s tlačítky +1 a Dneska končím. Po 6. ráno už nic. Jen v tomhle telefonu."),
+            "notify" => ("Oznámení od kámošů",
+                "Žádosti o přátelství, kámoš si dal první drink, připil si s tebou nebo tě zve do hospody."),
+            "detect" => ("Poznávat hospodu",
+                "Při zápisu se podívá, jestli jsi do 60 m od hospody (nebo doma). Uvidíš to na lístku a ve statistikách „kde nejčastěji piješ“ – ty vidí i kámoši. Poloha se nikam neukládá."),
+            "share" => ("Hlásit kámošům",
+                "Při prvním drinku po 3h pauze přijde kámošům oznámení a uvidí tě v Kámoších.\n\n" +
+                "I kde – „X si právě dal pivo – U Peťky“ / „… doma“ / „… venku“ a uvidí tě i na mapě (i doma).\n" +
+                "Že piju – „X si právě dal pivo“, bez hospody.\n" +
+                "Nehlásit – kámošům nic nepřijde a mezi pijícími nebudeš."),
+            "home" => ("Domov",
+                (HomePlace.IsSet ? "Nastavený. " : "Nenastavený – pití doma se počítá jako „jinde“. ") +
+                "Pití do 80 m od domova se počítá jako „doma“. Poloha domova zůstává jen v tomhle telefonu."),
+            "prices" => ("Ceny",
+                "Z nich se počítá útrata ve statistikách. Když má hospoda v profilu vyplněné ceny, vezmou se ty. Tvoje ceny vidíš jen ty."),
+            "promile" => ("Promile",
+                "Odhad ze vzorce (Widmark) podle váhy, pohlaví a časů zápisů. Bez vyplněné váhy se nepočítá. Skutečnost se může lišit klidně o půl promile – podle toho NIKDY neřiď. Váha zůstává jen v telefonu."),
+            _ => ("", "")
+        };
+        if (text.Length > 0) await Listek.AlertAsync(this, title, text);
     }
 
     /// <summary>Vybraná volba = vyčmáraná hnědou pastelkou, nevybraná = bledá tužka.</summary>
@@ -227,10 +246,12 @@ public partial class Settings : ContentPage
                 NotifyFriends = notifyFriends,
                 SharePub = shareLevel == 2,
                 ShareLevel = shareLevel,
-                FavoritePubs = UserSession.Profile?.FavoritePubs ?? new()
+                FavoritePubs = UserSession.Profile?.FavoritePubs ?? new(),
+                MaskFor = UserSession.Profile?.MaskFor ?? new()
             };
             await firestoreService.UpdateUserData(userId, profile);
             UserSession.SetProfile(profile);
+            _ = NickDirectory.PublishNickAsync(nickname);   // adresář pro hledání kámošů
 
             // přezdívka je uložená i v přátelstvích, ať se kámošům nečtou profily
             if (nicknameChanged)
@@ -328,6 +349,9 @@ public partial class Settings : ContentPage
 
     private async void OnUsageClicked(object sender, EventArgs e) =>
         await Shell.Current.GoToAsync("//Spotreba");
+
+    private async void OnOsmClicked(object sender, EventArgs e) =>
+        await Shell.Current.GoToAsync("//OsmNavrhy");
 
     private async void OnNewsClicked(object sender, EventArgs e) =>
         await Shell.Current.GoToAsync("//Novinky", new Dictionary<string, object> { ["back"] = "//Settings" });

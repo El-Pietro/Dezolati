@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using Dezolati.Controls;
 using Dezolati.Services;
 
@@ -115,6 +115,62 @@ public partial class Spotreba : ContentPage
         Application.Current?.Resources.TryGetValue(key, out var s) == true ? s as Style : null;
 
     private async void OnRefreshClicked(object sender, EventArgs e) => await Load();
+
+    /// <summary>Kdo má jakou verzi (appka ji zapisuje do adresáře po každé aktualizaci; starší než 3.10 nic).</summary>
+    private async void OnVersionsTapped(object? sender, TappedEventArgs e)
+    {
+        VersionsList.IsVisible = !VersionsList.IsVisible;
+        VersionsToggle.Text = VersionsList.IsVisible ? "(schovat)" : "(ukázat)";
+        if (!VersionsList.IsVisible) return;
+
+        VersionsList.Clear();
+        VersionsList.Add(new Label { Text = "Načítám…", Style = AppStyle("Small") });
+        var dir = await NickDirectory.GetAsync(force: true);   // 1 čtení
+        VersionsList.Clear();
+        var rows = dir.Values
+            .OrderByDescending(u => AppUpdater.ParseVersion(u.Version) ?? new Version(0, 0))
+            .ThenBy(u => u.Nick, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+        var groups = rows.GroupBy(u => u.Version ?? "starší").Select(g => $"{g.Key}: {g.Count()}");
+        VersionsList.Add(new Label { Text = string.Join(" · ", groups), Style = AppStyle("Small") });
+        foreach (var u in rows)
+        {
+            var row = new Grid
+            {
+                ColumnDefinitions = new ColumnDefinitionCollection(new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto)),
+                ColumnSpacing = 8
+            };
+            row.Add(new Label { Text = u.Nick, Style = AppStyle("Body"), LineBreakMode = LineBreakMode.TailTruncation, MaxLines = 1 }, 0, 0);
+            row.Add(new Label { Text = (u.Version ?? "starší") + " ", Style = AppStyle("Body") }, 1, 0);
+            VersionsList.Add(row);
+        }
+        if (rows.Count == 0)
+            VersionsList.Add(new Label { Text = Net.IsOnline ? "V adresáři zatím nikdo není." : "Bez signálu nic nenačtu.", Style = AppStyle("Small") });
+    }
+
+    /// <summary>Jednorázově: smazat moje staré testovací dny (statistiky, průměry). Ve 3.11 tlačítko zmizí.</summary>
+    private async void OnCleanupClicked(object sender, EventArgs e)
+    {
+        var before = new DateTime(2026, 10, 1);
+        if (!await Listek.ConfirmAsync(this, "Smazat staré zápisy?",
+                "Smažou se tvoje denní součty před 1. 10. 2026 – zmizí ze statistik, součtů, rekordu i průměrů. " +
+                "Vrátit to nejde. Stojí to 1 čtení a 1 smazání za každý takový den.", "Smazat", danger: true))
+            return;
+        try
+        {
+            CleanupButton.IsEnabled = false;
+            var count = await new FirestoreService().DeleteMyDaysBefore(before);
+            await Listek.AlertAsync(this, "Hotovo", count == 0 ? "Nic starého tam nebylo." : $"Smazáno {Cz.Plural(count, "den", "dny", "dní")}.");
+        }
+        catch (Exception ex)
+        {
+            await Listek.AlertAsync(this, "Nepovedlo se", Net.IsNetworkError(ex) ? "Bez signálu to nepůjde." : ex.Message);
+        }
+        finally
+        {
+            CleanupButton.IsEnabled = true;
+        }
+    }
 
     private void OnZpetClicked(object sender, EventArgs e) => OnBackButtonPressed();
 

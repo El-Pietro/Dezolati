@@ -156,9 +156,9 @@ namespace Dezolati.Services
         private const string KeyEnabled = "promile_on";
         private const string KeyWeight = "promile_weight";
         private const string KeyDegrees = "promile_beer_deg";
-        private const double Burn = 0.15;   // ‰ za hodinu
+        public const double Burn = 0.15;   // ‰ za hodinu
 
-        public static bool Enabled { get => Preferences.Get(KeyEnabled, false); set => Preferences.Set(KeyEnabled, value); }
+        public static bool Enabled { get => Preferences.Get(KeyEnabled, true); set => Preferences.Set(KeyEnabled, value); }
         public static int WeightKg { get => Preferences.Get(KeyWeight, 0); set => Preferences.Set(KeyWeight, Math.Clamp(value, 0, 300)); }
         /// <summary>Stupňovitost piva: 10 / 11 / 12.</summary>
         public static int BeerDegrees { get => Preferences.Get(KeyDegrees, 12); set => Preferences.Set(KeyDegrees, value is 10 or 11 or 12 ? value : 12); }
@@ -199,6 +199,34 @@ namespace Dezolati.Services
                 Preferences.Set(LogKey(uid), JsonSerializer.Serialize(items));
             }
             catch { }
+        }
+
+        /// <summary>„střízlivý kolem 4:30“ / „střízlivá zítra kolem 9:00“ / „… pozítří …“ / „… ve čtvrtek …“.</summary>
+        public static string SoberText(DateTime soberLocal, string? gender)
+        {
+            var adj = gender == "Píčka" ? "střízlivá" : gender == "Píč" ? "střízlivý" : "střízlivý/á";
+            var days = (soberLocal.Date - DateTime.Now.Date).Days;
+            var when = days <= 0 ? "" : days == 1 ? "zítra " : days == 2 ? "pozítří " : soberLocal.DayOfWeek switch
+            {
+                DayOfWeek.Monday => "v pondělí ",
+                DayOfWeek.Tuesday => "v úterý ",
+                DayOfWeek.Wednesday => "ve středu ",
+                DayOfWeek.Thursday => "ve čtvrtek ",
+                DayOfWeek.Friday => "v pátek ",
+                DayOfWeek.Saturday => "v sobotu ",
+                _ => "v neděli "
+            };
+            return $"{adj} {when}kolem {soberLocal:H:mm}";
+        }
+
+        /// <summary>Promile kámoše: odhad uložený při jeho zápisu → kolik je teď (odbourávání) a kdy na nule.</summary>
+        public static (double Promile, DateTime SoberAtLocal)? FromShared(double? value, DateTime? atUtc)
+        {
+            if (value is not double v || atUtc is not DateTime at || v <= 0) return null;
+            var now = DateTime.UtcNow;
+            var current = v - Burn * (now - at.ToUniversalTime()).TotalHours;
+            if (current <= 0.005) return null;
+            return (current, now.AddHours(current / Burn).ToLocalTime());
         }
 
         /// <summary>Odhad teď: (‰, kdy na nule). null = vypnuto / nevyplněná váha / nic dnes.</summary>

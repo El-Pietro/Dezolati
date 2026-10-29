@@ -42,6 +42,17 @@ namespace Dezolati.Droid
                         PushAndroid.Show(this, title, body);
                     break;
 
+                case "cheer":
+                    // připití: jedno oznámení, které roste („6 kámošů si s tebou připilo“), a hned i do Kámošů
+                    if (D("sessionId") is string mySession && D("fromUid") is string cheerFrom)
+                    {
+                        var all = Services.Cheers.OnReceived(mySession, cheerFrom, D("fromNick") ?? "Někdo", D("emoji") ?? "🍻");
+                        PushAndroid.ShowCheers(this, all);
+                    }
+                    else
+                        PushAndroid.Show(this, title, body);   // starší server
+                    break;
+
                 case "invite":
                     // pozvánka jen do 15 km (podle poslední polohy z appky; neznámá = ukázat)
                     if (double.TryParse(D("lat"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var lat)
@@ -111,6 +122,57 @@ namespace Dezolati.Droid
 
     public static class PushAndroid
     {
+        // všechna oznámení od kámošů v jedné skupině (Android je sbalí pod Dezoláty)
+        private const string Group = "cz.elpietro.dezolati.KAMOSI";
+        private const int SummaryId = 4243;
+        private const int CheersId = 4242;
+
+        /// <summary>Spojené připíjení: „6 kámošů si s tebou připilo 🍻“ + řádek za každého (přepisuje se).</summary>
+        public static void ShowCheers(Context context, List<Services.CheerInfo> cheers)
+        {
+            if (cheers.Count == 0) return;
+            try
+            {
+                EnsureChannel();
+                var last = cheers[^1];
+                var title = cheers.Count == 1
+                    ? $"{last.FromNick} si s tebou připíjí {last.Emoji}"
+                    : $"{Services.Cz.Plural(cheers.Count, "kámoš si", "kámoši si", "kámošů si")} s tebou {(cheers.Count < 5 ? "připili" : "připilo")} 🍻";
+                var line = string.Join(" · ", cheers.Select(c => $"{c.FromNick} {c.Emoji}"));
+                var builder = Base(context, title, cheers.Count == 1 ? "Na zdraví! 🍻" : line);
+                if (cheers.Count > 1)
+                {
+                    var inbox = new NotificationCompat.InboxStyle().SetBigContentTitle(title);
+                    foreach (var c in cheers.AsEnumerable().Reverse()) inbox.AddLine($"{c.FromNick} {c.Emoji}");
+                    builder.SetStyle(inbox);
+                }
+                NotificationManagerCompat.From(context).Notify(CheersId, builder.Build());
+                ShowSummary(context);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Push cheers: {ex.Message}");
+            }
+        }
+
+        /// <summary>Souhrn skupiny (bez něj by Android oznámení nesbalil).</summary>
+        private static void ShowSummary(Context context)
+        {
+            try
+            {
+                var summary = new NotificationCompat.Builder(context, ChannelId)
+                    .SetSmallIcon(Resource.Drawable.ic_stat_beer)
+                    .SetColor(unchecked((int)0xFF6B3E1E))
+                    .SetContentTitle("Dezoláti")
+                    .SetGroup(Group)
+                    .SetGroupSummary(true)
+                    .SetOnlyAlertOnce(true)
+                    .SetAutoCancel(true);
+                NotificationManagerCompat.From(context).Notify(SummaryId, summary.Build());
+            }
+            catch { }
+        }
+
         /// <summary>Oznámení „X si právě dal(a)…“ s tlačítky 🍺 🍷 🥃.</summary>
         public static void ShowWithCheers(Context context, string? title, string? body, string fromUid, string sessionId)
         {
@@ -134,6 +196,7 @@ namespace Dezolati.Droid
                     builder.AddAction(0, emoji, pi);
                 }
                 NotificationManagerCompat.From(context).Notify(notifId, builder.Build());
+                ShowSummary(context);
             }
             catch (Exception ex)
             {
@@ -165,6 +228,7 @@ namespace Dezolati.Droid
                 .SetContentText(body)
                 .SetStyle(new NotificationCompat.BigTextStyle().BigText(body))
                 .SetPriority(NotificationCompat.PriorityHigh)
+                .SetGroup(Group)
                 .SetAutoCancel(true);
             if (pending != null) b.SetContentIntent(pending);
             return b;
@@ -204,10 +268,12 @@ namespace Dezolati.Droid
                     .SetContentText(body)
                     .SetStyle(new NotificationCompat.BigTextStyle().BigText(body))
                     .SetPriority(NotificationCompat.PriorityHigh)
+                    .SetGroup(Group)
                     .SetAutoCancel(true);
                 if (pending != null) builder.SetContentIntent(pending);
 
                 NotificationManagerCompat.From(context).Notify(Random.Shared.Next(10_000, 1_000_000), builder.Build());
+                ShowSummary(context);
             }
             catch (Exception ex)
             {

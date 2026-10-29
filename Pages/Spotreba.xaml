@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8" ?>
+﻿<?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:controls="clr-namespace:Dezolati.Controls"
@@ -40,6 +40,21 @@
 
                     <controls:PencilButton x:Name="RefreshButton" Text="Obnovit" Variant="Secondary"
                                            Margin="0,14,0,0" Clicked="OnRefreshClicked" />
+                    <!-- kdo má jakou verzi appky (z adresáře, 1 čtení) -->
+                    <Grid ColumnDefinitions="*, Auto" Margin="0,18,0,0">
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnVersionsTapped" />
+                        </Grid.GestureRecognizers>
+                        <Label Text="Verze u lidí" Style="{StaticResource Heading}" />
+                        <Label x:Name="VersionsToggle" Grid.Column="1" Text="(ukázat)" Style="{StaticResource Small}"
+                               TextColor="{StaticResource InkSoft}" VerticalOptions="End" Padding="12,0,4,4" />
+                    </Grid>
+                    <VerticalStackLayout x:Name="VersionsList" Spacing="2" IsVisible="False" />
+
+                    <!-- jednorázový úklid testovacích dat (ve 3.11 zase pryč) -->
+                    <controls:PencilButton x:Name="CleanupButton" Text="Smazat moje zápisy před 1. 10. 2026" Variant="Danger"
+                                           FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                           Margin="0,24,0,0" Clicked="OnCleanupClicked" />
                 </VerticalStackLayout>
             </ScrollView>
         </Border>

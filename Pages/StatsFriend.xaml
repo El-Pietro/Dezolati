@@ -19,18 +19,42 @@
                     <Label x:Name="TitleLabel" Text="Statistiky" Style="{StaticResource Title}" />
                     <!-- kde teď sedí (jen když to hlásí kámošům) -->
                     <Label x:Name="NowLabel" Style="{StaticResource Heading}" HorizontalTextAlignment="Center" IsVisible="False" />
+                    <!-- promile kámoše (odhad z jeho posledního zápisu) -->
+                    <Label x:Name="PromileLabel" Style="{StaticResource Small}" HorizontalTextAlignment="Center" IsVisible="False" />
                     <ActivityIndicator x:Name="Busy" IsRunning="False" IsVisible="False" Color="{StaticResource Pencil}" />
 
                     <Grid x:Name="SummaryGrid" ColumnDefinitions="Auto, *" ColumnSpacing="12" RowSpacing="6" />
+                    <!-- průměry: popisek a pod ním hodnoty (na jeden řádek se nevejdou) -->
+                    <VerticalStackLayout x:Name="AvgBox" Spacing="2" Margin="0,6,0,0" />
+
+                    <!-- po měsících (sbalené, načte se až po rozbalení) -->
+                    <VerticalStackLayout x:Name="MonthsBox" Spacing="4" IsVisible="False">
+                        <Grid ColumnDefinitions="*, Auto" Margin="0,12,0,0">
+                            <Grid.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnMonthsTapped" />
+                            </Grid.GestureRecognizers>
+                            <Label Text="Po měsících" Style="{StaticResource Heading}" />
+                            <Label x:Name="MonthsToggle" Grid.Column="1" Text="(ukázat)" Style="{StaticResource Small}"
+                                   TextColor="{StaticResource InkSoft}" VerticalOptions="End" Padding="12,0,4,4" />
+                        </Grid>
+                        <Grid x:Name="MonthsGrid" ColumnDefinitions="Auto, *" ColumnSpacing="12" RowSpacing="4" IsVisible="False" />
+                    </VerticalStackLayout>
 
                     <!-- útrata (jen u sebe) -->
                     <VerticalStackLayout x:Name="SpendBox" Spacing="4" IsVisible="False">
-                        <Label Text="Útrata" Style="{StaticResource Heading}" Margin="0,12,0,0" />
-                        <Grid x:Name="SpendGrid" ColumnDefinitions="Auto, *" ColumnSpacing="12" RowSpacing="6" />
-                        <Label x:Name="SpendNote" Style="{StaticResource Small}" IsVisible="False" />
-                        <controls:PencilButton x:Name="EstimateButton" Text="Dopočítat útratu zpětně (odhad)" Variant="Secondary"
-                                               FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
-                                               IsVisible="False" Clicked="OnEstimateClicked" />
+                        <!-- sbalené, ťuk na řádek rozbalí -->
+                        <Grid ColumnDefinitions="*, Auto" Margin="0,12,0,0">
+                            <Grid.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnSpendTapped" />
+                            </Grid.GestureRecognizers>
+                            <Label Text="Útrata" Style="{StaticResource Heading}" />
+                            <Label x:Name="SpendToggle" Grid.Column="1" Text="(ukázat)" Style="{StaticResource Small}"
+                                   TextColor="{StaticResource InkSoft}" VerticalOptions="End" Padding="12,0,4,4" />
+                        </Grid>
+                        <VerticalStackLayout x:Name="SpendDetail" Spacing="4" IsVisible="False">
+                            <Grid x:Name="SpendGrid" ColumnDefinitions="Auto, *" ColumnSpacing="12" RowSpacing="6" />
+                            <Label x:Name="SpendNote" Style="{StaticResource Small}" IsVisible="False" />
+                        </VerticalStackLayout>
                     </VerticalStackLayout>
 
                     <!-- kde se pije: doma / hospoda / jinde -->
@@ -78,8 +102,12 @@
                            Style="{StaticResource Small}" IsVisible="False" />
                     <VerticalStackLayout x:Name="HistoryList" Spacing="4" />
 
+                    <!-- tajný režim: tomuhle kámošovi ukazovat jen třetinu (nic nepozná) -->
+                    <controls:PencilButton x:Name="MaskButton" Text="Tajný režim: vypnutý" Variant="Secondary"
+                                           FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                           Margin="0,24,0,0" IsVisible="False" Clicked="OnMaskClicked" />
                     <controls:PencilButton x:Name="RemoveFriendButton" Text="Odebrat z kámošů" Variant="Danger"
-                                           Margin="0,24,0,0" IsVisible="False" Clicked="OnRemoveFriendClicked" />
+                                           Margin="0,8,0,0" IsVisible="False" Clicked="OnRemoveFriendClicked" />
                 </VerticalStackLayout>
             </ScrollView>
         </Border>

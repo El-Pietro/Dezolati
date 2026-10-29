@@ -198,7 +198,7 @@ public partial class Hospody : ContentPage, IQueryAttributable
         pubLayer = new MemoryLayer("Hospody") { Style = null, IsMapInfoLayer = true };
         meLayer = new MemoryLayer("Já") { Style = null };
         homeLayer = new MemoryLayer("Domov") { Style = null };
-        friendsLayer = new MemoryLayer("Kámoši") { Style = null };
+        friendsLayer = new MemoryLayer("Kámoši") { Style = null, IsMapInfoLayer = true };
         map.Layers.Add(homeLayer);
         map.Layers.Add(pubLayer);
         map.Layers.Add(friendsLayer);
@@ -351,6 +351,8 @@ public partial class Hospody : ContentPage, IQueryAttributable
 
     // ---------------- kámoši, kteří teď pijí ----------------
 
+    private readonly List<List<DrinkingFriend>> friendGroups = new();
+
     private async Task ShowFriendsAsync()
     {
         if (friendsLayer == null) return;
@@ -358,12 +360,16 @@ public partial class Hospody : ContentPage, IQueryAttributable
         {
             var drinking = await FriendsNow.GetAsync();
             var features = new List<IFeature>();
+            friendGroups.Clear();
             foreach (var g in drinking.Where(f => f.HasPubLocation)
                          .GroupBy(f => (Math.Round(f.PubLat!.Value, 4), Math.Round(f.PubLon!.Value, 4))))
             {
                 var (x, y) = SphericalMercator.FromLonLat(g.Key.Item2, g.Key.Item1);
                 var f = new PointFeature(x, y);
-                f["friends"] = string.Join(", ", g.Select(d => $"{d.Emoji} {d.Nick}"));
+                // bez emoji – písmo popisků v mapě je nemá (čtvereček); modrá = kámoši
+                f["friends"] = string.Join(", ", g.Select(d => d.PubName is "doma" or "venku" ? $"{d.Nick} ({d.PubName})" : d.Nick));
+                f["friendGroup"] = friendGroups.Count.ToString();
+                friendGroups.Add(g.ToList());
                 f.Styles.Add(FriendSymbol);
                 f.Styles.Add(FriendsLabel);
                 features.Add(f);
@@ -540,16 +546,82 @@ public partial class Hospody : ContentPage, IQueryAttributable
                 nav.CenterOnAndZoomTo(cluster.Point, nav.Viewport.Resolution / 3, 400));
             return;
         }
-        if (e.MapInfo?.Feature?["id"] is not string id) return;
         if (AddCard.IsVisible || HomeCard.IsVisible) return;   // při přidávání / domově se ťuká jen na mapu
+        // kámoši → jejich kartička
+        if (e.MapInfo?.Feature?["friendGroup"] is string gi && int.TryParse(gi, out var groupIndex)
+            && groupIndex < friendGroups.Count)
+        {
+            var group = friendGroups[groupIndex];
+            MainThread.BeginInvokeOnMainThread(async () => await ShowFriendCardAsync(group));
+            return;
+        }
+        if (e.MapInfo?.Feature?["id"] is not string id) return;
         var pub = PubService.Find(id)
                   ?? (Favorites.All.TryGetValue(id, out var fav) ? Favorites.ToPub(id, fav) : null);
         if (pub == null) return;
         MainThread.BeginInvokeOnMainThread(() => ShowCard(pub, null));
     }
 
+    /// <summary>Kámoši na jednom místě: kde, před kolika minutami, kolik má dnes a promile. Čtení = 1 za kámoše.</summary>
+    private async Task ShowFriendCardAsync(List<DrinkingFriend> group)
+    {
+        HideCard();
+        FilterCard.IsVisible = false;
+        FriendCardList.Clear();
+        var todays = new List<Label>();
+        foreach (var f in group)
+        {
+            var box = new VerticalStackLayout { Spacing = 0 };
+            var name = new Label
+            {
+                Text = $"{f.Emoji} {f.Nick}", Style = AppStyle("Heading"),
+                HorizontalOptions = LayoutOptions.Start, HorizontalTextAlignment = TextAlignment.Start
+            };
+            var tap = new TapGestureRecognizer();
+            var friend = f;
+            tap.Tapped += async (_, _) => await Shell.Current.GoToAsync("//StatsFriend", new Dictionary<string, object>
+            {
+                ["userId"] = friend.Uid, ["nick"] = friend.Nick, ["back"] = "//Hospody"
+            });
+            name.GestureRecognizers.Add(tap);
+            box.Add(name);
+            box.Add(new Label { Text = $"{f.PubName ?? "pije"} · {FriendsNow.Ago(f.LastDrinkAt)}", Style = AppStyle("Small") });
+            var today = new Label { Text = "dnes: …", Style = AppStyle("Small") };
+            box.Add(today);
+            todays.Add(today);
+            FriendCardList.Add(box);
+        }
+        FriendCard.IsVisible = true;
+
+        // dnešek každého (1 čtení za kámoše) + promile z profilu (0 čtení)
+        var fs = new FirestoreService();
+        for (var i = 0; i < group.Count; i++)
+        {
+            var f = group[i];
+            string drunk;
+            try
+            {
+                var day = await fs.GetDailyDrinks(f.Uid, f.PubDayNow);
+                drunk = day == null || day.Total <= 0 ? "dnes: nic zapsaného" : "dnes: " + Cz.Souhrn(day.Pivo, day.Vino, day.Panaky);
+            }
+            catch
+            {
+                drunk = "dnes: ?";
+            }
+            if (f.PromileNow is { } p)
+                drunk += $" · ≈ {p.Promile.ToString("0.0", System.Globalization.CultureInfo.GetCultureInfo("cs-CZ"))} ‰";
+            todays[i].Text = drunk;
+        }
+    }
+
+    private void HideFriendCard() => FriendCard.IsVisible = false;
+
+    private static Style? AppStyle(string key) =>
+        Application.Current?.Resources.TryGetValue(key, out var s) == true ? s as Style : null;
+
     private void ShowCard(PubInfo pub, double? distanceMeters)
     {
+        HideFriendCard();
         selected = pub;
         CardName.Text = PubService.NameOf(pub);
         var info = PubService.IsClosed(pub) ? "zavřeno · " + pub.KindText : pub.KindText;
@@ -709,6 +781,7 @@ public partial class Hospody : ContentPage, IQueryAttributable
     private void HideCard()
     {
         PubCard.IsVisible = false;
+        FriendCard.IsVisible = false;
         selected = null;
     }
 
@@ -750,6 +823,22 @@ public partial class Hospody : ContentPage, IQueryAttributable
         }
     }
 
+    private static readonly string[] HomeWords =
+        { "doma", "domov", "domu", "u me", "u mne", "byt", "chata", "chalupa", "barak", "dum", "home", "u nas", "kvartyr" };
+
+    /// <summary>Název podniku, který je spíš domov („Doma“, „U mě“, „Barák“…). Bez háčků a velkých písmen.</summary>
+    private static bool LooksLikeHome(string name)
+    {
+        var sb = new System.Text.StringBuilder();
+        foreach (var ch in name.Normalize(System.Text.NormalizationForm.FormD))
+            if (System.Globalization.CharUnicodeInfo.GetUnicodeCategory(ch) != System.Globalization.UnicodeCategory.NonSpacingMark)
+                sb.Append(char.ToLowerInvariant(ch));
+        var n = System.Text.RegularExpressions.Regex.Replace(sb.ToString(), @"[^a-z0-9 ]", " ").Trim();
+        n = System.Text.RegularExpressions.Regex.Replace(n, @"\s+", " ");
+        // jen celé názvy – „Chata pod Sněžkou“ nebo „Dům piva“ jsou podniky
+        return HomeWords.Any(w => n == w || n == "moje " + w || n == "muj " + w || n == "nase " + w || n == "u mne " + w);
+    }
+
     private async void OnAddSaveClicked(object sender, EventArgs e)
     {
         if (mapControl == null) return;
@@ -763,6 +852,23 @@ public partial class Hospody : ContentPage, IQueryAttributable
         var vp = mapControl.Map.Navigator.Viewport;
         var (lon, lat) = SphericalMercator.ToLonLat(vp.CenterX, vp.CenterY);
 
+        // „Doma“, „Domov“, „U mě“… → nejspíš domov, ne hospoda (domov je jen v telefonu, nikam se neposílá)
+        if (LooksLikeHome(name))
+        {
+            var answer = await Listek.ShowAsync(this, "Nemyslíš svůj domov?",
+                $"„{name}“ zní jako tvůj domov. Domov se uloží jen v tomhle telefonu – pití tady se pak počítá jako „doma“ a ostatní ho na mapě neuvidí jako hospodu.",
+                ("Je to domov", PencilVariant.Primary), ("Ne, je to podnik", PencilVariant.Secondary));
+            if (answer == null) return;
+            if (answer == "Je to domov")
+            {
+                HomePlace.Set(Math.Round(lat, 6), Math.Round(lon, 6));
+                CloseAdd();
+                ShowHome();
+                await Listek.AlertAsync(this, "Domov uložen", "Pití do 80 m odsud se počítá jako „doma“. Změnit ho jde v Nastavení.");
+                return;
+            }
+        }
+
         // nepřidávat podruhé, co už v mapě je
         var near = PubService.Nearest(lat, lon, 25);
         if (near != null && !await Listek.ConfirmAsync(this, "Už tu něco je",
@@ -773,6 +879,7 @@ public partial class Hospody : ContentPage, IQueryAttributable
         {
             AddSaveButton.IsEnabled = false;
             var pub = await PubService.CreateAsync(name, addKind, lat, lon);
+            _ = OsmReports.SubmitAsync(pub, "added");   // návrh poznámky do OpenStreetMap (schvaluje správce)
             CloseAdd();
             ShowPubs(await PubCatalog.GetAsync());
             ShowCard(pub, null);
@@ -819,6 +926,11 @@ public partial class Hospody : ContentPage, IQueryAttributable
         {
             CloseHomeMode(); // Zpět při nastavování domova = zpátky do Nastavení
             Dispatcher.Dispatch(async () => await Shell.Current.GoToAsync("//Settings"));
+            return true;
+        }
+        if (FriendCard.IsVisible)
+        {
+            FriendCard.IsVisible = false;
             return true;
         }
         if (PubCard.IsVisible)

@@ -26,13 +26,13 @@ namespace Dezolati.Services
         /// <summary>
         /// Hlášení kámošům (uloženo i v profilu, tady kvůli zápisu bez signálu):
         /// 0 nehlásit, 1 hlásit že piju (oznámení „X si dala pivo“), 2 i kde (hospoda, „Teď sedí“, mapa).
-        /// Výchozí 1; kdo dřív hlásil hospodu, má 2.
+        /// Výchozí 2 (vše zapnuté, kdo nechce, vypne).
         /// </summary>
         public static int ShareLevel
         {
             get => Preferences.ContainsKey(KeyShareLevel)
                 ? Math.Clamp(Preferences.Get(KeyShareLevel, 1), 0, 2)
-                : Preferences.Get(KeySharePub, false) ? 2 : 1;
+                : 2;
             set
             {
                 Preferences.Set(KeyShareLevel, Math.Clamp(value, 0, 2));
@@ -48,11 +48,11 @@ namespace Dezolati.Services
 
         /// <summary>
         /// Poznávat hospodu podle polohy (jen pro mě: lístek, statistiky). Jen v telefonu.
-        /// Kdo už měl zapnuté „Hlásit“, má poznávání zapnuté taky.
+        /// Výchozí zapnuto.
         /// </summary>
         public static bool DetectPub
         {
-            get => Preferences.Get(KeyDetectPub, SharePub);
+            get => Preferences.Get(KeyDetectPub, true);
             set => Preferences.Set(KeyDetectPub, value);
         }
 
@@ -192,8 +192,9 @@ namespace Dezolati.Services
                 if (loc == null) return PlaceInfo.Unknown;
 
                 LastLocation.Remember(loc.Latitude, loc.Longitude);
+                // doma / venku: poloha se hodí kámošům na mapu (jen při hlášení „I kde“)
                 if (HomePlace.IsNear(loc.Latitude, loc.Longitude))
-                    return new PlaceInfo(Place.Home, null, null);
+                    return new PlaceInfo(Place.Home, null, null, loc.Latitude, loc.Longitude);
 
                 // hospody v okolí: chybí-li čtverec mapy, dotáhnout (max. pár sekund, bez signálu nic)
                 try
@@ -205,7 +206,7 @@ namespace Dezolati.Services
                 await PubService.LoadOverlayAsync();
                 var pub = PubService.Nearest(loc.Latitude, loc.Longitude, PubRadiusMeters);
                 return pub == null
-                    ? new PlaceInfo(Place.Other, null, null)
+                    ? new PlaceInfo(Place.Other, null, null, loc.Latitude, loc.Longitude)
                     : new PlaceInfo(Place.Pub, pub.Id, PubService.NameOf(pub), pub.Lat, pub.Lon);
             }
             catch

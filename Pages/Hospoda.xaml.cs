@@ -22,9 +22,12 @@ public partial class Hospoda : ContentPage, IQueryAttributable
         InitializeComponent();
     }
 
+    private string backRoute = "//Hospody";   // odkud se přišlo (mapa / návrhy do OSM)
+
     public void ApplyQueryAttributes(IDictionary<string, object> query)
     {
         var id = query.TryGetValue("pubId", out var v) ? v as string : null;
+        backRoute = query.TryGetValue("back", out var b) && b is string route ? route : "//Hospody";
         // náhradní údaje pro hospodu mimo stažené čtverce mapy (oblíbená kámoše apod.)
         PubInfo? fallback = null;
         if (id != null && query.TryGetValue("lat", out var la) && la is double lat
@@ -340,6 +343,8 @@ public partial class Hospoda : ContentPage, IQueryAttributable
         {
             ClosedButton.IsEnabled = false;
             await PubService.SaveAsync(pub, updated);
+            // návrh poznámky do OpenStreetMap (schvaluje správce); vlastní podniky v OSM nejsou
+            if (!PubService.IsCustom(pub)) _ = OsmReports.SubmitAsync(pub, closing ? "closed" : "reopened");
             profile = await PubService.GetProfileAsync(pub.Id) ?? updated;
             RenderProfile();
             RenderState();
@@ -447,7 +452,7 @@ public partial class Hospoda : ContentPage, IQueryAttributable
             SetEditing(false); // Zpět při úpravě = zrušit úpravu
             return true;
         }
-        Dispatcher.Dispatch(async () => await Shell.Current.GoToAsync("//Hospody"));
+        Dispatcher.Dispatch(async () => await Shell.Current.GoToAsync(backRoute));
         return true;
     }
 }

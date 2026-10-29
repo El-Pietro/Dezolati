@@ -10,6 +10,7 @@
  *
  * Tokeny telefonů: PushTokens/{hash} { Uid, Token }. Kdo nechce: Users/{uid}.NotifyFriends == false.
  *  - usage / usageWatch: přehled spotřeby proti bezplatným limitům (jen pro admina) + hlídání každou hodinu
+ *  - osmReport:      návrh poznámky do OpenStreetMap (zavřeno / otevřeno / nový podnik) → adminovi ke schválení
  *
  * Nasazení: firebase deploy --only functions   (viz functions/README.md)
  */
@@ -188,20 +189,26 @@ exports.atThePub = onDocumentCreated("Drinks/{id}", async (event) => {
   const share = d.ShareDrink === true || (d.ShareDrink === undefined && d.SharePub === true);
   if (!share) return;
 
-  const friends = await friendsOf(d.UserId);
+  const user = await userRef.get();
+  // tajný režim: kámoši v MaskFor se o pití nedozví
+  const masked = new Set(user.get("MaskFor") || []);
+  const friends = (await friendsOf(d.UserId)).filter((f) => !masked.has(f));
   if (friends.length === 0) return;
 
-  const user = await userRef.get();
-  const nick = d.Name || user.get("Nickname") || "Někdo";
+  const nick = user.get("Nickname") || d.Name || "Někdo";   // přezdívka, ne jméno
   const gender = user.get("Gender");
   const dal = gender === "Píčka" ? "dala" : gender === "Píč" ? "dal" : "dal(a)";
   const sNim = gender === "Píčka" ? " s ní" : gender === "Píč" ? " s ním" : "";
-  const where = d.SharePub === true && d.PubName ? `${d.PubName} – ` : "";
+  // „I kde“ (SharePub): hospoda / doma / venku
+  const where = d.SharePub !== true ? ""
+    : d.PubName ? ` – ${d.PubName}`
+    : d.Place === "home" ? " doma"
+    : d.Place === "other" ? " venku" : "";
 
   await notifyData(friends, {
     type: "drink",
-    title: `${nick} si právě ${dal} ${whatDrank(d)}`,
-    body: `${where}připij si${sNim}! 🍻`,
+    title: `${nick} si právě ${dal} ${whatDrank(d)}${where}`,
+    body: `Připij si${sNim}! 🍻`,
     fromUid: d.UserId,
     sessionId: event.params.id,
     pubId: d.SharePub === true ? d.PubId : undefined,
@@ -219,6 +226,9 @@ exports.cheer = onDocumentCreated("Cheers/{id}", async (event) => {
     title: `${from} si s tebou připíjí ${c.Emoji || "🍻"}`,
     body: "Na zdraví! 🍻",
     fromUid: c.From,
+    fromNick: from,            // appka si připití připíše rovnou (bez čtení) a spojí oznámení
+    emoji: c.Emoji || "🍻",
+    sessionId: c.SessionId,
   });
 });
 
@@ -227,9 +237,11 @@ exports.cheer = onDocumentCreated("Cheers/{id}", async (event) => {
 exports.invite = onDocumentCreated("Invites/{id}", async (event) => {
   const v = event.data?.data();
   if (!v || !v.From) return;
-  const friends = await friendsOf(v.From);
+  const inviter = await db.doc(`Users/${v.From}`).get();
+  const masked = new Set((inviter.exists && inviter.get("MaskFor")) || []);   // tajný režim
+  const friends = (await friendsOf(v.From)).filter((f) => !masked.has(f));
   if (friends.length === 0) return;
-  const from = v.FromNick || (await nickOf(v.From));
+  const from = v.FromNick || (inviter.exists && inviter.get("Nickname")) || "Někdo";
   await notifyData(friends, {
     type: "invite",
     title: `${from} tě zve na drink`,
@@ -450,4 +462,18 @@ exports.usageWatch = onSchedule({ schedule: "every 60 minutes", region: "europe-
     android: { priority: "high", notification: { channelId: "kamosi", icon: "ic_stat_beer", color: "#6B3E1E" } },
   });
   logger.warn("Upozornění na limit", lines);
+});
+
+// ---------------- návrh poznámky do OSM → adminovi ke schválení (Nastavení → Návrhy do OSM) ----------------
+
+exports.osmReport = onDocumentCreated("OsmReports/{id}", async (event) => {
+  const r = event.data?.data();
+  const admin = ADMIN_UID.value();
+  if (!r || !admin) return;
+  const what = { closed: "zavřeno", reopened: "zase otevřeno", added: "nový podnik" }[r.What] || r.What;
+  await notifyData([admin], {
+    type: "osm",
+    title: `Návrh do OSM: ${r.Name || "?"} – ${what}`,
+    body: `Od ${r.ByNick || "?"}. Schválíš v Nastavení → Návrhy do OSM.`,
+  });
 });

@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:controls="clr-namespace:Dezolati.Controls"
+             x:Class="Dezolati.Pages.Kostky2"
+             Title="Kostky">
+    <Grid RowDefinitions="Auto, *">
+        <Image Grid.RowSpan="2" Source="{AppThemeBinding Light=woodlight.jpg, Dark=wooddark.jpg}" Aspect="AspectFill" />
+
+        <BoxView Grid.Row="0" HeightRequest="0" Color="Transparent" InputTransparent="True" Margin="{DynamicResource TopBarMargin}" />
+        <controls:PencilButton Grid.Row="0" Variant="Outline" Text="Zpět" IsVisible="{OnPlatform Default=True, Android=False}"
+                               HorizontalOptions="Start" Margin="{DynamicResource TopBarMargin}" Clicked="OnZpetClicked" />
+
+        <Border Grid.Row="1" Style="{StaticResource Listek}">
+            <!-- nahoře jména (rolují se), dole tah + klávesnice (vždy na obrazovce) -->
+            <Grid RowDefinitions="*, Auto" RowSpacing="6">
+            <ScrollView Grid.Row="0">
+                <VerticalStackLayout Spacing="6">
+                    <Grid>
+                        <!-- návod vlevo nahoře -->
+                        <Label Text=" (návod) " Style="{StaticResource Small}" TextColor="{StaticResource InkSoft}"
+                               HorizontalOptions="Start" VerticalOptions="Start" Padding="0,0,12,8">
+                            <Label.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnHelpTapped" />
+                            </Label.GestureRecognizers>
+                        </Label>
+                        <Label x:Name="TitleLabel" Text="Kostky" Style="{StaticResource Title}" />
+                    </Grid>
+
+                    <VerticalStackLayout x:Name="Board" Spacing="2" />
+                    <Label x:Name="EventLabel" Style="{StaticResource Small}" HorizontalTextAlignment="Center" />
+                    <Label x:Name="FinalLabel" Style="{StaticResource FieldLabel}" HorizontalTextAlignment="Center" IsVisible="False" />
+                </VerticalStackLayout>
+            </ScrollView>
+
+                <VerticalStackLayout Grid.Row="1" Spacing="4">
+                    <Label x:Name="TurnLabel" Style="{StaticResource Heading}" HorizontalTextAlignment="Center" />
+                    <Label x:Name="PointsLabel" Style="{StaticResource Heading}" HorizontalTextAlignment="Center" />
+
+                    <VerticalStackLayout x:Name="PlayBox" Spacing="4">
+                        <Grid ColumnDefinitions="*, *, *" ColumnSpacing="6">
+                            <controls:PencilButton Text="Zapsat" Variant="Primary" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                                   FontSize="{DynamicResource FontButtonSmall}" Clicked="OnBankClicked" />
+                            <controls:PencilButton Grid.Column="1" Text="Další hod" Variant="Secondary" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                                   FontSize="{DynamicResource FontButtonSmall}" Clicked="OnNextClicked" />
+                            <controls:PencilButton Grid.Column="2" Text="Vynulovat" Variant="Danger" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                                   FontSize="{DynamicResource FontButtonSmall}" Clicked="OnResetClicked" />
+                        </Grid>
+                        <!-- číselná klávesnice -->
+                        <Grid x:Name="KeyGrid" ColumnDefinitions="*, *, *" RowDefinitions="Auto, Auto, Auto, Auto"
+                              ColumnSpacing="6" RowSpacing="4" Margin="0,2,0,0" />
+                    </VerticalStackLayout>
+
+                    <Grid ColumnDefinitions="*, *" ColumnSpacing="10" Margin="0,4,0,0">
+                        <controls:PencilButton x:Name="UndoButton" Text="Zpět o krok" Variant="Secondary"
+                                               FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                               Clicked="OnUndoClicked" />
+                        <controls:PencilButton Grid.Column="1" Text="Konec hry" Variant="Danger"
+                                               FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                               Clicked="OnEndClicked" />
+                    </Grid>
+                </VerticalStackLayout>
+            </Grid>
+        </Border>
+    </Grid>
+</ContentPage>

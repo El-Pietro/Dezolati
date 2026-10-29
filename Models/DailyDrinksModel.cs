@@ -34,6 +34,8 @@
         public DateTime Today { get; set; }
         /// <summary>Součty přes celou historii (agregace na serveru).</summary>
         public DailyDrinksModel Totals { get; set; } = new();
+        /// <summary>Den prvního zápisu (null = nic / index se ještě staví).</summary>
+        public DateTime? FirstDay { get; set; }
         /// <summary>Počet dní, kdy pil.</summary>
         public int Days { get; set; }
         /// <summary>Rekordní den (null = nikdy).</summary>
@@ -54,5 +56,12 @@
         public List<PubStat> Pubs { get; set; } = new();
         /// <summary>Oblíbené hospody (z profilu).</summary>
         public Dictionary<string, FavoritePub> FavoritePubs { get; set; } = new();
+        /// <summary>Dotyčný má pro mě zapnutý tajný režim → čísla jsou přepočtená (třetina), nic „kdo teď pije“.</summary>
+        public bool Masked { get; set; }
+        /// <summary>Odhad promile uložený při jeho posledním zápisu (null = nesdílí / střízlivý).</summary>
+        public double? PromileValue { get; set; }
+        public DateTime? PromileAt { get; set; }
+        /// <summary>Pohlaví (kvůli „střízlivý / střízlivá“).</summary>
+        public string? Gender { get; set; }
     }
 }

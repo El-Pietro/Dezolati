@@ -74,7 +74,7 @@ namespace Dezolati.Services
             var http = new HttpClient { Timeout = TimeSpan.FromSeconds(100) };
             // Overpass chce slušně představenou appku (vlastní User-Agent + Referer),
             // jinak vrací 406 Not Acceptable
-            http.DefaultRequestHeaders.UserAgent.ParseAdd("Dezolati/3.8 (+https://github.com/El-Pietro/Dezolati)");
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("Dezolati/3.9 (+https://github.com/El-Pietro/Dezolati)");
             http.DefaultRequestHeaders.Referrer = new Uri("https://github.com/El-Pietro/Dezolati");
             return http;
         }
