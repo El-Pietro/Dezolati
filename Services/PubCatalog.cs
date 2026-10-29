@@ -24,7 +24,8 @@ namespace Dezolati.Services
         private const string OldFileName = "hospody_cz64_v3.json";   // starý katalog celého JMK – už se nepoužívá
         private static readonly TimeSpan MaxAge = TimeSpan.FromDays(30);
 
-        private const string NationalUrl = "https://github.com/El-Pietro/Dezolati/releases/download/katalog/hospody-cz.csv.gz";
+        /// <summary>Odkud se katalog stahuje (web si ho bere ze svého webu – z GitHubu by ho prohlížeč nepustil).</summary>
+        public static string NationalUrl { get; set; } = "https://github.com/El-Pietro/Dezolati/releases/download/katalog/hospody-cz.csv.gz";
         private const string NationalFileName = "hospody_cz_v2.csv.gz";
         private const string OldNationalFileName = "hospody_cz.csv.gz";   // první verze jen s názvy
         private const string DetailsFileName = "hospody_detaily.json";

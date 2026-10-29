@@ -3,8 +3,9 @@
 @implements IDisposable
 @inject NavigationManager Nav
 
-@* Lístek (Pages/MainPage v appce). Mapa a hry přijdou v dalších fázích. *@
+@* Lístek (Pages/MainPage v appce). Hry přijdou v další fázi. *@
 <div class="topbar">
+    <PencilButton Variant="PencilVariant.Outline" Text="Hospody" OnClick="@(() => Nav.NavigateTo("hospody"))" />
     <div class="spacer"></div>
     <div class="badge-wrap">
         <PencilButton Variant="PencilVariant.Outline" Text="Přátelé" OnClick="@(() => Nav.NavigateTo("pratele"))" />

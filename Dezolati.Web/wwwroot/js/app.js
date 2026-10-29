@@ -88,6 +88,23 @@ window.dz = (function () {
             }
         },
 
+        // ---- poloha ----
+        geo: function (timeoutMs, maxAgeMs) {
+            return new Promise(function (resolve) {
+                if (!('geolocation' in navigator)) return resolve(JSON.stringify({ ok: false, error: 'unsupported' }));
+                var done = false;
+                var finish = function (r) { if (!done) { done = true; resolve(JSON.stringify(r)); } };
+                setTimeout(function () { finish({ ok: false, error: 'timeout' }); }, timeoutMs + 1500);
+                navigator.geolocation.getCurrentPosition(function (p) {
+                    finish({ ok: true, lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy });
+                }, function (e) {
+                    finish({ ok: false, error: e.code === 1 ? 'denied' : e.code === 3 ? 'timeout' : 'unavailable' });
+                }, { enableHighAccuracy: false, timeout: timeoutMs, maximumAge: maxAgeMs });
+            });
+        },
+        baseUri: function () { return document.baseURI; },
+        openUrl: function (url) { safe(function () { window.open(url, '_blank', 'noopener'); }); },
+
         // ---- drobnosti ----
         vibrate: function (ms) { safe(function () { if (navigator.vibrate) navigator.vibrate(ms); }); },
         isStandalone: function () {

@@ -1,0 +1,451 @@
+@namespace Dezolati.Web.Pages
+@page "/hospoda/{PubId}"
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+
+@* Profil hospody (Pages/Hospoda v appce). Základ je z OpenStreetMap, zbytek vyplňují uživatelé. *@
+<BackBar OnBack="Back" />
+
+<div class="listek">
+    <div class="stack">
+        @if (pub == null)
+        {
+            @if (loading)
+            {
+                <div class="spinner"></div>
+            }
+            else
+            {
+                <div class="title">Hospoda zmizela</div>
+                <div class="small center">V seznamu z OpenStreetMap už není.</div>
+            }
+        }
+        else
+        {
+            <div class="title">@PubService.NameOf(pub)</div>
+            <div class="small center">@Info()</div>
+            @if (profile.Closed)
+            {
+                <div class="heading center" style="color:#A01C1C">Natrvalo zavřeno</div>
+            }
+            @if (PubService.NameOf(pub) != pub.Name)
+            {
+                <div class="small center">@(PubService.IsCustom(pub) ? "původní název" : "v OpenStreetMap"): @pub.Name</div>
+            }
+
+            <div class="grid2" style="margin-top:6px">
+                <PencilButton Text="@(Favorites.Is(pub.Id) ? "★ Oblíbená" : "☆ Oblíbená")" Small="true" Variant="PencilVariant.Secondary"
+                              Disabled="busy" OnClick="ToggleFav" />
+                <PencilButton Text="Pozvat kámoše" Small="true" Variant="PencilVariant.Secondary" Disabled="busy" OnClick="Invite" />
+            </div>
+            @if (!string.IsNullOrEmpty(pub.Website) || !string.IsNullOrEmpty(pub.Phone))
+            {
+                <div class="grid2" style="margin-top:6px">
+                    @if (!string.IsNullOrEmpty(pub.Website))
+                    {
+                        <PencilButton Text="Web" Small="true" Variant="PencilVariant.Secondary" OnClick="OpenWeb" />
+                    }
+                    @if (!string.IsNullOrEmpty(pub.Phone))
+                    {
+                        <PencilButton Text="Zavolat" Small="true" Variant="PencilVariant.Secondary" OnClick="Call" />
+                    }
+                </div>
+            }
+            @if (loading)
+            {
+                <div class="spinner"></div>
+            }
+
+            @if (!editing)
+            {
+                <div class="stack" style="gap:2px;margin-top:10px">
+                    <div class="field-label">Co točí:</div>
+                    <div class="body">@Or(TapsFromOsm ? OsmTaps : profile.Taps)</div>
+                    @if (TapsFromOsm)
+                    {
+                        <div class="small">podle OpenStreetMap</div>
+                    }
+                    <div class="field-label">Ceny:</div>
+                    @if (PriceNumbers.Length > 0)
+                    {
+                        <div class="body">@PriceNumbers</div>
+                    }
+                    @if (!(PriceNumbers.Length > 0 && string.IsNullOrWhiteSpace(profile.Prices)))
+                    {
+                        <div class="body">@Or(profile.Prices)</div>
+                    }
+                    <div class="field-label">Otvíračka:</div>
+                    <div class="body">@Or(HoursFromOsm ? OsmHoursCz : profile.Hours)</div>
+                    @if (HoursFromOsm)
+                    {
+                        <div class="small">podle OpenStreetMap</div>
+                    }
+                    <div class="field-label">Poznámka:</div>
+                    <div class="body">@Or(profile.Note)</div>
+                    <div class="small" style="margin-top:8px">
+                        @(profile.UpdatedAt is DateTime at
+                            ? $"Naposledy upravil(a) {profile.UpdatedByNick ?? "?"}, {at.ToString("d. M. yyyy", WebPlatform.Cs)}"
+                            : "Zatím to nikdo nevyplnil. Buď první.")
+                    </div>
+
+                    <PencilButton Text="Upravit" Class="mt12" OnClick="StartEdit" />
+                    @if (history == null)
+                    {
+                        <PencilButton Text="Historie změn" Variant="PencilVariant.Secondary" Disabled="busy" OnClick="LoadHistory" />
+                    }
+                    else
+                    {
+                        <div class="stack" style="gap:8px;margin-top:8px">
+                            @if (history.Count == 0)
+                            {
+                                <div class="small">Žádné úpravy.</div>
+                            }
+                            @foreach (var h in history)
+                            {
+                                <div class="small history-item">@h</div>
+                            }
+                        </div>
+                    }
+                    <PencilButton Text="@(profile.Closed ? "Zase otevřeno" : "Natrvalo zavřeno")"
+                                  Variant="@(profile.Closed ? PencilVariant.Primary : PencilVariant.Danger)"
+                                  Class="mt12" Disabled="busy" OnClick="ToggleClosed" />
+                    @if (PubService.IsCustom(pub) && PubService.IsMine(pub))
+                    {
+                        <PencilButton Text="Smazat podnik" Variant="PencilVariant.Danger" Disabled="busy" OnClick="Delete" />
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="stack" style="gap:2px;margin-top:10px">
+                    <div class="field-label">Název:</div>
+                    <input class="entry" maxlength="80" @bind="eName" />
+                    <div class="field-label">Co točí:</div>
+                    <textarea class="entry textarea" maxlength="300" placeholder="Plzeň 12°, Kozel 11°…" @bind="eTaps"></textarea>
+                    <div class="field-label">Ceny v Kč (pro výpočet útraty):</div>
+                    <div class="grid3">
+                        <input class="entry" inputmode="numeric" maxlength="4" placeholder="pivo 0,5" @bind="ePivo" />
+                        <input class="entry" inputmode="numeric" maxlength="4" placeholder="víno 2 dcl" @bind="eVino" />
+                        <input class="entry" inputmode="numeric" maxlength="4" placeholder="panák" @bind="ePanak" />
+                    </div>
+                    <div class="field-label">Ceny – poznámka:</div>
+                    <textarea class="entry textarea" maxlength="300" placeholder="Plzeň 0,5 l = 62 Kč, Kozel 48 Kč" @bind="ePrices"></textarea>
+                    <div class="field-label">Otvíračka:</div>
+                    <textarea class="entry textarea" maxlength="300" placeholder="Po–Čt 15–23, Pá–So 15–02" @bind="eHours"></textarea>
+                    <div class="field-label">Poznámka:</div>
+                    <textarea class="entry textarea" maxlength="300" placeholder="Zahrádka, šipky, hospodský je morous…" @bind="eNote"></textarea>
+                    <PencilButton Text="Uložit" Class="mt12" Disabled="busy" OnClick="Save" />
+                    <PencilButton Text="Zrušit" Variant="PencilVariant.Secondary" OnClick="() => editing = false" />
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public string? PubId { get; set; }
+
+    private PubInfo? pub;
+    private PubProfile profile = new();
+    private bool loading = true, busy, editing;
+    private List<string>? history;
+    private string? loadedFor;
+
+    private string? eName, eTaps, ePrices, eHours, eNote, ePivo, eVino, ePanak;
+    private string[] editStart = Array.Empty<string>();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (AuthSession.Uid == null)
+        {
+            Nav.NavigateTo("prihlaseni", replace: true);
+            return;
+        }
+        if (PubId == null || loadedFor == PubId) return;
+        loadedFor = PubId;
+        await LoadAsync(PubId);
+    }
+
+    private async Task LoadAsync(string id)
+    {
+        loading = true;
+        editing = false;
+        history = null;
+        profile = new PubProfile();
+        try
+        {
+            await PubCatalog.GetAsync();
+            await PubService.LoadOverlayAsync();
+            pub = PubService.Find(id);
+            if (pub == null && Favorites.All.TryGetValue(id, out var fav))
+            {
+                var fallback = Favorites.ToPub(id, fav);
+                try { await PubCatalog.EnsureCellsAsync(PubCatalog.CellsNear(fallback.Lat, fallback.Lon)); } catch { }
+                pub = PubService.Find(id) ?? fallback;
+            }
+            if (pub == null) return;
+            StateHasChanged();
+
+            var details = pub.Light ? PubCatalog.EnsureDetailsAsync(pub) : null;
+            profile = await PubService.GetProfileAsync(pub.Id) ?? new PubProfile();
+            if (details != null)
+            {
+                var detailed = await details;
+                pub = PubService.Find(detailed.Id) is { Light: false } fresh ? fresh : detailed;
+            }
+        }
+        catch (Exception ex)
+        {
+            await Note.AlertAsync("Chyba", Net.IsNetworkError(ex) ? "Bez signálu hospodu nenačtu." : $"Hospodu se nepodařilo načíst: {ex.Message}");
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task Back() => await JS.InvokeVoidAsync("history.back");
+
+    private string Info()
+    {
+        if (pub == null) return "";
+        var info = pub.KindText;
+        if (!string.IsNullOrEmpty(pub.Address)) info += $" · {pub.Address}";
+        if (PubService.IsCustom(pub)) info += $" · přidal(a) {profile.CreatedByNick ?? "?"}";
+        return info;
+    }
+
+    private static string Or(string? s) => string.IsNullOrWhiteSpace(s) ? "—" : s;
+    private string? OsmTaps => pub?.Brewery;
+    private string? OsmHoursCz => OsmHours.ToCzech(pub?.Hours);
+    private bool TapsFromOsm => string.IsNullOrWhiteSpace(profile.Taps) && !string.IsNullOrWhiteSpace(OsmTaps);
+    private bool HoursFromOsm => string.IsNullOrWhiteSpace(profile.Hours) && !string.IsNullOrWhiteSpace(OsmHoursCz);
+
+    private string PriceNumbers
+    {
+        get
+        {
+            var parts = new List<string>();
+            if (profile.PricePivo is int a) parts.Add($"pivo {a} Kč");
+            if (profile.PriceVino is int b) parts.Add($"víno {b} Kč");
+            if (profile.PricePanak is int c) parts.Add($"panák {c} Kč");
+            return string.Join(" · ", parts);
+        }
+    }
+
+    private static int? ParsePrice(string? text) =>
+        int.TryParse((text ?? "").Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) && n > 0 && n <= PubService.MaxPrice
+            ? n : null;
+
+    private static string Norm(string? s) => (s ?? "").Trim();
+
+    private string[] CurrentEdit() => new[]
+    {
+        Norm(eName), Norm(eTaps), Norm(ePrices), Norm(eHours), Norm(eNote),
+        ParsePrice(ePivo)?.ToString() ?? "", ParsePrice(eVino)?.ToString() ?? "", ParsePrice(ePanak)?.ToString() ?? ""
+    };
+
+    private void StartEdit()
+    {
+        if (pub == null) return;
+        eName = PubService.NameOf(pub);
+        eTaps = string.IsNullOrWhiteSpace(profile.Taps) ? OsmTaps : profile.Taps;
+        ePrices = profile.Prices;
+        ePivo = profile.PricePivo?.ToString(CultureInfo.InvariantCulture);
+        eVino = profile.PriceVino?.ToString(CultureInfo.InvariantCulture);
+        ePanak = profile.PricePanak?.ToString(CultureInfo.InvariantCulture);
+        eHours = string.IsNullOrWhiteSpace(profile.Hours) ? OsmHoursCz : profile.Hours;
+        eNote = profile.Note;
+        editStart = CurrentEdit();
+        editing = true;
+    }
+
+    private async Task Save()
+    {
+        if (pub == null) return;
+        if (CurrentEdit().SequenceEqual(editStart))
+        {
+            editing = false;
+            await Note.AlertAsync("Nic nového", "Nic jsi nezměnil, takže není co ukládat.");
+            return;
+        }
+        var updated = new PubProfile
+        {
+            DisplayName = eName, Taps = eTaps, Prices = ePrices, Hours = eHours, Note = eNote,
+            PricePivo = ParsePrice(ePivo), PriceVino = ParsePrice(eVino), PricePanak = ParsePrice(ePanak),
+            Closed = profile.Closed
+        };
+        try
+        {
+            busy = true;
+            await PubService.SaveAsync(pub, updated);
+            profile = await PubService.GetProfileAsync(pub.Id) ?? updated;
+            history = null;
+            editing = false;
+        }
+        catch (Exception ex)
+        {
+            await Note.AlertAsync("Chyba", $"Uložit se nepovedlo: {ex.Message}");
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task LoadHistory()
+    {
+        if (pub == null) return;
+        try
+        {
+            busy = true;
+            var edits = await PubService.GetHistoryAsync(pub.Id);
+            var result = new List<string>();
+            for (var i = 0; i < edits.Count; i++)
+            {
+                var ed = edits[i];
+                PubEdit? prev = i + 1 < edits.Count ? edits[i + 1]
+                    : edits.Count >= PubService.HistoryLimit ? null
+                    : new PubEdit();
+                var lines = new List<string> { $"{ed.At?.ToString("d. M. yyyy H:mm", WebPlatform.Cs) ?? "?"} – {ed.ByNick ?? "?"}" };
+                if (ed.Action == "created")
+                {
+                    lines.Add($"přidal(a) podnik „{ed.DisplayName}“");
+                    result.Add(string.Join("\n", lines));
+                    continue;
+                }
+                if (prev != null ? ed.Closed != prev.Closed : ed.Closed)
+                    lines.Add(ed.Closed ? "označil(a) jako natrvalo zavřeno" : "znovu otevřeno");
+                void Diff(string label, string? now, string? before)
+                {
+                    if (prev == null ? Norm(now).Length == 0 : Norm(now) == Norm(before)) return;
+                    lines.Add(string.IsNullOrWhiteSpace(now) ? $"{label}: (smazáno)" : $"{label}: {now}");
+                }
+                static string? Kc(int? n) => n is int v ? $"{v} Kč" : null;
+                Diff("název", ed.DisplayName, prev?.DisplayName);
+                Diff("točí", ed.Taps, prev?.Taps);
+                Diff("ceny", ed.Prices, prev?.Prices);
+                Diff("cena piva", Kc(ed.PricePivo), Kc(prev?.PricePivo));
+                Diff("cena vína", Kc(ed.PriceVino), Kc(prev?.PriceVino));
+                Diff("cena panáku", Kc(ed.PricePanak), Kc(prev?.PricePanak));
+                Diff("otvíračka", ed.Hours, prev?.Hours);
+                Diff("poznámka", ed.Note, prev?.Note);
+                if (lines.Count == 1) lines.Add("(beze změny)");
+                result.Add(string.Join("\n", lines));
+            }
+            history = result;
+        }
+        catch (Exception ex)
+        {
+            await Note.AlertAsync("Chyba", $"Historie: {ex.Message}");
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task ToggleClosed()
+    {
+        if (pub == null) return;
+        var closing = !profile.Closed;
+        var name = PubService.NameOf(pub);
+        var ok = closing
+            ? await Note.ConfirmAsync("Zavřeno natrvalo?", $"„{name}“ na mapě zešedne. Kdyby to nebyla pravda, kdokoli to vrátí.", "Zavřeno", danger: true)
+            : await Note.ConfirmAsync("Zase otevřeno?", $"„{name}“ zase jede?", "Otevřeno");
+        if (!ok) return;
+        var updated = new PubProfile
+        {
+            DisplayName = name, Taps = profile.Taps, Prices = profile.Prices, Hours = profile.Hours, Note = profile.Note,
+            PricePivo = profile.PricePivo, PriceVino = profile.PriceVino, PricePanak = profile.PricePanak, Closed = closing
+        };
+        try
+        {
+            busy = true;
+            await PubService.SaveAsync(pub, updated);
+            if (!PubService.IsCustom(pub)) _ = OsmReports.SubmitAsync(pub, closing ? "closed" : "reopened");
+            profile = await PubService.GetProfileAsync(pub.Id) ?? updated;
+            history = null;
+        }
+        catch (Exception ex)
+        {
+            await Note.AlertAsync("Chyba", $"Uložit se nepovedlo: {ex.Message}");
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task Delete()
+    {
+        if (pub == null) return;
+        if (!await Note.ConfirmAsync("Smazat podnik?",
+                $"„{PubService.NameOf(pub)}“ zmizí z mapy všem. Jestli jen zavřeli, dej radši „Natrvalo zavřeno“.", "Smazat", danger: true))
+            return;
+        try
+        {
+            await PubService.DeleteAsync(pub);
+            Nav.NavigateTo("hospody");
+        }
+        catch (Exception ex)
+        {
+            await Note.AlertAsync("Chyba", $"Smazat se nepovedlo: {ex.Message}");
+        }
+    }
+
+    private async Task ToggleFav()
+    {
+        if (pub == null) return;
+        try
+        {
+            busy = true;
+            await Favorites.ToggleAsync(pub);
+        }
+        catch (Exception ex)
+        {
+            await Note.AlertAsync("Chyba", Net.IsNetworkError(ex) ? "Bez signálu to nejde uložit." : ex.Message);
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task Invite()
+    {
+        if (pub == null) return;
+        var name = PubService.NameOf(pub);
+        if (!await Note.ConfirmAsync("Pozvat kámoše?", $"Kámošům do {Invites.RadiusKm:0} km přijde „zve tě na drink do {name}“.", "Pozvat"))
+            return;
+        try
+        {
+            busy = true;
+            await Invites.SendAsync(pub);
+            await Note.AlertAsync("Posláno", "Pozvánka letí. Teď už jen čekat, kdo dorazí.");
+        }
+        catch (Exception ex)
+        {
+            await Note.AlertAsync("Nepovedlo se", Net.IsNetworkError(ex) ? "Bez signálu pozvánka neodejde." : ex.Message);
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task OpenWeb()
+    {
+        if (string.IsNullOrEmpty(pub?.Website)) return;
+        var url = pub.Website.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? pub.Website : "https://" + pub.Website;
+        await JS.InvokeVoidAsync("dz.openUrl", url);
+    }
+
+    private async Task Call()
+    {
+        if (string.IsNullOrEmpty(pub?.Phone)) return;
+        var number = new string(pub.Phone.Where(c => char.IsDigit(c) || c == '+').ToArray());
+        if (!await Note.ConfirmAsync("Zavolat?", pub.Phone, "Zavolat")) return;
+        Nav.NavigateTo("tel:" + number);   // jen otevře vytáčení
+    }
+}

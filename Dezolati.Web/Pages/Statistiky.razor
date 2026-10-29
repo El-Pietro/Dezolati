@@ -102,9 +102,9 @@
             @if (s.FavoritePubs.Count > 0)
             {
                 <div class="heading mt12">Oblíbené hospody</div>
-                @foreach (var fav in s.FavoritePubs.Values.OrderBy(f => f.Name, StringComparer.CurrentCultureIgnoreCase))
+                @foreach (var (favId, fav) in s.FavoritePubs.OrderBy(f => f.Value.Name, StringComparer.CurrentCultureIgnoreCase))
                 {
-                    <div class="body">★ @fav.Name</div>
+                    <div class="body" style="cursor:pointer" @onclick="@(() => OpenPub(favId))">★ @fav.Name</div>
                 }
             }
 
@@ -113,7 +113,7 @@
                 <div class="heading mt12">Nejčastější hospody</div>
                 @foreach (var (p, i) in s.Pubs.Take(5).Select((p, i) => (p, i)))
                 {
-                    <div>
+                    <div style="cursor:pointer" @onclick="@(() => OpenPub(p.PubId))">
                         <div class="body">@(i + 1). @(p.Name ?? "?")</div>
                         <div class="small">@PubInfo(p)</div>
                     </div>
@@ -435,6 +435,8 @@
             estimating = false;
         }
     }
+
+    private void OpenPub(string id) => Nav.NavigateTo($"hospoda/{Uri.EscapeDataString(id)}");
 
     // ---------------- tajný režim a odebrání (jen u kámoše) ----------------
 

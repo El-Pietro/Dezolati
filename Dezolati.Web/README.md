@@ -11,8 +11,13 @@ Webová verze appky jako PWA na GitHub Pages: **https://el-pietro.github.io/Dezo
 ## Fáze
 1. ✅ přihlášení, registrace, lístek, zápis, škrtání, moje statistiky, nastavení
 2. ✅ kámoši (žádosti, hledání, Možná znáš, kdo pije, připíjení, statistiky kámoše, tajný režim) + oznámení (web push)
-3. mapa hospod
+3. ✅ mapa hospod (Leaflet + OSM dlaždice, katalog přibalený k webu, kartička hospody i kámošů, profil hospody, úpravy, přidání, oblíbené, filtr, pozvánky, domov) + poznání hospody při zápisu (poloha z prohlížeče)
 4. hry a zbytek
+
+## Katalog hospod
+- Web nestahuje katalog z GitHub Releases (prohlížeč by ho nepustil) – akce `web.yml` ho při nasazení přibalí
+  do `wwwroot/data/hospody-cz.csv.gz` (ve `.gitignore`) a každé pondělí ráno web nasadí znovu s čerstvým.
+- Při `dotnet run` u sebe katalog chybí → mapa si hospody dotáhne z Overpassu (pomalejší, ale funguje).
 
 ## Oznámení (web push)
 - Token prohlížeče jde do `PushTokens` stejně jako token telefonu (`Platform = "Web"`), server (functions) se nemění.

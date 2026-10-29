@@ -20,5 +20,9 @@
     <Compile Include="$(MSBuildThisFileDirectory)..\Services\UserSession.cs" Link="Shared\Services\UserSession.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)..\Services\Social.cs" Link="Shared\Services\Social.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)..\Services\FriendBadge.cs" Link="Shared\Services\FriendBadge.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\Services\PubCatalog.cs" Link="Shared\Services\PubCatalog.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\Services\PubService.cs" Link="Shared\Services\PubService.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\Services\OsmReports.cs" Link="Shared\Services\OsmReports.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\Services\OsmHours.cs" Link="Shared\Services\OsmHours.cs" />
   </ItemGroup>
 </Project>

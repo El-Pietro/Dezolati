@@ -48,6 +48,10 @@ namespace Dezolati.Web
             IsStandalone = await js.InvokeAsync<bool>("dz.isStandalone");
             IsIos = await js.InvokeAsync<bool>("dz.isIos");
 
+            // katalog hospod přibalený k webu (z GitHub Releases by ho prohlížeč nestáhl)
+            var baseUri = await js.InvokeAsync<string>("dz.baseUri");
+            Services.PubCatalog.NationalUrl = new Uri(new Uri(baseUri), "data/hospody-cz.csv.gz").ToString();
+
             _bridge = new Bridge();
             await js.InvokeVoidAsync("dz.hook", DotNetObjectReference.Create(_bridge));
             await js.InvokeVoidAsync("dz.persist");

@@ -50,6 +50,15 @@
         }
 
         <div class="section-head" style="margin-top:6px;cursor:default">
+            <div class="field-label" style="margin:0">Poznávat hospodu podle polohy:</div>
+            <button class="link" @onclick="@(() => Info("detect"))">(info)</button>
+        </div>
+        <div class="grid2">
+            <Chip Text="Poznávat" Selected="@detectPub" OnClick="@(() => SetDetect(true))" />
+            <Chip Text="Nepoznávat" Selected="@(!detectPub)" OnClick="@(() => SetDetect(false))" />
+        </div>
+
+        <div class="section-head" style="margin-top:6px;cursor:default">
             <div class="field-label" style="margin:0">Hlásit kámošům, že piju:</div>
             <button class="link" @onclick="@(() => Info("share"))">(info)</button>
         </div>
@@ -57,6 +66,19 @@
             <Chip Text="I kde" Selected="@(shareLevel == 2)" OnClick="@(() => SetShare(2))" />
             <Chip Text="Že piju" Selected="@(shareLevel == 1)" OnClick="@(() => SetShare(1))" />
             <Chip Text="Nehlásit" Selected="@(shareLevel == 0)" OnClick="@(() => SetShare(0))" />
+        </div>
+
+        <div class="section-head" style="margin-top:6px;cursor:default">
+            <div class="field-label" style="margin:0">Domov:</div>
+            <button class="link" @onclick="@(() => Info("home"))">(info)</button>
+        </div>
+        <div class="grid2">
+            <PencilButton Text="@(HomePlace.IsSet ? "Přestěhovat" : "Nastavit domov")" Small="true" Variant="PencilVariant.Secondary"
+                          OnClick="@(() => Nav.NavigateTo("hospody?mode=home"))" />
+            @if (HomePlace.IsSet)
+            {
+                <PencilButton Text="Zapomenout" Small="true" Variant="PencilVariant.Secondary" OnClick="HomePlace.Clear" />
+            }
         </div>
 
         <div class="section-head" style="margin-top:6px;cursor:default">
@@ -95,7 +117,7 @@
         <PencilButton Text="Uložit změny" Class="mt24" Disabled="saving" OnClick="Save" />
 
         <div class="small center" style="margin-top:18px">Dezoláti @AppInfo.Current.VersionString</div>
-        <div class="small soft center">Na webu zatím není: mapa hospod, hry a připomínky. Ty jsou v appce pro Android.</div>
+        <div class="small soft center">Na webu zatím nejsou hry a připomínky. Ty jsou v appce pro Android.</div>
         <PencilButton Text="Odhlásit se" Variant="PencilVariant.Danger" Class="mt12" OnClick="Logout" />
     </div>
 </div>
@@ -106,6 +128,7 @@
     private string pricePivo = "", priceVino = "", pricePanak = "", weight = "";
     private bool saving;
     private bool notifyFriends = true;
+    private bool detectPub = PushService.DetectPub;
     private int shareLevel = 2;
     private WebPush.State pushState = WebPush.State.Unsupported;
     private bool pushBusy;
@@ -196,9 +219,38 @@
     private async Task SetShare(int level)
     {
         if (level == shareLevel) return;
+        if (level == 2 && !await EnsureLocationAsync()) return;
         shareLevel = level;
         PushService.ShareLevel = level;
+        if (level == 2) { detectPub = true; PushService.DetectPub = true; }
         await SavePrefsAsync();
+    }
+
+    /// <summary>Poznávání hospody – jen v tomhle prohlížeči. Vypnutí vypne i hlášení „i kde“.</summary>
+    private async Task SetDetect(bool on)
+    {
+        if (on == detectPub) return;
+        if (on && !await EnsureLocationAsync()) return;
+        detectPub = on;
+        PushService.DetectPub = on;
+        if (!on && shareLevel == 2)
+        {
+            shareLevel = 1;
+            PushService.ShareLevel = 1;
+            await SavePrefsAsync();
+        }
+    }
+
+    /// <summary>Bez polohy nejde poznat hospodu → zeptat se prohlížeče hned (z ťuknutí).</summary>
+    private async Task<bool> EnsureLocationAsync()
+    {
+        if (await WebGeo.GetAsync(TimeSpan.FromSeconds(10), TimeSpan.FromMinutes(10)) != null) return true;
+        if (WebGeo.LastError == "denied")
+        {
+            await Note.AlertAsync("Bez polohy to nejde", WebGeo.Explain("denied"));
+            return false;
+        }
+        return true;   // poloha teď nejde zjistit (třeba uvnitř), ale povolená je
     }
 
     /// <summary>Oznámení a hlášení se ukládají hned do profilu (platí i pro appku v telefonu).</summary>
@@ -243,9 +295,14 @@
                 "Platí pro tvůj účet všude (appka i web). Na webu je pak ještě potřeba povolit je v prohlížeči tlačítkem níž."),
             "share" => ("Hlásit kámošům",
                 "Při prvním drinku po 3h pauze přijde kámošům oznámení a uvidí tě v Kámoších.\n\n" +
-                "I kde – i hospoda / doma / venku (pozná to jen appka v telefonu, web zatím polohu nezná).\n" +
+                "I kde – i hospoda / doma / venku (podle polohy při zápisu).\n" +
                 "Že piju – jen „X si právě dal pivo“.\n" +
                 "Nehlásit – kámošům nic nepřijde a mezi pijícími nebudeš.\n\nPlatí pro appku i web."),
+            "detect" => ("Poznávat hospodu",
+                "Při zápisu se podívá, jestli jsi do 60 m od hospody (nebo doma). Uvidíš to na lístku a ve statistikách „kde nejčastěji piješ“ – ty vidí i kámoši. Poloha se nikam neukládá. Platí jen v tomhle prohlížeči."),
+            "home" => ("Domov",
+                (HomePlace.IsSet ? "Nastavený. " : "Nenastavený – pití doma se počítá jako „jinde“. ") +
+                "Pití do 80 m od domova se počítá jako „doma“. Poloha domova zůstává jen v tomhle prohlížeči."),
             "prices" => ("Ceny",
                 "Z nich se počítá útrata ve statistikách. Když má hospoda v profilu vyplněné ceny, vezmou se ty. Tvoje ceny vidíš jen ty."),
             _ => ("Promile",

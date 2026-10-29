@@ -1,5 +1,6 @@
 # Webová verze Dezolátů (hlavně pro iPhone) → GitHub Pages: https://el-pietro.github.io/Dezolati/
-# Spustí se sama po pushi do master, když se změní web nebo sdílená logika (Services, Models).
+# Spustí se sama po pushi do master, když se změní web nebo sdílená logika (Services, Models),
+# a každé pondělí ráno (čerstvý katalog hospod).
 # Jednorázově v repu: Settings → Pages → Source: GitHub Actions.
 name: Web
 
@@ -11,6 +12,8 @@ on:
       - 'Services/**'
       - 'Models/**'
       - '.github/workflows/web.yml'
+  schedule:
+    - cron: '47 4 * * 1'   # pondělí po katalogu hospod (hospody.yml jede ve 3:17 UTC) → web dostane čerstvý
   workflow_dispatch:
 
 permissions:
@@ -31,6 +34,16 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
+
+      # katalog hospod k webu (z GitHub Releases by ho prohlížeč nestáhl – nepouští cizí weby)
+      - name: Katalog hospod
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p Dezolati.Web/wwwroot/data
+          gh release download katalog -R "${{ github.repository }}" -p hospody-cz.csv.gz -D Dezolati.Web/wwwroot/data --clobber \
+            || echo "Katalog se nepodařilo stáhnout – web si hospody dotáhne z Overpassu"
+          ls -l Dezolati.Web/wwwroot/data || true
 
       - name: Sestavit web
         run: dotnet publish Dezolati.Web/Dezolati.Web.csproj -c Release -o out

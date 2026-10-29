@@ -1,0 +1,562 @@
+@namespace Dezolati.Web.Pages
+@page "/hospody"
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+
+@* Mapa hospod (Pages/Hospody v appce). Hospody jsou z katalogu přibaleného k webu → mapa nestojí žádné čtení. *@
+<div class="map-page">
+    <div class="topbar">
+        <PencilButton Variant="PencilVariant.Outline" Text="Zpět" OnClick="Back" />
+        <div class="spacer"></div>
+        @if (mode == Mode.Normal)
+        {
+            <PencilButton Variant="PencilVariant.Outline" Text="@(FilterActive ? "Filtr •" : "Filtr")" OnClick="ToggleFilter" />
+            <PencilButton Variant="PencilVariant.Outline" Text="Přidat" OnClick="StartAdd" />
+        }
+        <PencilButton Variant="PencilVariant.Outline" Text="Kde jsem?" OnClick="() => CenterOnMeAsync(false)" />
+    </div>
+
+    <div class="map-frame">
+        <div id="dzmap" class="map"></div>
+        @if (hint != null)
+        {
+            <div class="map-hint">@hint</div>
+        }
+        @if (mode != Mode.Normal)
+        {
+            <div class="crosshair"></div>
+        }
+        @if (loadingText != null)
+        {
+            <div class="map-loading">
+                <div class="spinner"></div>
+                <div class="body">@loadingText</div>
+            </div>
+        }
+    </div>
+
+    @if (mode == Mode.Add)
+    {
+        <div class="listek map-card">
+            <div class="stack">
+                <div class="small center">Posuň mapu, ať je křížek na podniku</div>
+                <input class="entry" maxlength="80" placeholder="Název podniku" @bind="addName" />
+                <div class="grid4">
+                    @foreach (var (k, label) in AddKinds)
+                    {
+                        var kind = k;
+                        <Chip Text="@label" Selected="@(addKind == kind)" OnClick="() => addKind = kind" />
+                    }
+                </div>
+                <div class="grid2">
+                    <PencilButton Text="Přidat sem" Disabled="busy" OnClick="SaveAdd" />
+                    <PencilButton Text="Zrušit" Variant="PencilVariant.Secondary" OnClick="() => mode = Mode.Normal" />
+                </div>
+            </div>
+        </div>
+    }
+    else if (mode == Mode.Home)
+    {
+        <div class="listek map-card">
+            <div class="stack">
+                <div class="small center">Posuň mapu, ať je křížek na tvém domově</div>
+                <div class="grid2">
+                    <PencilButton Text="Tady bydlím" OnClick="SaveHome" />
+                    <PencilButton Text="Zrušit" Variant="PencilVariant.Secondary" OnClick="@(() => Nav.NavigateTo("nastaveni"))" />
+                </div>
+            </div>
+        </div>
+    }
+    else if (filterOpen)
+    {
+        <div class="listek map-card">
+            <div class="stack">
+                <div class="grid2">
+                    <Chip Text="Vše" Selected="@(!onlyFav)" OnClick="() => SetOnlyFav(false)" />
+                    <Chip Text="★ Oblíbené" Selected="@onlyFav" OnClick="() => SetOnlyFav(true)" />
+                </div>
+                <div class="grid4">
+                    @foreach (var (k, label) in FilterKinds)
+                    {
+                        var kind = k;
+                        <Chip Text="@label" Selected="@kinds.Contains(kind)" OnClick="() => ToggleKind(kind)" />
+                    }
+                </div>
+                <div class="grid2">
+                    <Chip Text="I zavřené" Selected="@showClosed" OnClick="ToggleClosed" />
+                    <PencilButton Text="Hotovo" Small="true" OnClick="() => filterOpen = false" />
+                </div>
+            </div>
+        </div>
+    }
+    else if (friendGroup != null)
+    {
+        <div class="listek map-card">
+            <div class="stack" style="gap:10px">
+                @for (var i = 0; i < friendGroup.Count; i++)
+                {
+                    var f = friendGroup[i];
+                    var idx = i;
+                    <div>
+                        <div class="heading" style="cursor:pointer" @onclick="() => OpenFriend(f)">@f.Emoji @f.Nick</div>
+                        <div class="small">@(f.PubName ?? "pije") · @FriendsNow.Ago(f.LastDrinkAt)</div>
+                        <div class="small">@(idx < friendToday.Count ? friendToday[idx] : "dnes: …")</div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+    else if (selected != null)
+    {
+        <div class="listek map-card">
+            <div style="display:flex;align-items:center;gap:10px">
+                <div class="grow-1">
+                    <div class="heading">@PubService.NameOf(selected)</div>
+                    <div class="small">@CardInfo(selected)</div>
+                </div>
+                <button class="star" @onclick="ToggleStar">@(Favorites.Is(selected.Id) ? "★" : "☆")</button>
+            </div>
+            <div class="grid2" style="margin-top:6px">
+                <PencilButton Text="Otevřít" Small="true" OnClick="@(() => Nav.NavigateTo($"hospoda/{Uri.EscapeDataString(selected.Id)}"))" />
+                <PencilButton Text="Pozvat kámoše" Small="true" Variant="PencilVariant.Secondary" Disabled="busy" OnClick="Invite" />
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private enum Mode { Normal, Add, Home }
+
+    [SupplyParameterFromQuery(Name = "mode")] public string? QueryMode { get; set; }
+
+    private static readonly (string, string)[] AddKinds =
+        { ("pub", "Hospoda"), ("bar", "Bar"), ("restaurant", "Restaurace"), ("biergarten", "Zahrádka") };
+    private static readonly (string, string)[] FilterKinds =
+        { ("pub", "Hospody"), ("bar", "Bary"), ("restaurant", "Restaurace"), ("biergarten", "Zahrádky") };
+
+    private DotNetObjectReference<Hospody>? self;
+    private Mode mode;
+    private string? hint;
+    private string? loadingText = "Načítám hospody…";
+    private PubInfo? selected;
+    private double? selectedDistance;
+    private bool busy, filterOpen, mapReady;
+    private string addName = "", addKind = "pub";
+
+    private bool onlyFav = Preferences.Get("map_only_fav", false);
+    private bool showClosed = Preferences.Get("map_show_closed", true);
+    private HashSet<string> kinds = new((Preferences.Get("map_kinds", "pub,bar,restaurant,biergarten") ?? "")
+        .Split(',', StringSplitOptions.RemoveEmptyEntries));
+    private bool FilterActive => onlyFav || !showClosed || kinds.Count < 4;
+
+    private List<List<DrinkingFriend>> friendGroups = new();
+    private List<DrinkingFriend>? friendGroup;
+    private List<string> friendToday = new();
+
+    protected override void OnInitialized()
+    {
+        if (AuthSession.Uid == null)
+        {
+            Nav.NavigateTo("prihlaseni", replace: true);
+            return;
+        }
+        mode = QueryMode == "home" ? Mode.Home : Mode.Normal;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || AuthSession.Uid == null) return;
+        self = DotNetObjectReference.Create(this);
+
+        // výchozí pohled: Brno (domov, když je nastavený)
+        var (lat, lon, zoom) = (49.1951, 16.6068, 13);
+        if (HomePlace.Location is { } h) (lat, lon, zoom) = (h.Lat, h.Lon, mode == Mode.Home ? 17 : 15);
+        await JS.InvokeVoidAsync("dzMap.create", "dzmap", self, lat, lon, zoom);
+        await JS.InvokeVoidAsync("dzMap.setFilter", onlyFav, showClosed, kinds.ToArray());
+        await ShowHomeAsync();
+        mapReady = true;
+
+        PubCatalog.Changed += OnCatalogChanged;
+        Favorites.Changed += OnCatalogChanged;
+        await LoadAsync();
+    }
+
+    private void OnCatalogChanged() => InvokeAsync(async () => { await PushPubsAsync(); StateHasChanged(); });
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            await PubCatalog.GetAsync();            // spustí i stažení katalogu (na pozadí)
+            await PubService.LoadOverlayAsync();     // opravené názvy, zavřené a přidané podniky
+            await PushPubsAsync();
+            loadingText = null;
+            StateHasChanged();
+            if (mode == Mode.Normal) await CenterOnMeAsync(silent: true);
+            _ = ShowFriendsAsync();
+        }
+        catch (Exception ex)
+        {
+            loadingText = Net.IsNetworkError(ex) ? "Bez signálu hospody nenačtu." : ex.Message;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>Všechny podniky do mapy jedním balíkem (filtr, výřez a shluky řeší mapa sama).</summary>
+    private async Task PushPubsAsync()
+    {
+        if (!mapReady) return;
+        var catalog = await PubCatalog.GetAsync();
+        var list = new List<object[]>(catalog.Count + 50);
+        var seen = new HashSet<string>();
+        void Add(PubInfo p, bool fav)
+        {
+            if (!seen.Add(p.Id)) return;
+            var flags = (PubService.IsClosed(p) ? 1 : 0) | (PubService.IsCustom(p) ? 2 : 0) | (fav ? 4 : 0);
+            list.Add(new object[] { p.Id, p.Lat, p.Lon, p.Kind, PubService.NameOf(p), flags });
+        }
+        foreach (var (id, fav) in Favorites.All)
+            Add(PubService.Find(id) ?? Favorites.ToPub(id, fav), true);
+        foreach (var p in PubService.AllPubs(catalog))
+            Add(p, false);
+        await JS.InvokeVoidAsync("dzMap.setPubs", System.Text.Json.JsonSerializer.Serialize(list));
+    }
+
+    private async Task ShowHomeAsync()
+    {
+        if (HomePlace.Location is { } h) await JS.InvokeVoidAsync("dzMap.setHome", h.Lat, h.Lon);
+        else await JS.InvokeVoidAsync("dzMap.setHome", null, null);
+    }
+
+    // ---------------- z mapy ----------------
+
+    private bool downloading;
+
+    /// <summary>Posun / přiblížení mapy: nápověda a (bez katalogu) dotažení čtverců z Overpassu.</summary>
+    [JSInvokable]
+    public async Task OnView(double s, double w, double n, double e, int zoom, bool onlyFavorites)
+    {
+        string? text = null;
+        if (!onlyFavorites)
+        {
+            if (!PubCatalog.HasNational && (PubCatalog.NationalLoading || downloading)) text = "Stahuji hospody…";
+            else if (zoom < 13) text = "Přibliž mapu, ať vidíš hospody";
+            else if (!PubCatalog.HasNational)
+            {
+                var cells = PubCatalog.CellsIn(s, w, n, e);
+                var missing = cells.Where(c => !PubCatalog.HasCell(c)).ToList();
+                if (missing.Count > 0 && cells.Count <= 24)
+                {
+                    text = "Stahuji hospody v okolí…";
+                    _ = DownloadCellsAsync(missing);
+                }
+            }
+        }
+        if (text != hint)
+        {
+            hint = text;
+            StateHasChanged();
+        }
+        await Task.CompletedTask;
+    }
+
+    private async Task DownloadCellsAsync(List<string> missing)
+    {
+        if (downloading) return;
+        downloading = true;
+        try { await PubCatalog.EnsureCellsAsync(missing); }
+        catch { hint = Net.IsOnline ? "Hospody se nepodařilo načíst" : "Bez signálu – hospody načtu později"; }
+        finally
+        {
+            downloading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    [JSInvokable]
+    public void OnPubClick(string id)
+    {
+        if (mode != Mode.Normal) return;
+        var pub = PubService.Find(id) ?? (Favorites.All.TryGetValue(id, out var fav) ? Favorites.ToPub(id, fav) : null);
+        if (pub == null) return;
+        ShowCard(pub, null);
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void OnMapClick()
+    {
+        if (mode != Mode.Normal) return;
+        if (selected != null || friendGroup != null || filterOpen)
+        {
+            selected = null;
+            friendGroup = null;
+            filterOpen = false;
+            StateHasChanged();
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnFriendClick(int group)
+    {
+        if (mode != Mode.Normal || group < 0 || group >= friendGroups.Count) return;
+        selected = null;
+        filterOpen = false;
+        friendGroup = friendGroups[group];
+        friendToday = friendGroup.Select(_ => "dnes: …").ToList();
+        StateHasChanged();
+
+        // dnešek každého (1 čtení za kámoše) + promile z profilu (0 čtení)
+        var fs = new FirestoreService();
+        var g = friendGroup;
+        for (var i = 0; i < g.Count; i++)
+        {
+            var f = g[i];
+            string drunk;
+            try
+            {
+                var day = await fs.GetDailyDrinks(f.Uid, f.PubDayNow);
+                drunk = day == null || day.Total <= 0 ? "dnes: nic zapsaného" : "dnes: " + Cz.Souhrn(day.Pivo, day.Vino, day.Panaky);
+            }
+            catch
+            {
+                drunk = "dnes: ?";
+            }
+            if (f.PromileNow is { } p) drunk += $" · ≈ {p.Promile.ToString("0.0", WebPlatform.Cs)} ‰";
+            if (friendGroup != g) return;
+            friendToday[i] = drunk;
+            StateHasChanged();
+        }
+    }
+
+    private void OpenFriend(DrinkingFriend f) =>
+        Nav.NavigateTo($"statistiky/{Uri.EscapeDataString(f.Uid)}?nick={Uri.EscapeDataString(f.Nick)}");
+
+    private async Task ShowFriendsAsync()
+    {
+        try
+        {
+            var drinking = await FriendsNow.GetAsync();
+            friendGroups = drinking.Where(f => f.HasPubLocation)
+                .GroupBy(f => (Math.Round(f.PubLat!.Value, 4), Math.Round(f.PubLon!.Value, 4)))
+                .Select(g => g.ToList()).ToList();
+            var marks = friendGroups.Select((g, i) => new
+            {
+                lat = g[0].PubLat!.Value,
+                lon = g[0].PubLon!.Value,
+                label = string.Join(", ", g.Select(d => d.PubName is "doma" or "venku" ? $"{d.Nick} ({d.PubName})" : d.Nick)),
+                group = i
+            }).ToList();
+            await JS.InvokeVoidAsync("dzMap.setFriends", marks);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Kámoši na mapě: {ex.Message}");
+        }
+    }
+
+    // ---------------- kartička hospody ----------------
+
+    private void ShowCard(PubInfo pub, double? distance)
+    {
+        friendGroup = null;
+        filterOpen = false;
+        selected = pub;
+        selectedDistance = distance;
+    }
+
+    private string CardInfo(PubInfo pub)
+    {
+        var info = PubService.IsClosed(pub) ? "zavřeno · " + pub.KindText : pub.KindText;
+        if (!string.IsNullOrEmpty(pub.Address)) info += " · " + pub.Address;
+        if (selectedDistance is double d) info += $" · {Math.Round(d)} m";
+        return info;
+    }
+
+    private async Task ToggleStar()
+    {
+        if (selected == null) return;
+        try { await Favorites.ToggleAsync(selected); }
+        catch (Exception ex) { await Note.AlertAsync("Chyba", Net.IsNetworkError(ex) ? "Bez signálu to nejde uložit." : ex.Message); }
+    }
+
+    private async Task Invite()
+    {
+        if (selected == null) return;
+        var pub = selected;
+        var name = PubService.NameOf(pub);
+        if (!await Note.ConfirmAsync("Pozvat kámoše?", $"Kámošům do {Invites.RadiusKm:0} km přijde „zve tě na drink do {name}“.", "Pozvat"))
+            return;
+        try
+        {
+            busy = true;
+            await Invites.SendAsync(pub);
+            await Note.AlertAsync("Posláno", "Pozvánka letí. Teď už jen čekat, kdo dorazí.");
+        }
+        catch (Exception ex)
+        {
+            await Note.AlertAsync("Nepovedlo se", Net.IsNetworkError(ex) ? "Bez signálu pozvánka neodejde." : ex.Message);
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    // ---------------- filtr ----------------
+
+    private void ToggleFilter()
+    {
+        filterOpen = !filterOpen;
+        if (filterOpen) { selected = null; friendGroup = null; }
+    }
+
+    private async Task ApplyFilter()
+    {
+        Preferences.Set("map_only_fav", onlyFav);
+        Preferences.Set("map_show_closed", showClosed);
+        Preferences.Set("map_kinds", string.Join(",", kinds));
+        await JS.InvokeVoidAsync("dzMap.setFilter", onlyFav, showClosed, kinds.ToArray());
+    }
+
+    private async Task SetOnlyFav(bool on) { onlyFav = on; await ApplyFilter(); }
+    private async Task ToggleClosed() { showClosed = !showClosed; await ApplyFilter(); }
+    private async Task ToggleKind(string kind)
+    {
+        if (!kinds.Remove(kind)) kinds.Add(kind);
+        await ApplyFilter();
+    }
+
+    // ---------------- poloha ----------------
+
+    private async Task CenterOnMeAsync(bool silent)
+    {
+        var loc = await WebGeo.GetAsync(TimeSpan.FromSeconds(10), TimeSpan.FromMinutes(5));
+        if (loc is not { } l)
+        {
+            if (!silent) await Note.AlertAsync("Bez polohy", WebGeo.Explain(WebGeo.LastError));
+            return;
+        }
+        LastLocation.Remember(l.Lat, l.Lon);
+        await JS.InvokeVoidAsync("dzMap.setMe", l.Lat, l.Lon);
+        await JS.InvokeVoidAsync("dzMap.flyTo", l.Lat, l.Lon, 17);
+
+        // sedíš v hospodě? (do 60 m)
+        if (mode == Mode.Normal && PubService.Nearest(l.Lat, l.Lon, 60) is { } near)
+        {
+            ShowCard(near, PubCatalog.DistanceMeters(l.Lat, l.Lon, near.Lat, near.Lon));
+            StateHasChanged();
+        }
+    }
+
+    // ---------------- přidání podniku / domov ----------------
+
+    private void StartAdd()
+    {
+        selected = null;
+        friendGroup = null;
+        filterOpen = false;
+        addName = "";
+        addKind = "pub";
+        mode = Mode.Add;
+    }
+
+    private async Task<(double Lat, double Lon)?> CenterAsync()
+    {
+        var c = await JS.InvokeAsync<double[]?>("dzMap.center");
+        return c is { Length: 2 } ? (c[0], c[1]) : null;
+    }
+
+    private static readonly string[] HomeWords =
+        { "doma", "domov", "domu", "u me", "u mne", "byt", "chata", "chalupa", "barak", "dum", "home", "u nas", "kvartyr" };
+
+    /// <summary>Název spíš domova („Doma“, „U mě“, „Barák“…) – stejně jako v appce.</summary>
+    private static bool LooksLikeHome(string name)
+    {
+        var sb = new System.Text.StringBuilder();
+        foreach (var ch in name.Normalize(System.Text.NormalizationForm.FormD))
+            if (CharUnicodeInfo.GetUnicodeCategory(ch) != UnicodeCategory.NonSpacingMark)
+                sb.Append(char.ToLowerInvariant(ch));
+        var n = System.Text.RegularExpressions.Regex.Replace(sb.ToString(), @"[^a-z0-9 ]", " ").Trim();
+        n = System.Text.RegularExpressions.Regex.Replace(n, @"\s+", " ");
+        return HomeWords.Any(w => n == w || n == "moje " + w || n == "muj " + w || n == "nase " + w || n == "u mne " + w);
+    }
+
+    private async Task SaveAdd()
+    {
+        var name = addName.Trim();
+        if (name.Length == 0)
+        {
+            await Note.AlertAsync("Jak se jmenuje?", "Napiš název podniku.");
+            return;
+        }
+        if (await CenterAsync() is not { } c) return;
+
+        if (LooksLikeHome(name))
+        {
+            var answer = await Note.ShowAsync("Nemyslíš svůj domov?",
+                $"„{name}“ zní jako tvůj domov. Domov se uloží jen v tomhle prohlížeči – pití tady se pak počítá jako „doma“ a ostatní ho na mapě neuvidí jako hospodu.",
+                ("Je to domov", PencilVariant.Primary), ("Ne, je to podnik", PencilVariant.Secondary));
+            if (answer == null) return;
+            if (answer == "Je to domov")
+            {
+                HomePlace.Set(Math.Round(c.Lat, 6), Math.Round(c.Lon, 6));
+                mode = Mode.Normal;
+                await ShowHomeAsync();
+                await Note.AlertAsync("Domov uložen", "Pití do 80 m odsud se počítá jako „doma“. Změnit ho jde v Nastavení.");
+                return;
+            }
+        }
+
+        var near = PubService.Nearest(c.Lat, c.Lon, 25);
+        if (near != null && !await Note.ConfirmAsync("Už tu něco je",
+                $"Do 25 m je „{PubService.NameOf(near)}“. Opravdu přidat nový podnik?", "Přidat"))
+            return;
+
+        try
+        {
+            busy = true;
+            var pub = await PubService.CreateAsync(name, addKind, c.Lat, c.Lon);
+            _ = OsmReports.SubmitAsync(pub, "added");   // návrh poznámky do OpenStreetMap (schvaluje správce)
+            mode = Mode.Normal;
+            await PushPubsAsync();
+            ShowCard(pub, null);
+        }
+        catch (Exception ex)
+        {
+            await Note.AlertAsync("Chyba", $"Podnik se nepodařilo přidat: {ex.Message}");
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task SaveHome()
+    {
+        if (await CenterAsync() is not { } c) return;
+        var replace = HomePlace.IsSet;
+        if (!await Note.ConfirmAsync(replace ? "Přestěhoval ses?" : "Tady bydlíš?",
+                "Pití do 80 m odsud se bude počítat jako „doma“. Poloha domova zůstane jen v tomhle prohlížeči, " +
+                "kámoši uvidí nanejvýš to, že jsi pil doma.",
+                replace ? "Nový domov" : "Tady bydlím"))
+            return;
+        HomePlace.Set(Math.Round(c.Lat, 6), Math.Round(c.Lon, 6));
+        Nav.NavigateTo("nastaveni");
+    }
+
+    private void Back()
+    {
+        if (mode == Mode.Add) { mode = Mode.Normal; return; }
+        Nav.NavigateTo(mode == Mode.Home ? "nastaveni" : "");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        PubCatalog.Changed -= OnCatalogChanged;
+        Favorites.Changed -= OnCatalogChanged;
+        try { await JS.InvokeVoidAsync("dzMap.destroy"); } catch { }
+        self?.Dispose();
+    }
+}

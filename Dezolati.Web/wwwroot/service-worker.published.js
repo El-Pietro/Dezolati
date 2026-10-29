@@ -13,7 +13,7 @@ self.addEventListener('message', event => { if (event.data === 'skipWaiting') se
 
 const cacheNamePrefix = 'dezolati-';
 const cacheName = `${cacheNamePrefix}${self.assetsManifest.version}`;
-const offlineAssetsInclude = [/\.dll$/, /\.pdb$/, /\.wasm/, /\.html/, /\.js$/, /\.json$/, /\.css$/, /\.woff2?$/, /\.png$/, /\.jpe?g$/, /\.webp$/, /\.svg$/, /\.blat$/, /\.dat$/, /\.webmanifest$/];
+const offlineAssetsInclude = [/\.dll$/, /\.pdb$/, /\.wasm/, /\.html/, /\.js$/, /\.json$/, /\.css$/, /\.woff2?$/, /\.png$/, /\.jpe?g$/, /\.webp$/, /\.svg$/, /\.blat$/, /\.dat$/, /\.webmanifest$/, /\.gz$/];
 const offlineAssetsExclude = [/^service-worker\.js$/, /^push-sw\.js$/];
 // GitHub Pages: appka žije v /Dezolati/ → základ = složka service workeru
 const baseUrl = new URL(self.registration.scope);

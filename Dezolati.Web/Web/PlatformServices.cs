@@ -118,8 +118,41 @@ namespace Dezolati.Services
             Preferences.Remove(KeyTokenUid);
         }
 
-        /// <summary>Na webu zatím bez polohy (přijde s mapou ve fázi 3).</summary>
-        public static Task<PlaceInfo> PlaceHereAsync() => Task.FromResult(PlaceInfo.Unknown);
+        private const double PubRadiusMeters = 60;
+
+        /// <summary>
+        /// Kde teď jsem (stejně jako v appce): doma do 80 m, hospoda do 60 m, jinde, nebo nevím.
+        /// Poloha z prohlížeče (poprvé se zeptá), max. pár sekund – zápis nesmí čekat.
+        /// </summary>
+        public static async Task<PlaceInfo> PlaceHereAsync()
+        {
+            if (!DetectPub && !SharePub) return PlaceInfo.Unknown;
+            try
+            {
+                var loc = await Dezolati.Web.WebGeo.GetAsync(TimeSpan.FromSeconds(5), TimeSpan.FromMinutes(10));
+                if (loc is not { } l) return PlaceInfo.Unknown;
+
+                LastLocation.Remember(l.Lat, l.Lon);
+                if (HomePlace.IsNear(l.Lat, l.Lon))
+                    return new PlaceInfo(Place.Home, null, null, l.Lat, l.Lon);
+
+                try
+                {
+                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+                    await PubCatalog.EnsureCellsAsync(PubCatalog.CellsNear(l.Lat, l.Lon), cts.Token);
+                }
+                catch { }
+                await PubService.LoadOverlayAsync();
+                var pub = PubService.Nearest(l.Lat, l.Lon, PubRadiusMeters);
+                return pub == null
+                    ? new PlaceInfo(Place.Other, null, null, l.Lat, l.Lon)
+                    : new PlaceInfo(Place.Pub, pub.Id, PubService.NameOf(pub), pub.Lat, pub.Lon);
+            }
+            catch
+            {
+                return PlaceInfo.Unknown;
+            }
+        }
     }
 
     /// <summary>Připomínky „už X minut nic?“ – jen Android (lokální notifikace). Na webu nic.</summary>
@@ -130,43 +163,5 @@ namespace Dezolati.Services
         public static void OnCorrection(DateTime day, int pivo, int vino, int panaky) { }
         public static void Adjust(DateTime day, int pivo, int vino, int panaky) { }
         public static void Cancel() { }
-    }
-
-    /// <summary>Kousek PubService (profil hospody kvůli cenám). Mapa a katalog přijdou ve fázi 3.</summary>
-    public static class PubService
-    {
-        public const int MaxPrice = 5000;
-
-        /// <summary>Jméno hospody (v appce s přejmenováním z profilu; na webu zatím jen z katalogu).</summary>
-        public static string NameOf(PubInfo pub) => pub.Name;
-
-        public sealed class PubPrices
-        {
-            public int? PricePivo { get; init; }
-            public int? PriceVino { get; init; }
-            public int? PricePanak { get; init; }
-        }
-
-        public static async Task<PubPrices?> GetProfileAsync(string pubId)
-        {
-            var d = await FirestoreRest.GetAsync($"Pubs/{pubId}");
-            if (d == null) return null;
-            int? P(string f) => d.Has(f) ? (int)d.Int(f) : null;
-            return new PubPrices { PricePivo = P("PricePivo"), PriceVino = P("PriceVino"), PricePanak = P("PricePanak") };
-        }
-    }
-
-    public static class PubCatalog
-    {
-        public static double DistanceMeters(double lat1, double lon1, double lat2, double lon2)
-        {
-            const double R = 6371000;
-            double Rad(double deg) => deg * Math.PI / 180;
-            var dLat = Rad(lat2 - lat1);
-            var dLon = Rad(lon2 - lon1);
-            var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
-                    Math.Cos(Rad(lat1)) * Math.Cos(Rad(lat2)) * Math.Sin(dLon / 2) * Math.Sin(dLon / 2);
-            return 2 * R * Math.Asin(Math.Min(1, Math.Sqrt(a)));
-        }
     }
 }

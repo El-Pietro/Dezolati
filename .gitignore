@@ -372,3 +372,6 @@ FodyWeavers.xsd
 functions/node_modules/
 firebase-debug.log
 .firebase/
+
+# katalog hospod pro web – stahuje ho GitHub Action při nasazení webu
+Dezolati.Web/wwwroot/data/
