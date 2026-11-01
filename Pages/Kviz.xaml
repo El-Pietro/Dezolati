@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:controls="clr-namespace:Dezolati.Controls"
+             x:Class="Dezolati.Pages.Kviz"
+             Title="Hospodský kvíz">
+    <Grid RowDefinitions="Auto, *">
+        <Image Grid.RowSpan="2" Source="{AppThemeBinding Light=woodlight.jpg, Dark=wooddark.jpg}" Aspect="AspectFill" />
+
+        <BoxView Grid.Row="0" HeightRequest="0" Color="Transparent" InputTransparent="True" Margin="{DynamicResource TopBarMargin}" />
+        <controls:PencilButton Grid.Row="0" Variant="Outline" Text="Zpět" IsVisible="{OnPlatform Default=True, Android=False}"
+                               HorizontalOptions="Start" Margin="{DynamicResource TopBarMargin}" Clicked="OnZpetClicked" />
+
+        <Border Grid.Row="1" Style="{StaticResource Listek}">
+            <ScrollView>
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="Hospodský kvíz" Style="{StaticResource Title}" />
+
+                    <!-- nastavení: hráči a počet kol -->
+                    <VerticalStackLayout x:Name="SetupBox" Spacing="6">
+                        <Label Text="Kdo hraje (střídáte se u jednoho telefonu):" Style="{StaticResource FieldLabel}" />
+                        <VerticalStackLayout x:Name="PlayersStack" Spacing="2" />
+                        <Grid ColumnDefinitions="*, Auto" ColumnSpacing="8">
+                            <Entry x:Name="NewPlayerEntry" Placeholder="Jméno hráče" ReturnType="Done" Completed="OnAddPlayerClicked" />
+                            <controls:PencilButton Grid.Column="1" Text="Přidat" Variant="Secondary" WidthRequest="110"
+                                                   FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                                   Clicked="OnAddPlayerClicked" />
+                        </Grid>
+                        <Label Text="Otázek na hráče:" Style="{StaticResource FieldLabel}" />
+                        <Grid ColumnDefinitions="*, *, *" ColumnSpacing="8">
+                            <controls:PencilButton x:Name="Rounds3" Text="3" Variant="Secondary" CommandParameter="3" Clicked="OnRoundsClicked" />
+                            <controls:PencilButton x:Name="Rounds5" Grid.Column="1" Text="5" Variant="Secondary" CommandParameter="5" Clicked="OnRoundsClicked" />
+                            <controls:PencilButton x:Name="Rounds10" Grid.Column="2" Text="10" Variant="Secondary" CommandParameter="10" Clicked="OnRoundsClicked" />
+                        </Grid>
+                        <controls:PencilButton Text="Začít kvíz" Variant="Primary" Clicked="OnStartClicked" Margin="0,6,0,0" />
+                        <Label x:Name="InfoLabel" Style="{StaticResource Small}" />
+                    </VerticalStackLayout>
+
+                    <!-- otázka -->
+                    <VerticalStackLayout x:Name="QuestionBox" Spacing="8" IsVisible="False">
+                        <Label x:Name="TurnLabel" Style="{StaticResource Heading}" HorizontalTextAlignment="Center" />
+                        <Label x:Name="CategoryLabel" Style="{StaticResource Small}" HorizontalTextAlignment="Center" TextColor="{StaticResource InkSoft}" />
+                        <ProgressBar x:Name="TimeBar" Progress="1" ProgressColor="{StaticResource Pencil}" />
+                        <Label x:Name="QuestionLabel" Style="{StaticResource Body}" FontSize="20" HorizontalTextAlignment="Center" />
+                        <controls:PencilButton x:Name="Opt0" CommandParameter="0" Variant="Secondary" Clicked="OnOptionClicked" />
+                        <controls:PencilButton x:Name="Opt1" CommandParameter="1" Variant="Secondary" Clicked="OnOptionClicked" />
+                        <controls:PencilButton x:Name="Opt2" CommandParameter="2" Variant="Secondary" Clicked="OnOptionClicked" />
+                        <controls:PencilButton x:Name="Opt3" CommandParameter="3" Variant="Secondary" Clicked="OnOptionClicked" />
+                        <Label x:Name="VerdictLabel" Style="{StaticResource Heading}" HorizontalTextAlignment="Center" IsVisible="False" />
+                        <Label x:Name="NoteLabel" Style="{StaticResource Small}" HorizontalTextAlignment="Center" IsVisible="False" />
+                        <controls:PencilButton x:Name="NextButton" Text="Další" Variant="Primary" IsVisible="False" Clicked="OnNextClicked" />
+                        <Label x:Name="ScoreLabel" Style="{StaticResource Small}" HorizontalTextAlignment="Center" />
+                    </VerticalStackLayout>
+
+                    <!-- konec -->
+                    <VerticalStackLayout x:Name="DoneBox" Spacing="8" IsVisible="False">
+                        <Label Text="Výsledky" Style="{StaticResource Heading}" HorizontalTextAlignment="Center" />
+                        <Label x:Name="RankingLabel" Style="{StaticResource Body}" HorizontalTextAlignment="Center" />
+                        <controls:PencilButton Text="Znovu" Variant="Primary" Clicked="OnAgainClicked" />
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </ScrollView>
+        </Border>
+    </Grid>
+</ContentPage>

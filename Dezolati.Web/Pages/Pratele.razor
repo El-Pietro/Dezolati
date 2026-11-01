@@ -22,6 +22,10 @@
             </div>
         }
 
+        <PencilButton Text="@(Pozvani.WaitingCount > 0 ? $"Pozvánky ({Pozvani.WaitingCount} čeká)" : "Pozvánky do hospody")"
+                      Variant="@(Pozvani.WaitingCount > 0 ? PencilVariant.Primary : PencilVariant.Secondary)" Small="true"
+                      OnClick="@(() => Nav.NavigateTo("pozvanky"))" />
+
         @if (pushHint != null)
         {
             <div class="small soft">@pushHint <a class="ink-link" @onclick="@(() => Nav.NavigateTo("nastaveni"))">Nastavení</a></div>
@@ -47,6 +51,11 @@
         else if (friends.Count == 0)
         {
             <div class="heading center" style="margin:20px 0">Zatím nikdo. Piješ sám?</div>
+        }
+
+        @if (Uncheered().Count >= 2)
+        {
+            <PencilButton Text="Připít všem 🍺" Variant="PencilVariant.Primary" Small="true" Disabled="busy" OnClick="CheerAll" />
         }
 
         @foreach (var f in Ordered())
@@ -83,6 +92,18 @@
                     }
                 }
             </div>
+        }
+
+        @if (outgoing.Count > 0)
+        {
+            <div class="field-label" style="margin-top:14px">Čekáš, až tě přijmou:</div>
+            @foreach (var o in outgoing)
+            {
+                <div class="friend-row">
+                    <div class="body grow-1">@o.Display@(o.CreatedAt is DateTime at ? $"  (od {at.ToLocalTime():d. M.})" : "")</div>
+                    <PencilButton Text="Zrušit" Small="true" Variant="PencilVariant.Secondary" Disabled="busy" OnClick="() => CancelOutgoing(o)" />
+                </div>
+            }
         }
 
         <div class="section-head" style="margin-top:14px" @onclick="ToggleSuggest">
@@ -141,6 +162,7 @@
 @code {
     private readonly FirestoreService firestoreService = new();
     private List<FriendsModel> requests = new();
+    private List<FriendsModel> outgoing = new();
     private List<UserModel> friends = new();
     private Dictionary<string, DrinkingFriend> drinking = new();
     private readonly Dictionary<string, string> cheered = new();   // sezení → „připito 🍺“
@@ -189,10 +211,15 @@
         {
             loading = true;
             await UserSession.EnsureReadyAsync();
-            var (reqs, list) = await firestoreService.GetFriendsOverview(userId);
+            var (reqs, outs, list) = await firestoreService.GetFriendsOverviewAll(userId);
             requests = reqs;
+            outgoing = outs;
             friends = list;
             FriendBadge.Set(requests.Count);
+            _ = InvokeAsync(async () =>
+            {
+                try { await Pozvani.MineAsync(); FriendBadge.SetInvites(Pozvani.WaitingCount); StateHasChanged(); } catch { }
+            });
             FriendsNow.RememberFriends(friends);
             _ = NickDirectory.PublishFriendsAsync(UserSession.Profile?.Nickname, friends);
             loading = false;
@@ -243,7 +270,33 @@
     private void OpenFriend(string uid, string nick)
     {
         if (friends.All(f => f.UserId != uid)) return;   // jen kámoši
-        Nav.NavigateTo($"statistiky/{Uri.EscapeDataString(uid)}?nick={Uri.EscapeDataString(nick)}");
+        var own = friends.First(f => f.UserId == uid).OwnNickname ?? "";
+        Nav.NavigateTo($"statistiky/{Uri.EscapeDataString(uid)}?nick={Uri.EscapeDataString(nick)}&ownNick={Uri.EscapeDataString(own)}");
+    }
+
+    /// <summary>Kdo teď pije a ještě jsem mu nepřipil.</summary>
+    private List<DrinkingFriend> Uncheered() => drinking.Values
+        .Where(d => d.SessionId is string s && !cheered.ContainsKey(s) && !Cheers.Reacted(s)).ToList();
+
+    private async Task CheerAll()
+    {
+        busy = true;
+        try
+        {
+            foreach (var d in Uncheered())
+            {
+                var ok = await Cheers.SendAsync(d.Uid, d.SessionId!, "🍺");
+                cheered[d.SessionId!] = ok ? "připito 🍺" : "připito ✔";
+            }
+        }
+        catch (Exception ex)
+        {
+            await Note.AlertAsync("Nepovedlo se", Net.IsNetworkError(ex) ? "Bez signálu se připít nedá." : ex.Message);
+        }
+        finally
+        {
+            busy = false;
+        }
     }
 
     private async Task Cheer(DrinkingFriend friend, string session, string emoji)
@@ -270,6 +323,26 @@
         try
         {
             await firestoreService.UpdateFriendRequest(r.RequestId, accept ? "Accepted" : "Rejected");
+            await Load();
+        }
+        catch (Exception ex)
+        {
+            await Note.AlertAsync("Chyba", ex.Message);
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task CancelOutgoing(FriendsModel o)
+    {
+        if (!await Note.ConfirmAsync("Zrušit žádost?", $"{o.Display} se nic nedozví, žádost prostě zmizí.", "Zrušit žádost", danger: true))
+            return;
+        busy = true;
+        try
+        {
+            await firestoreService.UpdateFriendRequest(o.RequestId, "Rejected");   // = smazat
             await Load();
         }
         catch (Exception ex)

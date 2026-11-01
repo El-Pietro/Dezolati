@@ -1,0 +1,218 @@
+@namespace Dezolati.Web.Pages
+@page "/sklo"
+@implements IDisposable
+@using System.Diagnostics
+@using Microsoft.JSInterop
+
+@* Foukání skla (Pages/Sklo v appce). Logika i obrázek sdílené (Services/Sklo.cs). *@
+<BackBar To="hry" />
+
+<div class="listek grow">
+    <div class="stack">
+        <div class="title">Foukání skla</div>
+        <div class="small center">@Hint</div>
+
+        <svg @ref="svgRef" class="pour" viewBox="0 0 360 400"
+             @onpointerdown="Down" @onpointermove="Move" @onpointerup="UpCanvas" @onpointercancel="UpCanvas"
+             @oncontextmenu:preventDefault="true">
+            @((MarkupString)SceneKit.ToSvg(GlassScene.Build(game)))
+        </svg>
+
+        @if (game.State == GlassGame.Phase.Done && game.Result is { } r)
+        {
+            <div class="heading center">@r.Title – @r.Score bodů</div>
+            <div class="body center">@r.Comment</div>
+        }
+
+        <div class="hold-row">
+            @switch (game.State)
+            {
+                case GlassGame.Phase.Ready:
+                    @for (var i = 0; i < GlassShape.All.Length; i++)
+                    {
+                        var shape = GlassShape.All[i];
+                        <PencilButton Text="@shape.Name" OnClick="() => Pick(shape)" />
+                    }
+                    break;
+                case GlassGame.Phase.Gather:
+                    <div class="hold" @onpointerdown="() => SetFurnace(true)" @onpointerup="EndGather" @onpointercancel="EndGather" @onpointerleave="EndGather"
+                         @oncontextmenu:preventDefault="true">
+                        <PencilButton Text="Nabírat (drž)" />
+                    </div>
+                    break;
+                case GlassGame.Phase.Shape:
+                    <div class="hold" @onpointerdown="() => blowHeld = true" @onpointerup="() => blowHeld = false" @onpointercancel="() => blowHeld = false" @onpointerleave="() => blowHeld = false"
+                         @oncontextmenu:preventDefault="true">
+                        <PencilButton Text="Foukat" />
+                    </div>
+                    <div class="hold" @onpointerdown="() => SetFurnace(true)" @onpointerup="() => SetFurnace(false)" @onpointercancel="() => SetFurnace(false)" @onpointerleave="() => SetFurnace(false)"
+                         @oncontextmenu:preventDefault="true">
+                        <PencilButton Text="Do pece" Variant="PencilVariant.Secondary" />
+                    </div>
+                    <PencilButton Text="Do formy" Variant="PencilVariant.Secondary" OnClick="() => game.IntoMold()" />
+                    break;
+                case GlassGame.Phase.Mold:
+                    <div class="hold" @onpointerdown="() => blowHeld = true" @onpointerup="() => blowHeld = false" @onpointercancel="() => blowHeld = false" @onpointerleave="() => blowHeld = false"
+                         @oncontextmenu:preventDefault="true">
+                        <PencilButton Text="Foukat" />
+                    </div>
+                    <PencilButton Text="Otevřít" Variant="PencilVariant.Secondary" OnClick="Open" />
+                    break;
+                case GlassGame.Phase.Handle:
+                    <PencilButton Text="Bez ucha" Variant="PencilVariant.Secondary" OnClick="() => { game.SkipHandle(); AfterDone(); }" />
+                    break;
+                case GlassGame.Phase.Done:
+                    <PencilButton Text="Znovu" OnClick="Reset" />
+                    break;
+            }
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+            <div class="small">@bestText</div>
+            @if (game.State != GlassGame.Phase.Done)
+            {
+                <PencilButton Text="@(micOn ? "Mikrofon: zapnutý" : "Foukat do mikrofonu")" Small="true" Variant="PencilVariant.Secondary" OnClick="ToggleMic" />
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    public const string BestKey = "hry_sklo_best";
+
+    private ElementReference svgRef;
+    private GlassGame game = new();
+    private readonly Stopwatch clock = Stopwatch.StartNew();
+    private bool ticking, disposed, blowHeld, micOn, recorded;
+    private double holdBlow, scale = 1, left, top, lastX;
+    private string bestText = "";
+
+    private string Hint => game.State switch
+    {
+        GlassGame.Phase.Ready => "Co budeš foukat?",
+        GlassGame.Phase.Gather => "Drž a nabírej sklovinu z pece. Pusť v zelené – na jeden zátah.",
+        GlassGame.Phase.Shape => (micOn ? "Foukej do mikrofonu" : "Drž Foukat") +
+                                 " a pořád toč píšťalou – táhni prstem po obrázku sem a tam. Baňka má dorůst do kroužku. Vychladlé sklo do pece.",
+        GlassGame.Phase.Mold => "Dofoukni, ať sklo vyplní celou formu. Moc ne – praskne. Pak Otevřít.",
+        GlassGame.Phase.Handle => "Nakresli prstem ucho – od horní tečky k dolní.",
+        _ => "Hotovo."
+    };
+
+    protected override void OnInitialized() => Reset();
+
+    private void Reset()
+    {
+        game = new GlassGame();
+        recorded = false;
+        var best = Preferences.Get(BestKey, -1);
+        bestText = best < 0 ? "" : $"Rekord: {best} bodů";
+    }
+
+    private void Pick(GlassShape shape)
+    {
+        game.Start(shape);
+        _ = LoopAsync();
+    }
+
+    private void SetFurnace(bool on) => game.InFurnace = on;
+
+    private void EndGather()
+    {
+        if (game.State == GlassGame.Phase.Gather && game.InFurnace) game.EndGather();
+        game.InFurnace = false;
+    }
+
+    private void Open()
+    {
+        blowHeld = false;
+        game.OpenMold();
+        if (game.State == GlassGame.Phase.Done) AfterDone();
+    }
+
+    private async Task Measure()
+    {
+        if (WebPlatform.Js is not { } js) return;
+        try
+        {
+            var w = await js.InvokeAsync<double>("dz.elWidth", svgRef);
+            left = await js.InvokeAsync<double>("dz.elLeft", svgRef);
+            top = await js.InvokeAsync<double>("dz.elTop", svgRef);
+            if (w > 0) scale = w / 360;
+        }
+        catch { }
+    }
+
+    private async Task Down(PointerEventArgs e)
+    {
+        await Measure();
+        if (WebPlatform.Js is { } js) { try { await js.InvokeVoidAsync("dz.capture", svgRef, e.PointerId); } catch { } }
+        var (x, y) = ((e.ClientX - left) / scale, (e.ClientY - top) / scale);
+        lastX = x;
+        if (game.State == GlassGame.Phase.Handle) game.HandleStart(x, y);
+    }
+
+    private void Move(PointerEventArgs e)
+    {
+        if (e.Buttons == 0) return;
+        var (x, y) = ((e.ClientX - left) / scale, (e.ClientY - top) / scale);
+        if (game.State == GlassGame.Phase.Handle) game.HandleMove(x, y);
+        else game.AddRotation(x - lastX);
+        lastX = x;
+    }
+
+    private void UpCanvas()
+    {
+        if (game.State != GlassGame.Phase.Handle) return;
+        game.HandleEnd();
+        if (game.State == GlassGame.Phase.Done) AfterDone();
+    }
+
+    private async Task ToggleMic()
+    {
+        if (WebPlatform.Js is not { } js) return;
+        if (micOn) { micOn = false; try { await js.InvokeVoidAsync("dz.micStop"); } catch { } return; }
+        try { micOn = await js.InvokeAsync<bool>("dz.micStart"); } catch { micOn = false; }
+        if (!micOn) await Note.AlertAsync("Bez mikrofonu", "Prohlížeč mikrofon nepustil. Nevadí – foukej tlačítkem.");
+    }
+
+    private async Task LoopAsync()
+    {
+        if (ticking) return;
+        ticking = true;
+        var last = clock.Elapsed.TotalSeconds;
+        while (!disposed && game.State != GlassGame.Phase.Done)
+        {
+            await Task.Delay(16);
+            var now = clock.Elapsed.TotalSeconds;
+            var dt = now - last;
+            last = now;
+            holdBlow = blowHeld ? Math.Min(1, holdBlow + dt * 1.4) : 0;
+            var mic = 0.0;
+            if (micOn && WebPlatform.Js is IJSInProcessRuntime js)
+                mic = Math.Clamp((js.Invoke<double>("dz.micLevel") - 0.08) / 0.35, 0, 1);
+            game.Blow = Math.Max(holdBlow, mic);
+            game.Step(dt);
+            StateHasChanged();
+        }
+        ticking = false;
+        AfterDone();
+    }
+
+    private void AfterDone()
+    {
+        if (recorded || game.Result is not { } r) return;
+        recorded = true;
+        var best = Preferences.Get(BestKey, -1);
+        if (r.Score > best)
+        {
+            Preferences.Set(BestKey, r.Score);
+            bestText = best < 0 ? $"Rekord: {r.Score} bodů" : $"Nový rekord: {r.Score} bodů!";
+        }
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        disposed = true;
+        if (micOn && WebPlatform.Js is { } js) _ = js.InvokeVoidAsync("dz.micStop").AsTask();
+    }
+}

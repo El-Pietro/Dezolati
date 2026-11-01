@@ -106,6 +106,17 @@
                     <controls:PencilButton x:Name="MaskButton" Text="Tajný režim: vypnutý" Variant="Secondary"
                                            FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
                                            Margin="0,24,0,0" IsVisible="False" Clicked="OnMaskClicked" />
+                    <!-- moje přezdívka pro kámoše: vidím ji jen já (Private/{můj uid}) -->
+                    <VerticalStackLayout x:Name="AliasBox" Spacing="4" Margin="0,8,0,0" IsVisible="False">
+                        <Label Text="Moje přezdívka pro něj (vidíš ji jen ty):" Style="{StaticResource FieldLabel}" />
+                        <Grid ColumnDefinitions="*, Auto" ColumnSpacing="8">
+                            <Entry x:Name="AliasEntry" MaxLength="30" ReturnType="Done" Completed="OnAliasSaveClicked" />
+                            <controls:PencilButton x:Name="AliasSaveButton" Grid.Column="1" Text="Uložit" Variant="Secondary" WidthRequest="110"
+                                                   FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                                   Clicked="OnAliasSaveClicked" />
+                        </Grid>
+                        <Label x:Name="AliasHint" Style="{StaticResource Small}" TextColor="{StaticResource InkSoft}" />
+                    </VerticalStackLayout>
                     <controls:PencilButton x:Name="RemoveFriendButton" Text="Odebrat z kámošů" Variant="Danger"
                                            Margin="0,8,0,0" IsVisible="False" Clicked="OnRemoveFriendClicked" />
                 </VerticalStackLayout>

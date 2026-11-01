@@ -245,9 +245,25 @@ namespace Dezolati.Services
             return true;
         }
 
-        /// <summary>Otevře instalátor Androidu se staženým APK.</summary>
-        public static Task InstallAsync(string apkPath) =>
-            Launcher.Default.OpenAsync(new OpenFileRequest("Aktualizace Dezoláti",
+        /// <summary>
+        /// Nainstaluje stažené APK: přednostně přes PackageInstaller (jedno „Aktualizovat?“, bez výběru aplikace
+        /// a bez obrazovky „Otevřít / Hotovo“), když to nejde, postaru přes otevření souboru.
+        /// </summary>
+        public static async Task InstallAsync(string apkPath)
+        {
+#if ANDROID
+            try
+            {
+                Dezolati.Droid.ApkInstaller.Install(apkPath);
+                return;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"PackageInstaller: {ex.Message} – zkouším otevřít soubor");
+            }
+#endif
+            await Launcher.Default.OpenAsync(new OpenFileRequest("Aktualizace Dezoláti",
                 new ReadOnlyFile(apkPath, "application/vnd.android.package-archive")));
+        }
     }
 }

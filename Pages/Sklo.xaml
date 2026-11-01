@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:controls="clr-namespace:Dezolati.Controls"
+             x:Class="Dezolati.Pages.Sklo"
+             Title="Foukání skla">
+    <Grid RowDefinitions="Auto, *">
+        <Image Grid.RowSpan="2" Source="{AppThemeBinding Light=woodlight.jpg, Dark=wooddark.jpg}" Aspect="AspectFill" />
+
+        <BoxView Grid.Row="0" HeightRequest="0" Color="Transparent" InputTransparent="True" Margin="{DynamicResource TopBarMargin}" />
+        <controls:PencilButton Grid.Row="0" Variant="Outline" Text="Zpět" IsVisible="{OnPlatform Default=True, Android=False}"
+                               HorizontalOptions="Start" Margin="{DynamicResource TopBarMargin}" Clicked="OnZpetClicked" />
+
+        <Border Grid.Row="1" Style="{StaticResource Listek}">
+            <Grid RowDefinitions="Auto, Auto, *, Auto, Auto, Auto, Auto" RowSpacing="4">
+                <Label Grid.Row="0" Text="Foukání skla" Style="{StaticResource Title}" />
+                <Label Grid.Row="1" x:Name="HintLabel" Style="{StaticResource Small}" HorizontalTextAlignment="Center" />
+
+                <!-- sklárna; tah prstem = točení píšťalou / kreslení ucha -->
+                <GraphicsView Grid.Row="2" x:Name="Canvas" MinimumHeightRequest="230" />
+
+                <Label Grid.Row="3" x:Name="ResultTitle" Style="{StaticResource Heading}" HorizontalTextAlignment="Center" IsVisible="False" />
+                <Label Grid.Row="4" x:Name="ResultText" Style="{StaticResource Body}" HorizontalTextAlignment="Center" IsVisible="False" />
+
+                <!-- tlačítka podle fáze -->
+                <Grid Grid.Row="5" ColumnDefinitions="*, *, *" ColumnSpacing="8" Margin="0,6,0,0">
+                    <controls:PencilButton Grid.Column="0" x:Name="PickKrygl" Text="Krýgl" Variant="Primary" CommandParameter="0" Clicked="OnPickClicked" />
+                    <controls:PencilButton Grid.Column="1" x:Name="PickPokal" Text="Pokál" Variant="Primary" CommandParameter="1" Clicked="OnPickClicked" />
+                    <controls:PencilButton Grid.Column="2" x:Name="PickStamprle" Text="Štamprle" Variant="Primary" CommandParameter="2" Clicked="OnPickClicked" />
+
+                    <controls:HoldButton Grid.Column="0" Grid.ColumnSpan="3" x:Name="GatherButton" Text="Nabírat (drž)" Variant="Primary" />
+
+                    <controls:HoldButton Grid.Column="0" x:Name="BlowButton" Text="Foukat" Variant="Primary" />
+                    <controls:HoldButton Grid.Column="1" x:Name="FurnaceButton" Text="Do pece" Variant="Secondary" />
+                    <controls:PencilButton Grid.Column="2" x:Name="MoldButton" Text="Do formy" Variant="Secondary" Clicked="OnMoldClicked" />
+                    <controls:PencilButton Grid.Column="2" x:Name="OpenButton" Text="Otevřít" Variant="Secondary" Clicked="OnOpenClicked" />
+
+                    <controls:PencilButton Grid.Column="1" Grid.ColumnSpan="2" x:Name="NoHandleButton" Text="Bez ucha" Variant="Secondary" Clicked="OnNoHandleClicked" />
+                    <controls:PencilButton Grid.Column="1" Grid.ColumnSpan="2" x:Name="AgainButton" Text="Znovu" Variant="Primary" Clicked="OnAgainClicked" />
+                </Grid>
+                <Grid Grid.Row="6" ColumnDefinitions="*, Auto" ColumnSpacing="8">
+                    <Label x:Name="BestLabel" Style="{StaticResource Small}" VerticalOptions="Center" />
+                    <controls:PencilButton Grid.Column="1" x:Name="MicButton" Text="Foukat do mikrofonu" Variant="Secondary"
+                                           FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                           Clicked="OnMicClicked" />
+                </Grid>
+            </Grid>
+        </Border>
+    </Grid>
+</ContentPage>

@@ -279,6 +279,7 @@ namespace Dezolati.Services
         /// </summary>
         public static List<CheerInfo> OnReceived(string sessionId, string fromUid, string fromNick, string emoji)
         {
+            fromNick = FriendAliases.Display(fromUid, fromNick) ?? fromNick;
             List<ReceivedCheer> list;
             try { list = JsonSerializer.Deserialize<List<ReceivedCheer>>(Preferences.Get(KeyReceived, "[]")) ?? new(); }
             catch { list = new(); }
@@ -297,7 +298,8 @@ namespace Dezolati.Services
             if (me == null) return new();
             var docs = await FirestoreRest.QueryAsync("Cheers",
                 new[] { Filter.Eq("To", me), Filter.Eq("SessionId", mySessionId) });
-            return docs.Select(d => new CheerInfo(d.Str("From") ?? "", d.Str("FromNick") ?? "?", d.Str("Emoji") ?? "🍻", d.Time("At")))
+            return docs.Select(d => new CheerInfo(d.Str("From") ?? "",
+                    FriendAliases.Display(d.Str("From") ?? "", d.Str("FromNick")) ?? "?", d.Str("Emoji") ?? "🍻", d.Time("At")))
                 .OrderBy(c => c.At).ToList();
         }
     }

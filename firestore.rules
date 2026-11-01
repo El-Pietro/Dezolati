@@ -11,6 +11,15 @@ service cloud.firestore {
       allow write: if signedIn() && me() == uid;
     }
 
+    // Soukromé věci uživatele (vlastní přezdívky kámošů): čte a píše jen on sám.
+    match /Private/{uid} {
+      allow read, delete: if signedIn() && me() == uid;
+      allow write: if signedIn() && me() == uid
+                   && request.resource.data.keys().hasOnly(['Aliases'])
+                   && request.resource.data.Aliases is map
+                   && request.resource.data.Aliases.size() <= 500;
+    }
+
     // Jednotlivé zápisy (log): jen vlastní, jen vytvořit.
     match /Drinks/{id} {
       allow read: if signedIn() && resource.data.UserId == me();
@@ -140,9 +149,11 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    // Pozvánky na drink: jen vytvořit (rozešle server), nikdo je nečte.
+    // Pozvánky na drink. Staré (do 3.10): jen vytvořit, rozešle server kámošům do 15 km.
+    // Nové (Version 2, od 3.11): zakládá a mění jen server (Cloud Function inviteAction), číst smí jen pozvaní.
     match /Invites/{id} {
       function v() { return request.resource.data; }
+      allow read: if signedIn() && me() in resource.data.get('Members', []);
       allow create: if signedIn()
                     && v().keys().hasOnly(['From', 'FromNick', 'PubId', 'PubName', 'Lat', 'Lon', 'At'])
                     && v().From == me()

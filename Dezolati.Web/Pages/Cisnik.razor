@@ -1,0 +1,158 @@
+@namespace Dezolati.Web.Pages
+@page "/cisnik"
+@implements IDisposable
+@using System.Diagnostics
+@using Microsoft.JSInterop
+
+@* Číšník s tácem (Pages/Cisnik v appce). Logika i obrázek sdílené (Services/Cisnik.cs). *@
+<BackBar To="hry" />
+
+<div class="listek grow">
+    <div class="stack">
+        <div class="title">Číšník s tácem</div>
+        <div class="small center">@hint</div>
+
+        <svg @ref="svgRef" class="pour" viewBox="0 0 360 400"
+             @onpointerdown="Down" @onpointermove="Move" @onpointerup="Up" @onpointercancel="Up"
+             @oncontextmenu:preventDefault="true">
+            @((MarkupString)SceneKit.ToSvg(WaiterScene.Build(game)))
+        </svg>
+
+        @if (game.Result is { } r)
+        {
+            <div class="heading center">@r.Title – @r.Score bodů</div>
+            <div class="body center">@r.Comment</div>
+        }
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:6px">
+            <div class="small">@bestText</div>
+            <div style="display:flex;gap:8px">
+                @if (tiltOk)
+                {
+                    <PencilButton Text="Obrátit náklon" Small="true" Variant="PencilVariant.Secondary" OnClick="Invert" />
+                }
+                @if (game.State != WaiterGame.Phase.Walking)
+                {
+                    <PencilButton Text="@(game.State == WaiterGame.Phase.Done ? "Znovu" : "Vyrazit")" Style="width:120px" OnClick="Start" />
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    public const string BestKey = "hry_cisnik_best";
+    private const string InvertKey = "hry_cisnik_obratit";
+
+    private ElementReference svgRef;
+    private WaiterGame game = new();
+    private readonly Stopwatch clock = Stopwatch.StartNew();
+    private bool ticking, disposed, tiltOk, inverted;
+    private double touchTarget, touchPart, zero, left, width = 360;
+    private string hint = "", bestText = "";
+
+    protected override void OnInitialized()
+    {
+        inverted = Preferences.Get(InvertKey, false);
+        Reset();
+    }
+
+    private void Reset()
+    {
+        game = new WaiterGame();
+        hint = "Tác se sám naklání. Která strana klesá, na tu půlku obrázku drž prst – zvedneš ji. Nebo nakláněj telefon proti pádu. Moc dlouho ne, přepadne to na druhou stranu.";
+        var best = Preferences.Get(BestKey, -1);
+        bestText = best < 0 ? "" : $"Rekord: {best} bodů";
+    }
+
+    private bool motionAllowed, zeroSet;
+
+    /// <summary>Náklon telefonu (°); senzor „jde“ (tiltOk) až když opravdu přijde údaj – počítač ho nemá.</summary>
+    private double Tilt()
+    {
+        if (!motionAllowed || WebPlatform.Js is not IJSInProcessRuntime js) return 0;
+        var t = js.Invoke<double>("dz.motionTilt");
+        if (t < -900) return 0;
+        tiltOk = true;
+        var v = t * (inverted ? -1 : 1);
+        if (!zeroSet) { zero = v; zeroSet = true; }   // „nula“ = jak držíš telefon při prvním údaji
+        return v;
+    }
+
+    private async Task Start()
+    {
+        if (game.State == WaiterGame.Phase.Done) Reset();
+        if (WebPlatform.Js is { } js)
+        {
+            try
+            {
+                // povolení senzoru musí být přímo po ťuknutí (iPhone)
+                motionAllowed = await js.InvokeAsync<bool>("dz.motionStart");
+                width = await js.InvokeAsync<double>("dz.elWidth", svgRef);
+                left = await js.InvokeAsync<double>("dz.elLeft", svgRef);
+            }
+            catch { motionAllowed = false; }
+        }
+        zeroSet = false;
+        await Task.Delay(80);   // ať dorazí první údaj ze senzoru
+        Tilt();
+        game.Start();
+        _ = LoopAsync();
+    }
+
+    private async Task Down(PointerEventArgs e)
+    {
+        if (WebPlatform.Js is { } js)
+        {
+            try { await js.InvokeVoidAsync("dz.capture", svgRef, e.PointerId); } catch { }
+        }
+        Move(e);
+    }
+
+    private void Move(PointerEventArgs e)
+    {
+        if (e.Buttons == 0 && e.PointerType == "mouse") return;
+        touchTarget = e.ClientX - left < width / 2 ? -1 : 1;   // zvednout stranu, na kterou ťukáš
+    }
+
+    private void Up() => touchTarget = 0;
+
+    private void Invert()
+    {
+        inverted = !inverted;
+        Preferences.Set(InvertKey, inverted);
+        zero = -zero;
+    }
+
+    private async Task LoopAsync()
+    {
+        if (ticking) return;
+        ticking = true;
+        var last = clock.Elapsed.TotalSeconds;
+        while (!disposed && game.State == WaiterGame.Phase.Walking)
+        {
+            await Task.Delay(16);
+            var now = clock.Elapsed.TotalSeconds;
+            var dt = now - last;
+            last = now;
+            touchPart += (touchTarget - touchPart) * Math.Min(1, dt * 8);
+            var tilt = Tilt();
+            game.Control = Math.Clamp((tiltOk ? -(tilt - zero) / 15 : 0) + touchPart, -1, 1);   // telefon proti pádu, plná síla od 15°
+            game.Step(dt);
+            StateHasChanged();
+        }
+        ticking = false;
+        if (game.Result is { } r)
+        {
+            var best = Preferences.Get(BestKey, -1);
+            if (r.Score > best)
+            {
+                Preferences.Set(BestKey, r.Score);
+                bestText = best < 0 ? $"Rekord: {r.Score} bodů" : $"Nový rekord: {r.Score} bodů!";
+            }
+            try { if (WebPlatform.Js is { } js) await js.InvokeVoidAsync("dz.vibrate", 40); } catch { }
+            StateHasChanged();
+        }
+    }
+
+    public void Dispose() => disposed = true;
+}

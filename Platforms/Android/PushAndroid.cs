@@ -30,6 +30,14 @@ namespace Dezolati.Droid
             var title = n?.Title ?? D("title");
             var body = n?.Body ?? D("body");
 
+            // moje přezdívka pro kámoše místo jeho vlastní („Pepa si právě dal…“ → „Strejda si právě dal…“)
+            if (D("fromUid") is string aliasUid && D("fromNick") is string serverNick && serverNick.Length > 0
+                && Services.FriendAliases.Of(aliasUid) is string alias)
+            {
+                if (title?.StartsWith(serverNick) == true) title = alias + title[serverNick.Length..];
+                if (body?.StartsWith(serverNick) == true) body = alias + body[serverNick.Length..];
+            }
+
             switch (type)
             {
                 case "drink":
@@ -37,7 +45,8 @@ namespace Dezolati.Droid
                     Services.FriendsNow.Invalidate();
                     var session = D("sessionId");
                     if (D("fromUid") is string from && session != null && !Services.Cheers.Reacted(session))
-                        PushAndroid.ShowWithCheers(this, title, body, from, session);
+                        PushAndroid.AddDrinker(this, from, title ?? "", body, session,
+                            D("inviteId"), D("inviteName"));   // spojené „kdo pije“ (zvlášť lidi z pozvánky) + Připít všem
                     else
                         PushAndroid.Show(this, title, body);
                     break;
@@ -53,8 +62,15 @@ namespace Dezolati.Droid
                         PushAndroid.Show(this, title, body);   // starší server
                     break;
 
+                case "invite" when D("inviteId") != null:
+                    // nová pozvánka na vybrané kámoše (nebo odpověď na ni) → odznak na Přátelích
+                    Services.FriendBadge.Invalidate();
+                    _ = Services.FriendBadge.RefreshAsync();
+                    PushAndroid.Show(this, title, body);
+                    break;
+
                 case "invite":
-                    // pozvánka jen do 15 km (podle poslední polohy z appky; neznámá = ukázat)
+                    // stará pozvánka (appka do 3.10) jen do 15 km (podle poslední polohy z appky; neznámá = ukázat)
                     if (double.TryParse(D("lat"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var lat)
                         && double.TryParse(D("lon"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var lon)
                         && !Services.Invites.IsNearMe(lat, lon))
@@ -94,7 +110,9 @@ namespace Dezolati.Droid
             var emoji = intent.GetStringExtra("emoji");
             var notifId = intent.GetIntExtra("notif", 0);
             var title = intent.GetStringExtra("title");
-            if (to == null || session == null || emoji == null) return;
+            var all = intent.GetBooleanExtra("all", false);
+            var group = intent.GetStringExtra("group") ?? "";
+            if (emoji == null || (!all && (to == null || session == null))) return;
 
             var pending = GoAsync();
             var appContext = context.ApplicationContext ?? context;
@@ -103,9 +121,23 @@ namespace Dezolati.Droid
                 string text;
                 try
                 {
-                    text = await Services.Cheers.SendAsync(to, session, emoji)
-                        ? $"Připito {emoji}"
-                        : "Už jsi připil(a) 👍";
+                    if (all)
+                    {
+                        // „Připít všem“: každému, kdo v oznámení je a komu jsem ještě nepřipil
+                        var targets = PushAndroid.Drinkers().Where(d => (d.Group ?? "") == group).ToList();
+                        var sent = 0;
+                        foreach (var d in targets)
+                            if (await Services.Cheers.SendAsync(d.Uid, d.Session, emoji)) sent++;
+                        text = sent == 0 ? "Všem už jsi připil(a) 👍"
+                            : $"Připito {emoji} – {Services.Cz.Plural(sent, "kámošovi", "kámošům", "kámošům")}";
+                        title = "Na zdraví!";
+                    }
+                    else
+                    {
+                        text = await Services.Cheers.SendAsync(to!, session!, emoji)
+                            ? $"Připito {emoji}"
+                            : "Už jsi připil(a) 👍";
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -115,6 +147,7 @@ namespace Dezolati.Droid
                 {
                     pending?.Finish();
                 }
+                PushAndroid.ClearDrinkers(all ? null : session, group);
                 PushAndroid.Replace(appContext, notifId, title, text);
             });
         }
@@ -173,13 +206,113 @@ namespace Dezolati.Droid
             catch { }
         }
 
+        // ---------------- spojené „kdo pije“ ----------------
+
+        private const int DrinkersId = 4244;
+        private const string KeyDrinkers = "push_pijou";
+        private static readonly TimeSpan DrinkerMaxAge = TimeSpan.FromHours(3);
+        private static readonly object DrinkersGate = new();
+
+        /// <summary>Kámoš v oznámení „kdo pije“ (řádek = text ze serveru, sezení = na co se připíjí).</summary>
+        /// <summary>Group = id pozvánky (lidi z ní mají vlastní oznámení), "" = ostatní kámoši.</summary>
+        public sealed record Drinker(string Uid, string Line, string Session, DateTime At, string? Group = null, string? GroupName = null);
+
+        /// <summary>Id oznámení pro skupinu: ostatní 4244, pozvánky stabilně podle id (ať se přepisuje to samé).</summary>
+        private static int NotifIdFor(string group)
+        {
+            if (group.Length == 0) return DrinkersId;
+            var h = 17;
+            foreach (var c in group) h = unchecked(h * 31 + c);
+            return 50_000 + (h & 0x3FFF);
+        }
+
+        /// <summary>Kdo je teď v oznámení: posledních 3 h, jen sezení, kterým jsem ještě nepřipil.</summary>
+        public static List<Drinker> Drinkers()
+        {
+            lock (DrinkersGate)
+            {
+                List<Drinker> list;
+                try { list = System.Text.Json.JsonSerializer.Deserialize<List<Drinker>>(Microsoft.Maui.Storage.Preferences.Get(KeyDrinkers, "[]")) ?? new(); }
+                catch { list = new(); }
+                return list.Where(d => DateTime.UtcNow - d.At < DrinkerMaxAge && !Services.Cheers.Reacted(d.Session)).ToList();
+            }
+        }
+
+        private static void SaveDrinkers(List<Drinker> list)
+        {
+            lock (DrinkersGate)
+            {
+                try { Microsoft.Maui.Storage.Preferences.Set(KeyDrinkers, System.Text.Json.JsonSerializer.Serialize(list)); } catch { }
+            }
+        }
+
+        /// <summary>Po připití: vyřadit jedno sezení (null = všechny).</summary>
+        public static void ClearDrinkers(string? session, string group = "") =>
+            SaveDrinkers(Drinkers().Where(d => session == null ? (d.Group ?? "") != group : d.Session != session).ToList());
+
+        /// <summary>
+        /// Další kámoš začal pít: místo dalšího oznámení přepsat jedno společné.
+        /// Jeden = „Pepa si právě dal pivo“ + 🍺 🍷 🥃, víc = „Pijou: Pepa, Žanet a Karel“ + „Připít všem 🍻“.
+        /// </summary>
+        public static void AddDrinker(Context context, string fromUid, string line, string? body, string sessionId,
+            string? inviteId = null, string? inviteName = null)
+        {
+            var group = inviteId ?? "";
+            var all = Drinkers().Where(d => d.Uid != fromUid).ToList();
+            all.Add(new Drinker(fromUid, line, sessionId, DateTime.UtcNow, group, inviteName));
+            SaveDrinkers(all);
+
+            var list = all.Where(d => (d.Group ?? "") == group).ToList();
+            var notifId = NotifIdFor(group);
+            var prefix = group.Length > 0 ? $"{inviteName ?? "Pozvánka"}: " : "";
+
+            if (list.Count == 1)
+            {
+                ShowWithCheers(context, prefix + line, body, fromUid, sessionId, notifId);
+                return;
+            }
+            try
+            {
+                EnsureChannel();
+                // přezdívka = začátek řádku před „ si právě“
+                string Nick(Drinker d) { var i = d.Line.IndexOf(" si ", StringComparison.Ordinal); return i > 0 ? d.Line[..i] : d.Line; }
+                var nicks = list.Select(Nick).ToList();
+                var names = nicks.Count <= 3
+                    ? string.Join(", ", nicks.Take(nicks.Count - 1)) + " a " + nicks[^1]
+                    : $"{string.Join(", ", nicks.TakeLast(2))} a {Services.Cz.Plural(nicks.Count - 2, "další", "další", "dalších")}";
+                var title = group.Length > 0 ? $"{inviteName ?? "Pozvánka"}: pijou {names}" : $"Pijou: {names}";
+                var builder = Base(context, title, "Připij si s nimi! 🍻");
+                var inbox = new NotificationCompat.InboxStyle().SetBigContentTitle(title);
+                foreach (var d in list.AsEnumerable().Reverse()) inbox.AddLine(d.Line);
+                builder.SetStyle(inbox).SetOnlyAlertOnce(false);
+
+                var intent = new Intent(context, typeof(CheerReceiver));
+                intent.SetAction(CheerReceiver.Action);
+                intent.PutExtra("all", true);
+                intent.PutExtra("group", group);
+                intent.PutExtra("emoji", "🍺");
+                intent.PutExtra("notif", notifId);
+                intent.PutExtra("title", title);
+                var pi = PendingIntent.GetBroadcast(context, notifId * 4, intent,
+                    PendingIntentFlags.Immutable | PendingIntentFlags.UpdateCurrent);
+                builder.AddAction(0, "Připít všem 🍺", pi);
+
+                NotificationManagerCompat.From(context).Notify(notifId, builder.Build());
+                ShowSummary(context);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Push drinkers: {ex.Message}");
+            }
+        }
+
         /// <summary>Oznámení „X si právě dal(a)…“ s tlačítky 🍺 🍷 🥃.</summary>
-        public static void ShowWithCheers(Context context, string? title, string? body, string fromUid, string sessionId)
+        public static void ShowWithCheers(Context context, string? title, string? body, string fromUid, string sessionId, int? id = null)
         {
             try
             {
                 EnsureChannel();
-                var notifId = Random.Shared.Next(10_000, 1_000_000);
+                var notifId = id ?? Random.Shared.Next(10_000, 1_000_000);
                 var builder = Base(context, title, body);
                 var req = 0;
                 foreach (var emoji in Services.Cheers.Emojis)

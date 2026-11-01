@@ -17,9 +17,12 @@ namespace Dezolati.Pages
             "carka6.png", "carka7.png", "carka8.png", "carka9.png", "carka10.png"
         };
 
+        private readonly WetRingsDrawable rings = new();
+
         public MainPage()
         {
             InitializeComponent();
+            RingsView.Drawable = rings;
         }
 
         // Shell stránku drží v paměti, takže se data načítají při každém zobrazení
@@ -227,19 +230,23 @@ namespace Dezolati.Pages
             SouhrnLabel.Text = text;
             UpdatePromile();
 
-            // pevný seed = čárky vypadají pokaždé stejně, neskáčou při každém načtení
-            DrawCarky(Pivo, pivo, new Random(1));
-            DrawCarky(Vino, vino, new Random(2));
-            DrawCarky(Panaky, panaky, new Random(3));
+            // pevný seed = čárky vypadají pokaždé stejně, neskáčou při každém načtení;
+            // „šejdr“ (natočení, posun) a mokrá kolečka podle dne – celý den stejné, zítra jiné
+            DrawCarky(Pivo, pivo, new Random(1), shownDay, 0);
+            DrawCarky(Vino, vino, new Random(2), shownDay, 1);
+            DrawCarky(Panaky, panaky, new Random(3), shownDay, 2);
+            rings.Rings = Krouzky.For(shownDay, pivo, vino);
+            RingsView.Invalidate();
         }
 
-        private static void DrawCarky(FlexLayout flexLayout, int count, Random random)
+        private static void DrawCarky(FlexLayout flexLayout, int count, Random random, DateTime day, int kind)
         {
             flexLayout.Children.Clear();
 
             for (int i = 0; i < count; i++)
             {
                 var source = CarkyImages[random.Next(CarkyImages.Length)];
+                var (rot, dy, scale) = Krouzky.Jitter(day, kind, i);
 
                 if (i % 5 == 4)
                 {
@@ -248,8 +255,9 @@ namespace Dezolati.Pages
                     {
                         Source = source,
                         WidthRequest = 40,
-                        Rotation = -80,
-                        Margin = new Thickness(-17, -10, 0, 0)
+                        Rotation = -80 + rot,
+                        Scale = scale,
+                        Margin = new Thickness(-17, -10 + dy, 0, 0)
                     });
                 }
                 else
@@ -259,6 +267,9 @@ namespace Dezolati.Pages
                         Source = source,
                         WidthRequest = 40,
                         HeightRequest = 50,
+                        Rotation = rot,
+                        Scale = scale,
+                        TranslationY = dy,
                         Margin = new Thickness(0, 0, -12, 0)
                     });
                 }
@@ -273,7 +284,7 @@ namespace Dezolati.Pages
             await Shell.Current.GoToAsync("//Zapis");
         }
 
-        /// <summary>Ťuknutí na řádek lístku → škrtnout jednu čárku.</summary>
+        /// <summary>Ťuknutí na řádek lístku → připsat, nebo škrtnout jednu čárku (každý druh zvlášť).</summary>
         private async void OnRowTapped(object sender, TappedEventArgs e)
         {
             var userId = AuthSession.Uid;
@@ -285,20 +296,28 @@ namespace Dezolati.Pages
                 "Vino" => (shownVino, "Víno", "jedno víno"),
                 _ => (shownPanaky, "Panáky", "jednoho panáka")
             };
-            if (count <= 0) return;
 
-            var strike = await Listek.ConfirmAsync(this, $"{name}: {count}", "Škrtnout čárku z lístku?",
-                $"Škrtnout {one}", "Nic", danger: true);
-            if (!strike) return;
+            var add = $"Zapsat {one}";
+            var strike = $"Odmazat {one}";
+            var choice = count > 0
+                ? await Listek.ShowAsync(this, $"{name}: {count}", "Co s tím?",
+                    (add, PencilVariant.Primary), (strike, PencilVariant.Danger), ("Nic", PencilVariant.Secondary))
+                : await Listek.ShowAsync(this, $"{name}: zatím nic", "Připsat čárku?",
+                    (add, PencilVariant.Primary), ("Nic", PencilVariant.Secondary));
 
+            int p = kind == "Pivo" ? 1 : 0, v = kind == "Vino" ? 1 : 0, s = kind == "Panaky" ? 1 : 0;
             try
             {
-                await firestoreService.RecordCorrection(userId, shownDay,
-                    kind == "Pivo" ? 1 : 0, kind == "Vino" ? 1 : 0, kind == "Panaky" ? 1 : 0);
+                if (choice == add)
+                    await firestoreService.RecordDrink(userId, AuthSession.DisplayName, p, v, s);
+                else if (choice == strike)
+                    await firestoreService.RecordCorrection(userId, shownDay, p, v, s);
+                else
+                    return;
             }
             catch (Exception ex)
             {
-                await Listek.AlertAsync(this, "Chyba", "Škrtnutí se nepovedlo: " + ex.Message);
+                await Listek.AlertAsync(this, "Chyba", (choice == add ? "Zápis" : "Škrtnutí") + " se nepovedl: " + ex.Message);
             }
             await LoadData();
         }

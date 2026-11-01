@@ -29,6 +29,41 @@
                                            FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
                                            Clicked="OnShuffleClicked" />
 
+                    <!-- hospodský kvíz – pro partu u stolu -->
+                    <Label Text="Hospodský kvíz" Style="{StaticResource Heading}" Margin="0,16,0,0" />
+                    <Label Text="Přes sto ověřených otázek o pivu, pivovarech a hospodách. Hráči se střídají u jednoho telefonu, kdo prohraje, platí rundu." Style="{StaticResource Small}" />
+                    <controls:PencilButton Text="Hrát kvíz" Variant="Primary" Clicked="OnQuizClicked" />
+
+                    <!-- čepování – hra pro jednoho -->
+                    <Label Text="Čepování" Style="{StaticResource Heading}" Margin="0,16,0,0" />
+                    <Label Text="Hra pro jednoho: hladinka na jeden zátah. Drž pípu, pusť ve správnou chvíli." Style="{StaticResource Small}" />
+                    <Label x:Name="PourBestLabel" Style="{StaticResource Small}" IsVisible="False" />
+                    <controls:PencilButton Text="Čepovat" Variant="Primary" Clicked="OnPourClicked" />
+
+                    <!-- klouzání po pultu – hra pro jednoho -->
+                    <Label Text="Klouzání po pultu" Style="{StaticResource Heading}" Margin="0,16,0,0" />
+                    <Label Text="Švihni krýglem po pultu tak, ať zastaví štamgastovi na tácku. Pět krýglů, nerozbij je." Style="{StaticResource Small}" />
+                    <Label x:Name="SlideBestLabel" Style="{StaticResource Small}" IsVisible="False" />
+                    <controls:PencilButton Text="Klouzat" Variant="Primary" Clicked="OnSlideClicked" />
+
+                    <!-- číšník s tácem – hra pro jednoho -->
+                    <Label Text="Číšník s tácem" Style="{StaticResource Heading}" Margin="0,16,0,0" />
+                    <Label Text="Dones pět krýglů ke stolu a nic nevylij. Tác vyrovnáváš nakláněním telefonu nebo prstem." Style="{StaticResource Small}" />
+                    <Label x:Name="WaiterBestLabel" Style="{StaticResource Small}" IsVisible="False" />
+                    <controls:PencilButton Text="Nést" Variant="Primary" Clicked="OnWaiterClicked" />
+
+                    <!-- foukání skla – hra pro jednoho -->
+                    <Label Text="Foukání skla" Style="{StaticResource Heading}" Margin="0,16,0,0" />
+                    <Label Text="Naber sklovinu, foukej a toč píšťalou, dofoukni ve formě a nakresli ucho. Jde foukat i do mikrofonu." Style="{StaticResource Small}" />
+                    <Label x:Name="GlassBestLabel" Style="{StaticResource Small}" IsVisible="False" />
+                    <controls:PencilButton Text="Foukat" Variant="Primary" Clicked="OnGlassClicked" />
+
+                    <!-- vaření piva – hra pro jednoho -->
+                    <Label Text="Vaření piva" Style="{StaticResource Heading}" Margin="0,16,0,0" />
+                    <Label Text="Ležák po česku: trojrmutová dekokce, chmelovar a kvašení. Uvařená piva si schováš ve sklepě." Style="{StaticResource Small}" />
+                    <Label x:Name="BrewBestLabel" Style="{StaticResource Small}" IsVisible="False" />
+                    <controls:PencilButton Text="Vařit" Variant="Primary" Clicked="OnBrewClicked" />
+
                     <!-- šipky – zatím schované (doladí se) -->
                     <VerticalStackLayout IsVisible="False" Spacing="6">
                     <Label Text="Šipky" Style="{StaticResource Heading}" Margin="0,16,0,0" />

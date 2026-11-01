@@ -1,0 +1,111 @@
+@namespace Dezolati.Web.Pages
+@page "/cepovani"
+@implements IDisposable
+@using System.Diagnostics
+@using System.Globalization
+@using Microsoft.JSInterop
+
+@* Čepování (Pages/Cepovani v appce). Logika i obrázek jsou sdílené (Services/Cepovani*.cs), tady se jen převede do SVG. *@
+<BackBar To="hry" />
+
+<div class="listek grow">
+    <div class="stack">
+        <div class="title">Čepování</div>
+        <div class="small center">@hint</div>
+
+        <svg class="pour" viewBox="0 0 360 400"
+             @onpointerdown="Down" @onpointerup="Up" @onpointercancel="Up" @onpointerleave="Up"
+             @oncontextmenu:preventDefault="true">
+            @((MarkupString)SceneKit.ToSvg(PourScene.Build(game)))
+        </svg>
+
+        <div class="small soft center">@live</div>
+        @if (game.Result is { } r)
+        {
+            <div class="heading center">@r.Title – @r.Score bodů</div>
+            <div class="body center">@r.Comment</div>
+        }
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:6px">
+            <div class="small">@bestText</div>
+            @if (game.State == PourGame.Phase.Done)
+            {
+                <PencilButton Text="Další" Style="width:130px" OnClick="NewRound" />
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    public const string BestKey = "hry_cepovani_best";
+
+    private PourGame game = new();
+    private readonly Stopwatch clock = new();
+    private bool ticking, disposed;
+    private string hint = "", live = "", bestText = "";
+
+    protected override void OnInitialized() => NewRound();
+
+    private void NewRound()
+    {
+        game = new PourGame();
+        hint = "Drž prst na pípě. Pusť, až je pěna u okraje. Na jeden zátah.";
+        live = "";
+        var best = Preferences.Get(BestKey, -1);
+        bestText = best < 0 ? "" : $"Rekord: {best} bodů";
+    }
+
+    private void Down()
+    {
+        if (game.Press())
+        {
+            hint = "Teče… pusť, až je pěna u okraje.";
+            _ = LoopAsync();
+        }
+        else if (game.State == PourGame.Phase.Settling)
+        {
+            hint = "Na jeden zátah! Dočepovávat se nesmí.";
+        }
+    }
+
+    private void Up() => game.Release();
+
+    private async Task LoopAsync()
+    {
+        if (ticking) return;
+        ticking = true;
+        clock.Restart();
+        var last = 0.0;
+        while (!disposed && game.State != PourGame.Phase.Done)
+        {
+            await Task.Delay(16);
+            var now = clock.Elapsed.TotalSeconds;
+            game.Step(now - last);
+            last = now;
+            live = game.State == PourGame.Phase.Settling
+                ? "Pěna sedá, pivo dochází…"
+                : $"Pivo {(game.Beer / 1000).ToString("0.00", WebPlatform.Cs)} l · pěna {game.FoamFingers.ToString("0.0", WebPlatform.Cs)} prstu";
+            StateHasChanged();
+        }
+        ticking = false;
+        if (game.Result is { } r)
+        {
+            hint = "Tak co, výčepní?";
+            live = $"Pivo {(r.BeerMl / 1000).ToString("0.00", WebPlatform.Cs)} l · pěna {r.FoamFingers.ToString("0.0", WebPlatform.Cs)} prstu"
+                   + (r.SpilledMl >= 1 ? $" · na tácku {r.SpilledMl:0} ml" : "");
+            var best = Preferences.Get(BestKey, -1);
+            if (r.Score > best)
+            {
+                Preferences.Set(BestKey, r.Score);
+                bestText = best < 0 ? $"Rekord: {r.Score} bodů" : $"Nový rekord: {r.Score} bodů!";
+            }
+            try { if (WebPlatform.Js is { } js) await js.InvokeVoidAsync("dz.vibrate", 30); } catch { }
+            StateHasChanged();
+        }
+    }
+
+    public void Dispose()
+    {
+        disposed = true;
+        game.Release();
+    }
+}

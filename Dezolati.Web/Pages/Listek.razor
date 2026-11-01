@@ -3,9 +3,11 @@
 @implements IDisposable
 @inject NavigationManager Nav
 
-@* Lístek (Pages/MainPage v appce). Hry přijdou v další fázi. *@
+@* Lístek (Pages/MainPage v appce). Lišta jako v appce: Hospody | Hry | Přátelé. *@
 <div class="topbar">
     <PencilButton Variant="PencilVariant.Outline" Text="Hospody" OnClick="@(() => Nav.NavigateTo("hospody"))" />
+    <div class="spacer"></div>
+    <PencilButton Variant="PencilVariant.Outline" Text="Hry" OnClick="@(() => Nav.NavigateTo("hry"))" />
     <div class="spacer"></div>
     <div class="badge-wrap">
         <PencilButton Variant="PencilVariant.Outline" Text="Přátelé" OnClick="@(() => Nav.NavigateTo("pratele"))" />
@@ -16,7 +18,26 @@
     </div>
 </div>
 
-<div class="listek grow">
+<div class="listek grow wet">
+    @* mokrá kolečka od piv a vín – pod čárkami, podle dne (Services/Krouzky.cs, stejně jako v appce) *@
+    <svg class="rings" aria-hidden="true">
+        @foreach (var r in Krouzky.For(shownDay, shownPivo, shownVino))
+        {
+            // poloha v % lístku, velikost v px (kruh se nesmí roztáhnout do elipsy)
+            var rad = r.R * 300; var circ = rad * 2 * Math.PI;
+            var color = r.Wine ? "#7A1C2C" : "#A0661C";
+            var cx = F(r.X * 100) + "%"; var cy = F(r.Y * 100) + "%";
+            <g opacity="@F(r.Opacity)">
+                <circle cx="@cx" cy="@cy" r="@F(rad * 0.92)" fill="@color" fill-opacity="0.18" />
+                <circle cx="@cx" cy="@cy" r="@F(rad)" fill="none" stroke="@color" stroke-width="@F(Math.Max(2, r.Width * 300))"
+                        stroke-linecap="round" stroke-dasharray="@F(circ * 0.86) @F(circ)" stroke-dashoffset="@F(-circ * r.Gap / 360)" />
+                <circle cx="@cx" cy="@cy" r="@F(rad)" fill="none" stroke="@color" stroke-opacity="0.55"
+                        transform="translate(@F(rad * 0.08) @F(-rad * 0.08))"
+                        stroke-width="@F(Math.Max(1.5, r.Width * 180))" stroke-linecap="round"
+                        stroke-dasharray="@F(circ * 0.44) @F(circ)" stroke-dashoffset="@F(-circ * (r.Gap / 360 + 0.39))" />
+            </g>
+        }
+    </svg>
     <div class="title">Dezoláti!</div>
     <div class="body center pre">@souhrn</div>
     @if (promile != null)
@@ -30,14 +51,14 @@
             <div class="tally-row" @onclick="() => RowTapped(kind)">
                 <div class="heading">@label</div>
                 <div class="carky">
-                    @foreach (var (src, cross) in Carky(count, seed))
+                    @foreach (var (src, cross, style) in Carky(count, seed, shownDay))
                     {
-                        <img src="img/@src" class="@(cross ? "cross" : "")" alt="" />
+                        <img src="img/@src" class="@(cross ? "cross" : "")" style="@style" alt="" />
                     }
                 </div>
             </div>
         }
-        <div class="small soft center" style="margin-top:12px">(ťukni na řádek a škrtni čárku)</div>
+        <div class="small soft center" style="margin-top:12px">(ťukni na řádek – připíšeš nebo škrtneš čárku)</div>
     </div>
 </div>
 
@@ -71,13 +92,20 @@
         "carka6.png", "carka7.png", "carka8.png", "carka9.png", "carka10.png"
     };
 
-    // pevný seed = čárky vypadají pokaždé stejně (a stejně jako v appce)
-    private static IEnumerable<(string Src, bool Cross)> Carky(int count, int seed)
+    // pevný seed = čárky vypadají pokaždé stejně (a stejně jako v appce); „šejdr“ podle dne
+    private static IEnumerable<(string Src, bool Cross, string Style)> Carky(int count, int seed, DateTime day)
     {
         var random = new Random(seed);
         for (var i = 0; i < count; i++)
-            yield return (CarkyImages[random.Next(CarkyImages.Length)], i % 5 == 4);
+        {
+            var cross = i % 5 == 4;
+            var (rot, dy, scale) = Krouzky.Jitter(day, seed - 1, i);
+            var style = $"transform: translateY({F(dy)}px) rotate({F((cross ? -80 : 0) + rot)}deg) scale({F(scale)})";
+            yield return (CarkyImages[random.Next(CarkyImages.Length)], cross, style);
+        }
     }
+
+    private static string F(double v) => v.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
 
     protected override async Task OnInitializedAsync()
     {
@@ -214,7 +242,7 @@
         UpdatePromile();
     }
 
-    /// <summary>Ťuknutí na řádek lístku → škrtnout jednu čárku.</summary>
+    /// <summary>Ťuknutí na řádek lístku → připsat, nebo škrtnout jednu čárku (každý druh zvlášť).</summary>
     private async Task RowTapped(string kind)
     {
         var userId = AuthSession.Uid;
@@ -226,19 +254,28 @@
             "Vino" => (shownVino, "Víno", "jedno víno"),
             _ => (shownPanaky, "Panáky", "jednoho panáka")
         };
-        if (count <= 0) return;
 
-        var strike = await Note.ConfirmAsync($"{name}: {count}", "Škrtnout čárku z lístku?", $"Škrtnout {one}", "Nic", danger: true);
-        if (!strike) return;
+        var add = $"Zapsat {one}";
+        var strike = $"Odmazat {one}";
+        var choice = count > 0
+            ? await Note.ShowAsync($"{name}: {count}", "Co s tím?",
+                (add, PencilVariant.Primary), (strike, PencilVariant.Danger), ("Nic", PencilVariant.Secondary))
+            : await Note.ShowAsync($"{name}: zatím nic", "Připsat čárku?",
+                (add, PencilVariant.Primary), ("Nic", PencilVariant.Secondary));
 
+        int p = kind == "Pivo" ? 1 : 0, v = kind == "Vino" ? 1 : 0, s = kind == "Panaky" ? 1 : 0;
         try
         {
-            await firestoreService.RecordCorrection(userId, shownDay,
-                kind == "Pivo" ? 1 : 0, kind == "Vino" ? 1 : 0, kind == "Panaky" ? 1 : 0);
+            if (choice == add)
+                await firestoreService.RecordDrink(userId, AuthSession.DisplayName, p, v, s);
+            else if (choice == strike)
+                await firestoreService.RecordCorrection(userId, shownDay, p, v, s);
+            else
+                return;
         }
         catch (Exception ex)
         {
-            await Note.AlertAsync("Chyba", "Škrtnutí se nepovedlo: " + ex.Message);
+            await Note.AlertAsync("Chyba", (choice == add ? "Zápis" : "Škrtnutí") + " se nepovedl: " + ex.Message);
         }
         await LoadData();
     }

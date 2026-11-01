@@ -63,5 +63,29 @@
         public DateTime? PromileAt { get; set; }
         /// <summary>Pohlaví (kvůli „střízlivý / střízlivá“).</summary>
         public string? Gender { get; set; }
+        /// <summary>Poslední zápis (UTC), čeho v něm bylo nejvíc (pivo / vino / panak) a kde (jen když místo hlásí).</summary>
+        public DateTime? LastDrinkAt { get; set; }
+        public string? LastDrinkKind { get; set; }
+        public string? LastDrinkPlace { get; set; }
+
+        /// <summary>„před 3 h – pivo, U Lojzy“ / „včera 23:40 – víno“ / „12. 10. 21:15 – panák“ (appka i web).</summary>
+        public string LastDrinkText()
+        {
+            if (LastDrinkAt is not DateTime atUtc) return "—";
+            var inv = System.Globalization.CultureInfo.InvariantCulture;
+            var at = atUtc.ToLocalTime();
+            var now = DateTime.Now;
+            var ago = now - at;
+            string when = ago.TotalMinutes < 2 ? "právě teď"
+                : ago.TotalMinutes < 60 ? $"před {(int)ago.TotalMinutes} min"
+                : ago.TotalHours < 12 ? $"před {(int)ago.TotalHours} h"
+                : at.Date == now.Date ? "dnes " + at.ToString("H:mm", inv)
+                : at.Date == now.Date.AddDays(-1) ? "včera " + at.ToString("H:mm", inv)
+                : at.Year == now.Year ? at.ToString("d. M. H:mm", inv)
+                : at.ToString("d. M. yyyy", inv);
+            var what = LastDrinkKind switch { "pivo" => "pivo", "vino" => "víno", "panak" => "panák", _ => null };
+            var tail = string.Join(", ", new[] { what, LastDrinkPlace }.Where(p => !string.IsNullOrWhiteSpace(p)));
+            return tail.Length == 0 ? when : $"{when} – {tail}";
+        }
     }
 }

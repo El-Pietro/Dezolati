@@ -1,0 +1,236 @@
+@namespace Dezolati.Web.Pages
+@page "/pozvanky"
+@inject NavigationManager Nav
+
+@* Pozvánky do hospody (Pages/Pozvanky v appce). Logika sdílená: Services/Pozvani.cs. *@
+<BackBar To="pratele" />
+
+<div class="listek grow">
+    <div class="stack">
+        <div class="title">Pozvánky</div>
+
+        @if (draft != null)
+        {
+            <div class="heading center">Do hospody @PubService.NameOf(draft)</div>
+
+            @if (joinable.Count > 0)
+            {
+                <div class="field-label">Tam už se chystají tvoji kámoši:</div>
+                @foreach (var j in joinable)
+                {
+                    <div class="friend-row">
+                        <div class="body grow-1">@j.FromNick zve · jde @string.Join(", ", j.Friends)@(j.Going > j.Friends.Count ? $" a {j.Going - j.Friends.Count} dalších" : "")</div>
+                        <PencilButton Text="Přidat se" Small="true" Style="max-width:120px" Disabled="busy" OnClick="() => Join(j)" />
+                    </div>
+                }
+                <div class="field-label mt12">Nebo udělej vlastní pozvánku:</div>
+            }
+            else
+            {
+                <div class="field-label">Koho zveš?</div>
+            }
+
+            @if (friends.Count == 0)
+            {
+                <div class="small">@(loading ? "Načítám kámoše…" : "Nemáš koho pozvat. Nejdřív si přidej kámoše.")</div>
+            }
+            <FriendPicker Friends="friends" Picked="picked" />
+            <div class="hold-row">
+                <PencilButton Text="Všichni" Small="true" Variant="PencilVariant.Secondary" OnClick="PickAll" />
+                <PencilButton Text="@($"Pozvat{(picked.Count > 0 ? $" ({picked.Count})" : "")}")" Disabled="@(busy || picked.Count == 0)" OnClick="Create" />
+            </div>
+            <div class="small soft">Pozvaní odpoví Jdu / Nejdu a můžou přizvat svoje kámoše. Pozvánka platí do 6 ráno.</div>
+            <PencilButton Text="Zrušit" Variant="PencilVariant.Secondary" Small="true" OnClick="CancelDraft" />
+        }
+        else
+        {
+            @if (loading && invites.Count == 0)
+            {
+                <div class="spinner"></div>
+            }
+            else if (invites.Count == 0)
+            {
+                <div class="body center" style="margin:20px 0">Žádná pozvánka. Pozvat kámoše jde z mapy – ťukni na hospodu.</div>
+            }
+
+            @foreach (var inv in invites)
+            {
+                var mine = inv.MyStatus;
+                <div class="invite @(inv.Active ? "" : "ended")">
+                    <div class="heading">@inv.PubName</div>
+                    <div class="small soft">
+                        zve @(inv.From == AuthSession.Uid ? "ty" : inv.FromNick) ·
+                        @(inv.Active ? $"do 6:00 · jde {inv.Going} z {inv.Members.Count}" : "skončila v 6:00")
+                    </div>
+                    <div class="body">
+                        @foreach (var m in inv.Members.OrderBy(m => m.Status == "yes" ? 0 : m.Status == "wait" ? 1 : 2))
+                        {
+                            <span class="invite-member @m.Status">@m.Mark @(m.Uid == AuthSession.Uid ? "ty" : m.Nick)</span>
+                        }
+                    </div>
+
+                    @if (inv.Active)
+                    {
+                        <div class="hold-row">
+                            <PencilButton Text="Jdu 🍺" Small="true" Variant="@(mine == "yes" ? PencilVariant.Primary : PencilVariant.Secondary)"
+                                          Disabled="busy" OnClick="() => Respond(inv, true)" />
+                            <PencilButton Text="Nejdu" Small="true" Variant="@(mine == "no" ? PencilVariant.Danger : PencilVariant.Secondary)"
+                                          Disabled="busy" OnClick="() => Respond(inv, false)" />
+                            @if (mine != "no")
+                            {
+                                <PencilButton Text="Pozvat další" Small="true" Variant="PencilVariant.Secondary" Disabled="busy"
+                                              OnClick="() => ToggleAdd(inv)" />
+                            }
+                        </div>
+                        @if (addingTo == inv.Id)
+                        {
+                            var others = friends.Where(f => inv.Members.All(m => m.Uid != f.UserId)).ToList();
+                            @if (others.Count == 0)
+                            {
+                                <div class="small">Všechny svoje kámoše už tu máš.</div>
+                            }
+                            else
+                            {
+                                <FriendPicker Friends="others" Picked="picked" />
+                                <PencilButton Text="@($"Pozvat{(picked.Count > 0 ? $" ({picked.Count})" : "")}")" Small="true"
+                                              Disabled="@(busy || picked.Count == 0)" OnClick="() => Add(inv)" />
+                            }
+                        }
+                    }
+                    else
+                    {
+                        @if (summaries.TryGetValue(inv.Id, out var sum))
+                        {
+                            @if (sum.Count == 0)
+                            {
+                                <div class="small">Nikdo nic nezapsal. Buď se nepilo, nebo se zapomnělo.</div>
+                            }
+                            @for (var i = 0; i < sum.Count; i++)
+                            {
+                                <div class="small">@(i == 0 && sum[i].Total > 0 ? "🏆" : $"{i + 1}.") @sum[i].Nick – @sum[i].Text</div>
+                            }
+                        }
+                        else
+                        {
+                            <PencilButton Text="Kdo lil nejvíc?" Small="true" Variant="PencilVariant.Secondary" Disabled="busy"
+                                          OnClick="() => LoadSummary(inv)" />
+                        }
+                    }
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    private PubInfo? draft;
+    private List<JoinableInvite> joinable = new();
+    private List<UserModel> friends = new();
+    private HashSet<string> picked = new();
+    private List<InviteInfo> invites = new();
+    private Dictionary<string, List<(string Nick, int Total, string Text)>> summaries = new();
+    private string? addingTo;
+    private bool busy, loading;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthSession.Uid is not string me)
+        {
+            Nav.NavigateTo("prihlaseni", replace: true);
+            return;
+        }
+        draft = Pozvani.DraftPub;
+        Pozvani.DraftPub = null;
+        loading = true;
+        try
+        {
+            var (_, list) = await new FirestoreService().GetFriendsOverview(me);
+            friends = list;
+            if (draft != null)
+                joinable = await Pozvani.AtPubAsync(draft.Id);
+            else
+                await LoadInvites();
+        }
+        catch (Exception ex)
+        {
+            await Note.AlertAsync("Chyba", Net.IsNetworkError(ex) ? "Bez signálu se nic nenačte." : ex.Message);
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task LoadInvites()
+    {
+        invites = await Pozvani.MineAsync();
+        FriendBadge.SetInvites(Pozvani.WaitingCount);
+    }
+
+    private void PickAll()
+    {
+        if (picked.Count == friends.Count) picked.Clear();
+        else picked = friends.Select(f => f.UserId).ToHashSet();
+    }
+
+    private async Task Run(Func<Task> action, string? done = null)
+    {
+        busy = true;
+        try
+        {
+            await action();
+            if (done != null) await Note.AlertAsync("Hotovo", done);
+        }
+        catch (Exception ex)
+        {
+            await Note.AlertAsync("Nepovedlo se", Net.IsNetworkError(ex) ? "Bez signálu to nepůjde." : ex.Message);
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private Task Create() => Run(async () =>
+    {
+        await Pozvani.CreateAsync(draft!, picked);
+        draft = null;
+        picked.Clear();
+        await LoadInvites();
+    }, "Pozvánka letí. Teď už jen čekat, kdo dorazí.");
+
+    private Task Join(JoinableInvite j) => Run(async () =>
+    {
+        await Pozvani.JoinAsync(j.Id);
+        draft = null;
+        await LoadInvites();
+    });
+
+    private void CancelDraft()
+    {
+        draft = null;
+        _ = Run(LoadInvites);
+    }
+
+    private Task Respond(InviteInfo inv, bool going) => Run(async () =>
+    {
+        await Pozvani.RespondAsync(inv.Id, going);
+        await LoadInvites();
+    });
+
+    private void ToggleAdd(InviteInfo inv)
+    {
+        picked.Clear();
+        addingTo = addingTo == inv.Id ? null : inv.Id;
+    }
+
+    private Task Add(InviteInfo inv) => Run(async () =>
+    {
+        await Pozvani.AddAsync(inv.Id, picked);
+        picked.Clear();
+        addingTo = null;
+        await LoadInvites();
+    });
+
+    private Task LoadSummary(InviteInfo inv) => Run(async () => summaries[inv.Id] = await Pozvani.SummaryAsync(inv));
+}

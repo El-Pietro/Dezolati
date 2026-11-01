@@ -55,6 +55,34 @@
         ContentTemplate="{DataTemplate pages:Hry}"
         Route="Hry" />
     <ShellContent
+        Title="Čepování"
+        ContentTemplate="{DataTemplate pages:Cepovani}"
+        Route="Cepovani" />
+    <ShellContent
+        Title="Klouzání po pultu"
+        ContentTemplate="{DataTemplate pages:Klouzani}"
+        Route="Klouzani" />
+    <ShellContent
+        Title="Číšník s tácem"
+        ContentTemplate="{DataTemplate pages:Cisnik}"
+        Route="Cisnik" />
+    <ShellContent
+        Title="Foukání skla"
+        ContentTemplate="{DataTemplate pages:Sklo}"
+        Route="Sklo" />
+    <ShellContent
+        Title="Vaření piva"
+        ContentTemplate="{DataTemplate pages:Varna}"
+        Route="Varna" />
+    <ShellContent
+        Title="Hospodský kvíz"
+        ContentTemplate="{DataTemplate pages:Kviz}"
+        Route="Kviz" />
+    <ShellContent
+        Title="Pozvánky"
+        ContentTemplate="{DataTemplate pages:Pozvanky}"
+        Route="Pozvanky" />
+    <ShellContent
         Title="Šipky"
         ContentTemplate="{DataTemplate pages:Sipky}"
         Route="Sipky" />

@@ -1,0 +1,139 @@
+@namespace Dezolati.Web.Pages
+@page "/varna"
+@implements IDisposable
+@using System.Diagnostics
+
+@* Vaření piva (Pages/Varna v appce). Logika i obrázek sdílené (Services/Varna.cs), sklep v prohlížeči. *@
+<BackBar To="hry" />
+
+<div class="listek grow">
+    <div class="stack">
+        <div class="title">Vaření piva</div>
+        <div class="small center">@Hint</div>
+
+        <svg class="pour" viewBox="0 0 360 400" @oncontextmenu:preventDefault="true">
+            @((MarkupString)SceneKit.ToSvg(BrewScene.Build(game)))
+        </svg>
+
+        @if (game.State == BrewGame.Phase.Done && game.Result is { } r)
+        {
+            <div class="heading center">@r.Title – @r.Score bodů</div>
+            <div class="body center pre">@r.Summary
+@r.Comment
+Rmut @r.MashScore · chmel @r.BoilScore · kvašení @r.FermentScore</div>
+            <input class="entry" placeholder="Jak se tvoje pivo jmenuje?" maxlength="40" @bind="name" />
+            <div class="hold-row">
+                <PencilButton Text="Do sklepa" Disabled="saved" OnClick="Save" />
+                <PencilButton Text="Vařit znovu" Variant="PencilVariant.Secondary" OnClick="Reset" />
+            </div>
+        }
+
+        <div class="hold-row">
+            @if (game.State == BrewGame.Phase.Ready)
+            {
+                <PencilButton Text="Začít vařit" OnClick="StartGame" />
+            }
+            else if (game.State == BrewGame.Phase.Mash && game.Sub == BrewGame.MashStep.Take)
+            {
+                <PencilButton Text="Odebrat díl rmutu" OnClick="() => game.TakePortion()" />
+            }
+            else if (game.State == BrewGame.Phase.Mash && game.Sub == BrewGame.MashStep.Return)
+            {
+                <div class="hold" @onpointerdown="() => game.Pouring = true" @onpointerup="() => game.Pouring = false"
+                     @onpointercancel="() => game.Pouring = false" @onpointerleave="() => game.Pouring = false" @oncontextmenu:preventDefault="true">
+                    <PencilButton Text="Vracet (drž)" />
+                </div>
+                <PencilButton Text="Prodleva" Variant="PencilVariant.Secondary" Disabled="!game.CanConfirm" OnClick="() => game.ConfirmRest()" />
+            }
+            else if (game.State == BrewGame.Phase.Boil)
+            {
+                <PencilButton Text="Přihodit chmel" Disabled="game.Hops.Count >= 3" OnClick="() => game.AddHop()" />
+                @if (game.FoamEvent)
+                {
+                    <PencilButton Text="Ztlumit oheň" Variant="PencilVariant.Danger" OnClick="() => game.CalmFire()" />
+                }
+            }
+            else if (game.State == BrewGame.Phase.Ferment)
+            {
+                <div class="hold" @onpointerdown="() => game.Cool = true" @onpointerup="() => game.Cool = false"
+                     @onpointercancel="() => game.Cool = false" @onpointerleave="() => game.Cool = false" @oncontextmenu:preventDefault="true">
+                    <PencilButton Text="Chladit (drž)" />
+                </div>
+            }
+        </div>
+
+        @if (game.State is BrewGame.Phase.Ready or BrewGame.Phase.Done)
+        {
+            <div class="small pre">Tvůj sklep:
+@BrewCellar.Text(BrewCellar.Load())</div>
+        }
+    </div>
+</div>
+
+@code {
+    public const string BestKey = "hry_varna_best";
+
+    private BrewGame game = new();
+    private readonly Stopwatch clock = Stopwatch.StartNew();
+    private bool ticking, disposed, saved;
+    private string name = "";
+
+    private string Hint => game.State switch
+    {
+        BrewGame.Phase.Ready => "Vaříme ležák po česku: trojrmutová dekokce, chmelovar, kvašení. Pak ho ochutnají štamgasti.",
+        BrewGame.Phase.Mash => game.Sub switch
+        {
+            BrewGame.MashStep.Take => $"Rmutování {game.Decoction + 1}/3: cíl {game.Target:0} °C ({BrewGame.RestNames[game.Decoction]}). Odeber díl rmutu a povař ho.",
+            BrewGame.MashStep.Boiling => "Díl rmutu se povařuje…",
+            BrewGame.MashStep.Return => $"Drž a vracej povařený rmut, dokud teploměr neukáže {game.Target:0} °C. Teploměr se opožďuje – pusť o chlup dřív. Pak Prodleva.",
+            _ => "Prodleva – rmut odpočívá."
+        },
+        BrewGame.Phase.Boil => "Chmelovar: přihoď chmel třikrát – v zelených oknech (na hořkost, na chuť, na vůni). Když to kypí, ztlum oheň!",
+        BrewGame.Phase.Ferment => "Hlavní kvašení: drž teplotu 8–10 °C. Když se sklep ohřívá, chlaď.",
+        _ => "Hotovo. Pojmenuj ho a ulož do sklepa."
+    };
+
+    private void Reset()
+    {
+        game = new BrewGame();
+        saved = false;
+        name = "";
+    }
+
+    private void StartGame()
+    {
+        game.Start();
+        _ = LoopAsync();
+    }
+
+    private async Task LoopAsync()
+    {
+        if (ticking) return;
+        ticking = true;
+        var last = clock.Elapsed.TotalSeconds;
+        while (!disposed && game.State != BrewGame.Phase.Done)
+        {
+            await Task.Delay(16);
+            var now = clock.Elapsed.TotalSeconds;
+            game.Step(now - last);
+            last = now;
+            StateHasChanged();
+        }
+        ticking = false;
+        if (game.Result is { } r)
+        {
+            if (r.Score > Preferences.Get(BestKey, -1)) Preferences.Set(BestKey, r.Score);
+            name = BrewCellar.Names[Random.Shared.Next(BrewCellar.Names.Length)] + $" {r.Degree:0}°";
+        }
+        StateHasChanged();
+    }
+
+    private void Save()
+    {
+        if (saved || game.Result is not { } r) return;
+        BrewCellar.Add(new BrewCellar.Beer(string.IsNullOrWhiteSpace(name) ? "Bezejmenné" : name.Trim(), r.Degree, r.Abv, r.Ibu, r.Score, DateTime.Now));
+        saved = true;
+    }
+
+    public void Dispose() => disposed = true;
+}

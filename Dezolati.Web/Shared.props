@@ -19,6 +19,17 @@
     <Compile Include="$(MSBuildThisFileDirectory)..\Services\PubDay.cs" Link="Shared\Services\PubDay.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)..\Services\UserSession.cs" Link="Shared\Services\UserSession.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)..\Services\Social.cs" Link="Shared\Services\Social.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\Services\Cepovani.cs" Link="Shared\Services\Cepovani.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\Services\CepovaniScene.cs" Link="Shared\Services\CepovaniScene.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\Services\Klouzani.cs" Link="Shared\Services\Klouzani.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\Services\Cisnik.cs" Link="Shared\Services\Cisnik.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\Services\Sklo.cs" Link="Shared\Services\Sklo.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\Services\Varna.cs" Link="Shared\Services\Varna.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\Services\Kviz.cs" Link="Shared\Services\Kviz.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\Services\AccountService.cs" Link="Shared\Services\AccountService.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\Services\Pozvani.cs" Link="Shared\Services\Pozvani.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\Services\Krouzky.cs" Link="Shared\Services\Krouzky.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\Services\FriendAliases.cs" Link="Shared\Services\FriendAliases.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)..\Services\FriendBadge.cs" Link="Shared\Services\FriendBadge.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)..\Services\PubCatalog.cs" Link="Shared\Services\PubCatalog.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)..\Services\PubService.cs" Link="Shared\Services\PubService.cs" />

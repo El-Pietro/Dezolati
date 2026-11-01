@@ -1,0 +1,19 @@
+@namespace Dezolati.Web.Components
+@* Výběr kámošů do pozvánky: ťuk = vybrat / zrušit (FriendPicker v appce dělá Pozvanky.xaml.cs). *@
+<div class="picker">
+    @foreach (var f in Friends)
+    {
+        var uid = f.UserId;
+        <Chip Text="@f.Display" Selected="@Picked.Contains(uid)" OnClick="() => Toggle(uid)" />
+    }
+</div>
+
+@code {
+    [Parameter] public List<UserModel> Friends { get; set; } = new();
+    [Parameter] public HashSet<string> Picked { get; set; } = new();
+
+    private void Toggle(string uid)
+    {
+        if (!Picked.Remove(uid)) Picked.Add(uid);
+    }
+}

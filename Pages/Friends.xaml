@@ -45,10 +45,23 @@
                 <!-- Seznam přátel: kdo pije, je nahoře s emoji a místem; ťuk na jméno = statistiky -->
                 <ScrollView Grid.Row="4">
                     <VerticalStackLayout Spacing="2">
+                        <!-- pozvánky do hospody (odznak na lístku počítá i ty, co čekají na odpověď) -->
+                        <controls:PencilButton x:Name="InvitesButton" Text="Pozvánky do hospody" Variant="Secondary"
+                                               FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                               Margin="0,0,0,6" Clicked="OnInvitesClicked" />
+                        <!-- víc kámošů pije → jedním ťukem připít všem -->
+                        <controls:PencilButton x:Name="CheerAllButton" Text="Připít všem 🍺" Variant="Primary" IsVisible="False"
+                                               FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                               Clicked="OnCheerAllClicked" />
                         <VerticalStackLayout x:Name="FriendsStack" Spacing="2">
                             <Label x:Name="EmptyLabel" Text="Zatím nikdo. Piješ sám?" Style="{StaticResource Heading}"
                                    HorizontalOptions="Center" Margin="0,20" IsVisible="False" />
                         </VerticalStackLayout>
+
+                        <!-- Moje žádosti, na které se čeká (dají se zrušit) -->
+                        <Label x:Name="OutgoingHeader" Text="Čekáš, až tě přijmou:" Style="{StaticResource FieldLabel}"
+                               Margin="0,14,0,0" IsVisible="False" />
+                        <VerticalStackLayout x:Name="OutgoingStack" Spacing="2" IsVisible="False" />
 
                         <!-- Možná znáš: kámoši kámošů (z adresáře, sbalené) -->
                         <Grid ColumnDefinitions="*, Auto" Margin="0,14,0,0">

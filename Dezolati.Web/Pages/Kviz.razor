@@ -1,0 +1,148 @@
+@namespace Dezolati.Web.Pages
+@page "/kviz"
+@implements IDisposable
+@using System.Diagnostics
+
+@* Hospodský kvíz (Pages/Kviz v appce). Otázky a logika sdílené (Services/Kviz.cs). *@
+<BackBar To="hry" />
+
+<div class="listek grow">
+    <div class="stack">
+        <div class="title">Hospodský kvíz</div>
+
+        @if (game.State == QuizGame.Phase.Setup)
+        {
+            <div class="field-label">Kdo hraje (střídáte se u jednoho telefonu):</div>
+            @if (players.Count == 0)
+            {
+                <div class="small">Nikdo – hraješ sám.</div>
+            }
+            @for (var i = 0; i < players.Count; i++)
+            {
+                var idx = i;
+                <div class="friend-row">
+                    <div class="body grow-1">@(i + 1). @players[i]</div>
+                    <PencilButton Text="✖" Small="true" Variant="PencilVariant.Danger" Style="width:48px" OnClick="() => Remove(idx)" />
+                </div>
+            }
+            <div class="hold-row">
+                <input class="entry" placeholder="Jméno hráče" maxlength="30" @bind="newName" @onkeydown="Key" />
+                <PencilButton Text="Přidat" Small="true" Variant="PencilVariant.Secondary" Style="max-width:110px" OnClick="Add" />
+            </div>
+            <div class="field-label">Otázek na hráče:</div>
+            <div class="hold-row">
+                @foreach (var n in new[] { 3, 5, 10 })
+                {
+                    var r = n;
+                    <PencilButton Text="@r.ToString()" Variant="@(rounds == r ? PencilVariant.Primary : PencilVariant.Secondary)" OnClick="() => SetRounds(r)" />
+                }
+            </div>
+            <PencilButton Text="Začít kvíz" OnClick="StartQuiz" />
+            <div class="small">V balíku je @QuizBank.All.Count otázek o pivu, pivovarech a hospodách. Dokud neprojdete všechny, žádná se nezopakuje.</div>
+        }
+        else if (game.State is QuizGame.Phase.Question or QuizGame.Phase.Answered && game.Current is { } q)
+        {
+            <div class="heading center">@(game.Players.Count > 1 ? $"Na řadě: {game.CurrentPlayerName}" : $"Otázka {game.Index + 1} z {game.Deck.Count}")</div>
+            <div class="small soft center">@q.Category@(game.Players.Count > 1 ? $" · otázka {game.Index + 1} z {game.Deck.Count}" : "")</div>
+            <div class="quiz-time"><div style="width:@((game.TimeLeft / QuizGame.TimeLimit * 100).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture))%"></div></div>
+            <div class="body center" style="font-size:20px">@q.Text</div>
+            @for (var i = 0; i < 4; i++)
+            {
+                var idx = i;
+                var answered = game.State == QuizGame.Phase.Answered;
+                var variant = !answered ? PencilVariant.Secondary
+                    : idx == game.CorrectIndex ? PencilVariant.Primary
+                    : idx == game.Picked ? PencilVariant.Danger : PencilVariant.Secondary;
+                var label = !answered ? game.Options[idx] : idx == game.CorrectIndex ? "✔ " + game.Options[idx] : idx == game.Picked ? "✖ " + game.Options[idx] : game.Options[idx];
+                <PencilButton Text="@label" Variant="variant"
+                              Style="@(answered && idx != game.CorrectIndex && idx != game.Picked ? "opacity:.5" : "")"
+                              OnClick="() => game.Answer(idx)" />
+            }
+            @if (game.State == QuizGame.Phase.Answered)
+            {
+                <div class="heading center">@(game.Picked == -1 ? "Čas vypršel!" : game.LastCorrect ? "Správně!" : "Vedle.")</div>
+                <div class="small center">@q.Note</div>
+                <PencilButton Text="@(game.Index + 1 >= game.Deck.Count ? "Výsledky" : "Další")" OnClick="Next" />
+            }
+            <div class="small center">@string.Join(" · ", game.Players.Select((p, i) => $"{p} {game.Scores[i]}"))</div>
+        }
+        else if (game.State == QuizGame.Phase.Done)
+        {
+            <div class="heading center">Výsledky</div>
+            <div class="body center pre">@game.Ranking()</div>
+            <PencilButton Text="Znovu" OnClick="Reset" />
+        }
+    </div>
+</div>
+
+@code {
+    private QuizGame game = new();
+    private List<string> players = new();
+    private string newName = "";
+    private int rounds = 5;
+    private readonly Stopwatch clock = Stopwatch.StartNew();
+    private bool ticking, disposed;
+
+    protected override void OnInitialized()
+    {
+        players = QuizGame.LoadPlayers();
+        rounds = Preferences.Get("hry_kviz_kola", 5);
+    }
+
+    private void Add()
+    {
+        var n = newName.Trim();
+        if (n.Length == 0 || players.Count >= 12) return;
+        players.Add(n);
+        QuizGame.SavePlayers(players);
+        newName = "";
+    }
+
+    private void Key(KeyboardEventArgs e) { if (e.Key == "Enter") Add(); }
+
+    private void Remove(int i)
+    {
+        players.RemoveAt(i);
+        QuizGame.SavePlayers(players);
+    }
+
+    private void SetRounds(int r)
+    {
+        rounds = r;
+        Preferences.Set("hry_kviz_kola", r);
+    }
+
+    private void StartQuiz()
+    {
+        game = new QuizGame { RoundsPerPlayer = rounds };
+        game.Start(players);
+        _ = LoopAsync();
+    }
+
+    private void Next()
+    {
+        game.Next();
+        if (game.State == QuizGame.Phase.Question) _ = LoopAsync();
+    }
+
+    private void Reset() => game = new QuizGame();
+
+    private async Task LoopAsync()
+    {
+        if (ticking) return;
+        ticking = true;
+        var last = clock.Elapsed.TotalSeconds;
+        while (!disposed && game.State == QuizGame.Phase.Question)
+        {
+            await Task.Delay(100);
+            var now = clock.Elapsed.TotalSeconds;
+            game.Step(now - last);
+            last = now;
+            StateHasChanged();
+        }
+        ticking = false;
+        StateHasChanged();
+    }
+
+    public void Dispose() => disposed = true;
+}

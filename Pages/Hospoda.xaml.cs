@@ -399,27 +399,12 @@ public partial class Hospoda : ContentPage, IQueryAttributable
         }
     }
 
+    /// <summary>Pozvat vybrané kámoše (stránka Pozvánky: nejdřív nabídne „Přidat se“ ke kámošově pozvánce).</summary>
     private async void OnInviteClicked(object sender, EventArgs e)
     {
         if (pub == null) return;
-        var name = PubService.NameOf(pub);
-        if (!await Listek.ConfirmAsync(this, "Pozvat kámoše?",
-                $"Kámošům do {Invites.RadiusKm:0} km přijde „zve tě na drink do {name}“.", "Pozvat"))
-            return;
-        try
-        {
-            InviteButton.IsEnabled = false;
-            await Invites.SendAsync(pub);
-            await Listek.AlertAsync(this, "Posláno", "Pozvánka letí. Teď už jen čekat, kdo dorazí.");
-        }
-        catch (Exception ex)
-        {
-            await Listek.AlertAsync(this, "Nepovedlo se", Net.IsNetworkError(ex) ? "Bez signálu pozvánka neodejde." : ex.Message);
-        }
-        finally
-        {
-            InviteButton.IsEnabled = true;
-        }
+        Pozvani.DraftPub = pub;
+        await Shell.Current.GoToAsync("//Pozvanky");
     }
 
     private async void OnWebClicked(object sender, EventArgs e)

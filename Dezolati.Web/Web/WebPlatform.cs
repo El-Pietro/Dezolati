@@ -91,6 +91,7 @@ namespace Dezolati.Web
                             Services.Cheers.OnReceived(session, from, G("fromNick") ?? "?", G("emoji") ?? "🍻");
                             break;
                         case "friend":
+                        case "invite":
                             Services.FriendBadge.Invalidate();
                             _ = Services.FriendBadge.RefreshAsync();
                             break;

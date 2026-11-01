@@ -13,6 +13,8 @@
 	<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 	<uses-permission android:name="android.permission.WAKE_LOCK" />
 	<uses-permission android:name="android.permission.VIBRATE" />
+	<!-- foukání skla do mikrofonu: jen hlasitost, nic se nenahrává -->
+	<uses-permission android:name="android.permission.RECORD_AUDIO" />
 	<uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" android:maxSdkVersion="32" />
 	<uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 

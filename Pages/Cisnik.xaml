@@ -1,0 +1,35 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:controls="clr-namespace:Dezolati.Controls"
+             x:Class="Dezolati.Pages.Cisnik"
+             Title="Číšník s tácem">
+    <Grid RowDefinitions="Auto, *">
+        <Image Grid.RowSpan="2" Source="{AppThemeBinding Light=woodlight.jpg, Dark=wooddark.jpg}" Aspect="AspectFill" />
+
+        <BoxView Grid.Row="0" HeightRequest="0" Color="Transparent" InputTransparent="True" Margin="{DynamicResource TopBarMargin}" />
+        <controls:PencilButton Grid.Row="0" Variant="Outline" Text="Zpět" IsVisible="{OnPlatform Default=True, Android=False}"
+                               HorizontalOptions="Start" Margin="{DynamicResource TopBarMargin}" Clicked="OnZpetClicked" />
+
+        <Border Grid.Row="1" Style="{StaticResource Listek}">
+            <Grid RowDefinitions="Auto, Auto, *, Auto, Auto, Auto, Auto" RowSpacing="4">
+                <Label Grid.Row="0" Text="Číšník s tácem" Style="{StaticResource Title}" />
+                <Label Grid.Row="1" x:Name="HintLabel" Style="{StaticResource Small}" HorizontalTextAlignment="Center" />
+
+                <!-- hospoda a tác; prst na levé / pravé půlce = naklonit tam -->
+                <GraphicsView Grid.Row="2" x:Name="Canvas" MinimumHeightRequest="240" />
+
+                <Label Grid.Row="3" x:Name="ResultTitle" Style="{StaticResource Heading}" HorizontalTextAlignment="Center" IsVisible="False" />
+                <Label Grid.Row="4" x:Name="ResultText" Style="{StaticResource Body}" HorizontalTextAlignment="Center" IsVisible="False" />
+                <Label Grid.Row="5" x:Name="BestLabel" Style="{StaticResource Small}" HorizontalTextAlignment="Center" />
+                <Grid Grid.Row="6" ColumnDefinitions="*, *" ColumnSpacing="8" Margin="0,6,0,0">
+                    <controls:PencilButton x:Name="InvertButton" Text="Obrátit náklon" Variant="Secondary"
+                                           FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                           IsVisible="False" Clicked="OnInvertClicked" />
+                    <controls:PencilButton Grid.Column="1" x:Name="StartButton" Text="Vyrazit" Variant="Primary"
+                                           Clicked="OnStartClicked" />
+                </Grid>
+            </Grid>
+        </Border>
+    </Grid>
+</ContentPage>

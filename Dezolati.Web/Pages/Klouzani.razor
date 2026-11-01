@@ -1,0 +1,131 @@
+@namespace Dezolati.Web.Pages
+@page "/klouzani"
+@implements IDisposable
+@using System.Diagnostics
+@using Microsoft.JSInterop
+
+@* Klouzání po pultu (Pages/Klouzani v appce). Logika i obrázek sdílené (Services/Klouzani.cs), tady jen SVG a prst. *@
+<BackBar To="hry" />
+
+<div class="listek grow">
+    <div class="stack">
+        <div class="title">Klouzání po pultu</div>
+        <div class="small center">@hint</div>
+
+        <svg @ref="svgRef" class="pour" viewBox="0 0 360 400"
+             @onpointerdown="Down" @onpointermove="Move" @onpointerup="Up" @onpointercancel="Up"
+             @oncontextmenu:preventDefault="true">
+            @((MarkupString)SceneKit.ToSvg(SlideScene.Build(game.Current)))
+        </svg>
+
+        @if (result != null)
+        {
+            <div class="heading center">@result.Title – @result.Score bodů</div>
+        }
+        <div class="small soft center">@scoreText</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:6px">
+            <div class="small">@bestText</div>
+            @if (result != null)
+            {
+                <PencilButton Text="@(game.Finished ? "Znovu" : "Další krýgl")" Style="width:150px" OnClick="Next" />
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    public const string BestKey = "hry_klouzani_best";
+
+    private ElementReference svgRef;
+    private SlideGame game = new();
+    private SlideResult? result;
+    private readonly Stopwatch clock = Stopwatch.StartNew();
+    private bool ticking, disposed;
+    private double scale = 1;           // px na obrazovce / jednotka scény
+    private string hint = "", scoreText = "", bestText = "";
+
+    private double Now => clock.Elapsed.TotalSeconds;
+
+    protected override void OnInitialized() => NewGame();
+
+    private void NewGame()
+    {
+        game = new SlideGame();
+        StartRound();
+        var best = Preferences.Get(BestKey, -1);
+        bestText = best < 0 ? "" : $"Rekord: {best} bodů";
+    }
+
+    private void StartRound()
+    {
+        result = null;
+        hint = $"Krýgl {game.Round} z {SlideGame.Rounds}. {game.Current.Surface} Švihni krýglem doprava ke štamgastovi na tácek.";
+        scoreText = game.Total > 0 ? $"Zatím {game.Total} bodů" : "";
+    }
+
+    private async Task Down(PointerEventArgs e)
+    {
+        if (game.Current.State != SlideRound.Phase.Ready) return;
+        try
+        {
+            if (WebPlatform.Js is { } js)
+            {
+                var w = await js.InvokeAsync<double>("dz.elWidth", svgRef);
+                if (w > 0) scale = w / 360;
+                await js.InvokeVoidAsync("dz.capture", svgRef, e.PointerId);
+            }
+        }
+        catch { }
+        game.Current.Down(e.ClientX / scale, Now);
+        _ = LoopAsync();
+    }
+
+    private void Move(PointerEventArgs e) => game.Current.Move(e.ClientX / scale, Now);
+
+    private void Up() => game.Current.Up(Now);
+
+    private async Task LoopAsync()
+    {
+        if (ticking) return;
+        ticking = true;
+        var last = Now;
+        while (!disposed)
+        {
+            await Task.Delay(16);
+            var now = Now;
+            var round = game.Current;
+            round.Step(now - last);
+            last = now;
+            if (round.State == SlideRound.Phase.Ready) break;      // jen posunul, nepostrčil
+            if (round.State == SlideRound.Phase.Done) break;
+            StateHasChanged();
+        }
+        ticking = false;
+        if (game.Current is { State: SlideRound.Phase.Done, Result: { } r } && result == null)
+        {
+            game.Commit();
+            result = r;
+            if (game.Finished)
+            {
+                scoreText = $"Celkem {game.Total} z {SlideGame.Rounds * 100} bodů. {SlideGame.Verdict(game.Total)}";
+                var best = Preferences.Get(BestKey, -1);
+                if (game.Total > best)
+                {
+                    Preferences.Set(BestKey, game.Total);
+                    bestText = best < 0 ? $"Rekord: {game.Total} bodů" : $"Nový rekord: {game.Total} bodů!";
+                }
+            }
+            else scoreText = $"Zatím {game.Total} bodů";
+            try { if (WebPlatform.Js is { } js) await js.InvokeVoidAsync("dz.vibrate", r.Broken ? 120 : 30); } catch { }
+        }
+        StateHasChanged();
+    }
+
+    private void Next()
+    {
+        if (game.Finished) NewGame();
+        else if (game.Next()) StartRound();
+    }
+
+    public void Dispose() => disposed = true;
+}

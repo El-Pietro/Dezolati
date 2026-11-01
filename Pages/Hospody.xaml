@@ -7,13 +7,14 @@
     <Grid RowDefinitions="Auto, *, Auto">
         <Image Grid.RowSpan="3" Source="{AppThemeBinding Light=woodlight.jpg, Dark=wooddark.jpg}" Aspect="AspectFill" />
 
-        <!-- horní lišta: Zpět (jen mimo Android) a Kde jsem -->
-        <Grid Grid.Row="0" ColumnDefinitions="Auto, *, Auto, Auto, Auto" ColumnSpacing="8" Margin="{DynamicResource TopBarMargin}">
+        <!-- horní lišta jako na lístku: vlevo | uprostřed | vpravo (Zpět jen mimo Android, úplně vlevo) -->
+        <Grid Grid.Row="0" ColumnDefinitions="Auto, Auto, *, Auto" ColumnSpacing="8" Margin="{DynamicResource TopBarMargin}">
             <controls:PencilButton Grid.Column="0" Variant="Outline" Text="Zpět"
                                    IsVisible="{OnPlatform Default=True, Android=False}" Clicked="OnZpetClicked" />
-            <controls:PencilButton x:Name="FilterButton" Grid.Column="2" Variant="Outline" Text="Filtr" Clicked="OnFilterClicked" />
-            <controls:PencilButton x:Name="AddButton" Grid.Column="3" Variant="Outline" Text="Přidat" Clicked="OnAddClicked" />
-            <controls:PencilButton Grid.Column="4" Variant="Outline" Text="Kde jsem?" Clicked="OnWhereAmIClicked" />
+            <controls:PencilButton x:Name="FilterButton" Grid.Column="1" Variant="Outline" Text="Filtr" Clicked="OnFilterClicked" />
+            <controls:PencilButton x:Name="AddButton" Grid.Column="2" Variant="Outline" Text="Přidat"
+                                   HorizontalOptions="Center" Clicked="OnAddClicked" />
+            <controls:PencilButton Grid.Column="3" Variant="Outline" Text="Kde jsem?" Clicked="OnWhereAmIClicked" />
         </Grid>
 
         <!-- mapa položená na stole v papírovém rámečku -->

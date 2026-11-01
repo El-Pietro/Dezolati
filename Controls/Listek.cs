@@ -151,7 +151,18 @@ namespace Dezolati.Controls
                     Margin = new Thickness(0, 0, 0, 6)
                 };
                 messageLabel.SetDynamicResource(Label.FontSizeProperty, "FontBody");
-                stack.Add(messageLabel);
+
+                // dlouhý text (novinky ve verzi…) se posouvá, nadpis a tlačítka zůstanou vidět
+                var pageHeight = host.Height > 0
+                    ? host.Height
+                    : DeviceDisplay.MainDisplayInfo.Height / Math.Max(1, DeviceDisplay.MainDisplayInfo.Density);
+                var textMax = pageHeight - 64 /* okraj */ - 36 /* padding */ - 60 /* nadpis */ - buttons.Length * 62 - 24;
+                stack.Add(new ScrollView
+                {
+                    Content = messageLabel,
+                    MaximumHeightRequest = Math.Max(120, textMax),
+                    VerticalScrollBarVisibility = ScrollBarVisibility.Default
+                });
             }
             foreach (var (text, variant) in buttons)
             {

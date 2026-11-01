@@ -1,7 +1,7 @@
-namespace Dezolati.Services
+﻿namespace Dezolati.Services
 {
     /// <summary>
-    /// Odznak na tlačítku Přátelé = počet žádostí o přátelství, které čekají na mě.
+    /// Odznak na tlačítku Přátelé = počet žádostí o přátelství a pozvánek do hospody, které čekají na mě.
     /// Ptá se serveru jen při spuštění, návratu do appky a po oznámení o žádosti
     /// (ne při každém návratu na lístek), stránka Přátelé ho opraví zadarmo.
     /// </summary>
@@ -13,6 +13,7 @@ namespace Dezolati.Services
         private static bool _running;
 
         public static int Count { get; private set; }
+        private static int _requests, _invites;
 
         /// <summary>Počet se změnil (může přijít z jiného vlákna).</summary>
         public static event Action? Changed;
@@ -25,7 +26,15 @@ namespace Dezolati.Services
         {
             _dirty = false;
             _lastCheck = DateTime.UtcNow;
-            Update(count);
+            _requests = count;
+            Update(_requests + _invites);
+        }
+
+        /// <summary>Stránka pozvánek zná, kolik jich čeká na odpověď.</summary>
+        public static void SetInvites(int count)
+        {
+            _invites = count;
+            Update(_requests + _invites);
         }
 
         public static async Task RefreshAsync()
@@ -36,10 +45,16 @@ namespace Dezolati.Services
             _running = true;
             try
             {
-                var count = await new FirestoreService().CountIncomingRequests(uid);
+                _requests = await new FirestoreService().CountIncomingRequests(uid);
+                try
+                {
+                    await Pozvani.MineAsync();
+                    _invites = Pozvani.WaitingCount;
+                }
+                catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Odznak pozvánek: {ex.Message}"); }
                 _dirty = false;
                 _lastCheck = DateTime.UtcNow;
-                Update(count);
+                Update(_requests + _invites);
             }
             catch (Exception ex)
             {
@@ -55,6 +70,7 @@ namespace Dezolati.Services
         public static void Reset()
         {
             _dirty = true;
+            _requests = _invites = 0;
             Update(0);
         }
 

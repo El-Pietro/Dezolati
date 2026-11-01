@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:controls="clr-namespace:Dezolati.Controls"
+             x:Class="Dezolati.Pages.Varna"
+             Title="Vaření piva">
+    <Grid RowDefinitions="Auto, *">
+        <Image Grid.RowSpan="2" Source="{AppThemeBinding Light=woodlight.jpg, Dark=wooddark.jpg}" Aspect="AspectFill" />
+
+        <BoxView Grid.Row="0" HeightRequest="0" Color="Transparent" InputTransparent="True" Margin="{DynamicResource TopBarMargin}" />
+        <controls:PencilButton Grid.Row="0" Variant="Outline" Text="Zpět" IsVisible="{OnPlatform Default=True, Android=False}"
+                               HorizontalOptions="Start" Margin="{DynamicResource TopBarMargin}" Clicked="OnZpetClicked" />
+
+        <Border Grid.Row="1" Style="{StaticResource Listek}">
+            <Grid RowDefinitions="Auto, Auto, *, Auto, Auto, Auto, Auto, Auto" RowSpacing="4">
+                <Label Grid.Row="0" Text="Vaření piva" Style="{StaticResource Title}" />
+                <Label Grid.Row="1" x:Name="HintLabel" Style="{StaticResource Small}" HorizontalTextAlignment="Center" />
+
+                <GraphicsView Grid.Row="2" x:Name="Canvas" MinimumHeightRequest="220" />
+
+                <Label Grid.Row="3" x:Name="ResultTitle" Style="{StaticResource Heading}" HorizontalTextAlignment="Center" IsVisible="False" />
+                <Label Grid.Row="4" x:Name="ResultText" Style="{StaticResource Body}" HorizontalTextAlignment="Center" IsVisible="False" />
+
+                <Grid Grid.Row="5" ColumnDefinitions="*, *" ColumnSpacing="8" Margin="0,6,0,0">
+                    <controls:PencilButton Grid.ColumnSpan="2" x:Name="StartButton" Text="Začít vařit" Variant="Primary" Clicked="OnStartClicked" />
+                    <controls:PencilButton Grid.ColumnSpan="2" x:Name="TakeButton" Text="Odebrat díl rmutu" Variant="Primary" Clicked="OnTakeClicked" />
+                    <controls:HoldButton Grid.Column="0" x:Name="PourButton" Text="Vracet (drž)" Variant="Primary" />
+                    <controls:PencilButton Grid.Column="1" x:Name="RestButton" Text="Prodleva" Variant="Secondary" Clicked="OnRestClicked" />
+                    <controls:PencilButton Grid.Column="0" x:Name="HopButton" Text="Přihodit chmel" Variant="Primary" Clicked="OnHopClicked" />
+                    <controls:PencilButton Grid.Column="1" x:Name="CalmButton" Text="Ztlumit oheň" Variant="Danger" Clicked="OnCalmClicked" />
+                    <controls:HoldButton Grid.ColumnSpan="2" x:Name="CoolButton" Text="Chladit (drž)" Variant="Primary" />
+                </Grid>
+
+                <!-- pojmenování a sklep -->
+                <VerticalStackLayout Grid.Row="6" x:Name="SaveBox" Spacing="6" IsVisible="False">
+                    <Entry x:Name="NameEntry" Placeholder="Jak se tvoje pivo jmenuje?" MaxLength="40" />
+                    <Grid ColumnDefinitions="*, *" ColumnSpacing="8">
+                        <controls:PencilButton x:Name="SaveButton" Text="Do sklepa" Variant="Primary" Clicked="OnSaveClicked" />
+                        <controls:PencilButton Grid.Column="1" Text="Vařit znovu" Variant="Secondary" Clicked="OnAgainClicked" />
+                    </Grid>
+                </VerticalStackLayout>
+                <Label Grid.Row="7" x:Name="CellarLabel" Style="{StaticResource Small}" />
+            </Grid>
+        </Border>
+    </Grid>
+</ContentPage>

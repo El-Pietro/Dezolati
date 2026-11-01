@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:controls="clr-namespace:Dezolati.Controls"
+             x:Class="Dezolati.Pages.Cepovani"
+             Title="Čepování">
+    <Grid RowDefinitions="Auto, *">
+        <Image Grid.RowSpan="2" Source="{AppThemeBinding Light=woodlight.jpg, Dark=wooddark.jpg}" Aspect="AspectFill" />
+
+        <BoxView Grid.Row="0" HeightRequest="0" Color="Transparent" InputTransparent="True" Margin="{DynamicResource TopBarMargin}" />
+        <controls:PencilButton Grid.Row="0" Variant="Outline" Text="Zpět" IsVisible="{OnPlatform Default=True, Android=False}"
+                               HorizontalOptions="Start" Margin="{DynamicResource TopBarMargin}" Clicked="OnZpetClicked" />
+
+        <Border Grid.Row="1" Style="{StaticResource Listek}">
+            <Grid RowDefinitions="Auto, Auto, *, Auto, Auto, Auto, Auto" RowSpacing="4">
+                <Label Grid.Row="0" Text="Čepování" Style="{StaticResource Title}" />
+                <Label Grid.Row="1" x:Name="HintLabel" Style="{StaticResource Small}" HorizontalTextAlignment="Center"
+                       Text="Drž prst na pípě. Pusť, až je pěna u okraje. Na jeden zátah." />
+
+                <!-- pípa + půllitr; drží se kamkoli do obrázku -->
+                <GraphicsView Grid.Row="2" x:Name="Canvas" MinimumHeightRequest="260" />
+
+                <Label Grid.Row="3" x:Name="LiveLabel" Style="{StaticResource Small}" HorizontalTextAlignment="Center"
+                       TextColor="{StaticResource InkSoft}" />
+                <Label Grid.Row="4" x:Name="ResultTitle" Style="{StaticResource Heading}" HorizontalTextAlignment="Center" IsVisible="False" />
+                <Label Grid.Row="5" x:Name="ResultText" Style="{StaticResource Body}" HorizontalTextAlignment="Center" IsVisible="False" />
+                <Grid Grid.Row="6" ColumnDefinitions="*, Auto" ColumnSpacing="10" Margin="0,6,0,0">
+                    <Label x:Name="BestLabel" Style="{StaticResource Small}" VerticalOptions="Center" />
+                    <controls:PencilButton Grid.Column="1" x:Name="AgainButton" Text="Další" Variant="Primary"
+                                           WidthRequest="130" IsVisible="False" Clicked="OnAgainClicked" />
+                </Grid>
+            </Grid>
+        </Border>
+    </Grid>
+</ContentPage>

@@ -1,0 +1,71 @@
+@namespace Dezolati.Web.Pages
+@page "/hry"
+@inject NavigationManager Nav
+
+@* Hry (Pages/Hry v appce). Na webu zatím jen čepování, kostky a spol. přijdou později. *@
+<BackBar To="" />
+
+<div class="listek grow">
+    <div class="stack">
+        <div class="title">Hry</div>
+
+        <div class="heading">Hospodský kvíz</div>
+        <div class="small">Přes sto ověřených otázek o pivu, pivovarech a hospodách. Hráči se střídají u jednoho telefonu, kdo prohraje, platí rundu.</div>
+        <PencilButton Text="Hrát kvíz" OnClick="@(() => Nav.NavigateTo("kviz"))" />
+
+        <div class="heading" style="margin-top:16px">Čepování</div>
+        <div class="small">Hra pro jednoho: hladinka na jeden zátah. Drž pípu, pusť ve správnou chvíli.</div>
+        @if (best >= 0)
+        {
+            <div class="small">Tvůj rekord: @best bodů</div>
+        }
+        <PencilButton Text="Čepovat" OnClick="@(() => Nav.NavigateTo("cepovani"))" />
+
+        <div class="heading" style="margin-top:16px">Klouzání po pultu</div>
+        <div class="small">Švihni krýglem po pultu tak, ať zastaví štamgastovi na tácku. Pět krýglů, nerozbij je.</div>
+        @if (slideBest >= 0)
+        {
+            <div class="small">Tvůj rekord: @slideBest bodů</div>
+        }
+        <PencilButton Text="Klouzat" OnClick="@(() => Nav.NavigateTo("klouzani"))" />
+
+        <div class="heading" style="margin-top:16px">Číšník s tácem</div>
+        <div class="small">Dones pět krýglů ke stolu a nic nevylij. Tác vyrovnáváš nakláněním telefonu nebo prstem.</div>
+        @if (waiterBest >= 0)
+        {
+            <div class="small">Tvůj rekord: @waiterBest bodů</div>
+        }
+        <PencilButton Text="Nést" OnClick="@(() => Nav.NavigateTo("cisnik"))" />
+
+        <div class="heading" style="margin-top:16px">Foukání skla</div>
+        <div class="small">Naber sklovinu, foukej a toč píšťalou, dofoukni ve formě a nakresli ucho. Jde foukat i do mikrofonu.</div>
+        @if (glassBest >= 0)
+        {
+            <div class="small">Tvůj rekord: @glassBest bodů</div>
+        }
+        <PencilButton Text="Foukat" OnClick="@(() => Nav.NavigateTo("sklo"))" />
+
+        <div class="heading" style="margin-top:16px">Vaření piva</div>
+        <div class="small">Ležák po česku: trojrmutová dekokce, chmelovar a kvašení. Uvařená piva si schováš ve sklepě.</div>
+        @if (brewBest >= 0)
+        {
+            <div class="small">Nejlepší várka: @brewBest bodů</div>
+        }
+        <PencilButton Text="Vařit" OnClick="@(() => Nav.NavigateTo("varna"))" />
+
+        <div class="small soft" style="margin-top:16px">Kostky jsou zatím jen v appce.</div>
+    </div>
+</div>
+
+@code {
+    private int best, slideBest, waiterBest, glassBest, brewBest;
+
+    protected override void OnInitialized()
+    {
+        best = Preferences.Get(Cepovani.BestKey, -1);
+        slideBest = Preferences.Get(Klouzani.BestKey, -1);
+        waiterBest = Preferences.Get(Cisnik.BestKey, -1);
+        glassBest = Preferences.Get(Sklo.BestKey, -1);
+        brewBest = Preferences.Get(Varna.BestKey, -1);
+    }
+}

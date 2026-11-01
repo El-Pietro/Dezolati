@@ -141,6 +141,48 @@
           "order": "ASCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "Invites",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "Members",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "EndsAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "Invites",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "PubId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "EndsAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "Invites",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "From",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "EndsAt",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []

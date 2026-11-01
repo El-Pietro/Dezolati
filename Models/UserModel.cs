@@ -9,6 +9,8 @@
         public string UserId { get; set; } = "";
         public string? Name { get; set; }
         public string? Nickname { get; set; }
+        /// <summary>U kámoše: jeho vlastní přezdívka, když mu ukazuju svoji (Nickname = moje přezdívka pro něj).</summary>
+        public string? OwnNickname { get; set; }
         public string? Gender { get; set; }
         public string? DrinkerType { get; set; }
         public string? Email { get; set; }

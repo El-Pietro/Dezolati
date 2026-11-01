@@ -162,14 +162,29 @@ public partial class Hospody : ContentPage, IQueryAttributable
         InitializeComponent();
     }
 
+    private bool appeared;        // stránka je vidět (OnAppearing už proběhl)
+
+    // Shell u záložky volá ApplyQueryAttributes a OnAppearing v různém pořadí – napoprvé (stránka
+    // se teprve vytváří) klidně až PO OnAppearing. Proto: když už je stránka vidět, otevřít domov hned,
+    // jinak si to poznamenat pro OnAppearing. (Dřív se křížek ukázal až napodruhé.)
     public void ApplyQueryAttributes(IDictionary<string, object> query)
     {
-        homeRequested = query.TryGetValue("mode", out var m) && m as string == "home";
+        if (!(query.TryGetValue("mode", out var m) && m as string == "home")) return;
+        query.Clear();   // ať se režim domova neotevře znovu při každém návratu na mapu
+        if (appeared) Dispatcher.Dispatch(OpenHomeMode);
+        else homeRequested = true;
+    }
+
+    protected override void OnDisappearing()
+    {
+        base.OnDisappearing();
+        appeared = false;
     }
 
     protected override async void OnAppearing()
     {
         base.OnAppearing();
+        appeared = true;
         if (mapControl == null) CreateMap();
         if (homeRequested)
         {
@@ -648,27 +663,12 @@ public partial class Hospody : ContentPage, IQueryAttributable
         }
     }
 
+    /// <summary>Pozvat vybrané kámoše (stránka Pozvánky: nejdřív nabídne „Přidat se“ ke kámošově pozvánce).</summary>
     private async void OnInviteClicked(object sender, EventArgs e)
     {
         if (selected == null) return;
-        var name = PubService.NameOf(selected);
-        if (!await Listek.ConfirmAsync(this, "Pozvat kámoše?",
-                $"Kámošům do {Invites.RadiusKm:0} km přijde „zve tě na drink do {name}“.", "Pozvat"))
-            return;
-        try
-        {
-            InviteButton.IsEnabled = false;
-            await Invites.SendAsync(selected);
-            await Listek.AlertAsync(this, "Posláno", "Pozvánka letí. Teď už jen čekat, kdo dorazí.");
-        }
-        catch (Exception ex)
-        {
-            await Listek.AlertAsync(this, "Nepovedlo se", Net.IsNetworkError(ex) ? "Bez signálu pozvánka neodejde." : ex.Message);
-        }
-        finally
-        {
-            InviteButton.IsEnabled = true;
-        }
+        Pozvani.DraftPub = selected;
+        await Shell.Current.GoToAsync("//Pozvanky");
     }
 
     // ---------------- filtr ----------------

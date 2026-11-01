@@ -29,6 +29,21 @@ public partial class Hry : ContentPage
         ContinueDarts.IsVisible = DartsGame.LoadSaved(DartsGame.Key) is { Finished: false };
         ContinueDice.IsVisible = DiceGame.LoadSaved(DiceGame.Key) is { Finished: false };
         ContinueDice2.IsVisible = SimpleDiceGame.LoadSaved(SimpleDiceGame.Key) is { Finished: false };
+        var pourBest = Preferences.Get("hry_cepovani_best", -1);
+        PourBestLabel.Text = $"Tvůj rekord: {pourBest} bodů";
+        PourBestLabel.IsVisible = pourBest >= 0;
+        var slideBest = Preferences.Get("hry_klouzani_best", -1);
+        SlideBestLabel.Text = $"Tvůj rekord: {slideBest} bodů";
+        SlideBestLabel.IsVisible = slideBest >= 0;
+        var waiterBest = Preferences.Get("hry_cisnik_best", -1);
+        WaiterBestLabel.Text = $"Tvůj rekord: {waiterBest} bodů";
+        WaiterBestLabel.IsVisible = waiterBest >= 0;
+        var glassBest = Preferences.Get("hry_sklo_best", -1);
+        GlassBestLabel.Text = $"Tvůj rekord: {glassBest} bodů";
+        GlassBestLabel.IsVisible = glassBest >= 0;
+        var brewBest = Preferences.Get("hry_varna_best", -1);
+        BrewBestLabel.Text = $"Nejlepší várka: {brewBest} bodů";
+        BrewBestLabel.IsVisible = brewBest >= 0;
         RenderPlayers();
         UpdateChips();
     }
@@ -156,6 +171,24 @@ public partial class Hry : ContentPage
         game.Save();
         await Shell.Current.GoToAsync("//Kostky");
     }
+
+    private async void OnQuizClicked(object sender, EventArgs e) =>
+        await Shell.Current.GoToAsync("//Kviz");
+
+    private async void OnPourClicked(object sender, EventArgs e) =>
+        await Shell.Current.GoToAsync("//Cepovani");
+
+    private async void OnSlideClicked(object sender, EventArgs e) =>
+        await Shell.Current.GoToAsync("//Klouzani");
+
+    private async void OnWaiterClicked(object sender, EventArgs e) =>
+        await Shell.Current.GoToAsync("//Cisnik");
+
+    private async void OnGlassClicked(object sender, EventArgs e) =>
+        await Shell.Current.GoToAsync("//Sklo");
+
+    private async void OnBrewClicked(object sender, EventArgs e) =>
+        await Shell.Current.GoToAsync("//Varna");
 
     private async void OnDice2Clicked(object sender, EventArgs e)
     {

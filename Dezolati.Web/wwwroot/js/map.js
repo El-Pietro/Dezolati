@@ -1,5 +1,5 @@
 // Mapa hospod (Leaflet + dlaždice OpenStreetMap) – stejné chování jako mapa v appce:
-// hospody až při přiblížení, ve výřezu (+ půl výřezu okolo), při víc než 250 bodech shluky s počtem,
+// hospody ve výřezu (+ půl výřezu okolo), při víc než 250 bodech shluky s počtem,
 // oblíbené vždy navrch, kámoši modře. Data dodává C# (Pages/Hospody.razor).
 window.dzMap = (function () {
     var map = null, ref = null;
@@ -7,15 +7,16 @@ window.dzMap = (function () {
     var filter = { onlyFav: false, showClosed: true, kinds: { pub: 1, bar: 1, restaurant: 1, biergarten: 1 } };
     var pubLayer = null, clusterLayer = null, friendLayer = null, meLayer = null, homeLayer = null;
     var renderer = null;
-    var MIN_ZOOM_PUBS = 13;      // ≈ 19 m/px – jako v appce
-    var LABEL_ZOOM = 16;
-    var CLUSTER_ABOVE = 250, CLUSTER_PX = 72;
+    var LABEL_ZOOM = 16;                       // popisky až při přiblížení (v appce pod 3,5 m/px)
+    var CLUSTER_ABOVE = 250, CLUSTER_PX = 72;  // víc bodů ve výřezu → shluky s počtem (jako v appce)
+    var layerClicked = false;                  // ťuk na značku nemá zároveň zavřít kartičku (klik na mapu)
 
-    var COLORS = {
-        pub: { fill: '#C27A12', stroke: '#3B2314', r: 6 },
-        restaurant: { fill: '#DEC496', stroke: '#6B5A3A', r: 5 },
-        closed: { fill: '#AAAAAA', stroke: '#6E6E6E', r: 4.5 },
-        fav: { fill: '#E8B020', stroke: '#78460A', r: 8 }
+    // velikosti a barvy jako v appce (Mapsui SymbolStyle: 32 px × měřítko)
+    var STYLE = {
+        pub: { fill: '#C27A12', stroke: '#3B2314', r: 8, w: 2 },
+        restaurant: { fill: '#DEC496', stroke: '#6B5A3A', r: 6.5, w: 2 },
+        closed: { fill: '#AAAAAA', stroke: '#6E6E6E', r: 5.5, w: 2 },
+        fav: { fill: '#E8B020', stroke: '#78460A', r: 10.5, w: 3 }
     };
 
     function passes(p) {
@@ -28,36 +29,42 @@ window.dzMap = (function () {
     }
 
     function styleOf(p) {
-        if (p[5] & 1) return COLORS.closed;
-        if (p[5] & 4) return COLORS.fav;
-        if (p[3] === 'restaurant') return COLORS.restaurant;
-        return COLORS.pub;
+        if (p[5] & 1) return STYLE.closed;
+        if (p[5] & 4) return STYLE.fav;
+        if (p[3] === 'restaurant') return STYLE.restaurant;
+        return STYLE.pub;
+    }
+
+    function clicked(handler) {
+        return function (e) {
+            layerClicked = true;
+            setTimeout(function () { layerClicked = false; }, 300);
+            if (e && e.originalEvent) L.DomEvent.stop(e.originalEvent);
+            handler();
+        };
     }
 
     function addPub(layer, p) {
         var s = styleOf(p);
         var m;
         if ((p[5] & 2) && !(p[5] & 4) && !(p[5] & 1)) {
-            // přidané uživateli: hranatě
-            var d = s.r * 1.6;
-            m = L.rectangle(map.layerPointToLatLng ? boundsAround(p, d) : [[p[1], p[2]], [p[1], p[2]]],
-                { renderer: renderer, color: s.stroke, weight: 2, fillColor: s.fill, fillOpacity: 1 });
+            // přidané uživateli: hospodská barva, ale hranatě
+            m = L.marker([p[1], p[2]], {
+                icon: L.divIcon({ className: 'dz-custom', iconSize: [14, 14] }),
+                keyboard: false
+            });
         } else {
-            m = L.circleMarker([p[1], p[2]], { renderer: renderer, radius: s.r, color: s.stroke, weight: 2, fillColor: s.fill, fillOpacity: 1 });
+            m = L.circleMarker([p[1], p[2]], {
+                renderer: renderer, radius: s.r, color: s.stroke, weight: s.w,
+                fillColor: s.fill, fillOpacity: 1, bubblingMouseEvents: false
+            });
         }
-        m.on('click', function (e) { L.DomEvent.stopPropagation(e); ref.invokeMethodAsync('OnPubClick', p[0]); });
+        m.on('click', clicked(function () { ref.invokeMethodAsync('OnPubClick', p[0]); }));
         if (map.getZoom() >= LABEL_ZOOM) {
             m.bindTooltip(escapeHtml(p[4]) + ((p[5] & 1) ? ' (zavřeno)' : ''),
-                { permanent: true, direction: 'top', offset: [0, -6], className: 'dz-label' });
+                { permanent: true, direction: 'top', offset: [0, -s.r], className: 'dz-label', interactive: false });
         }
         layer.addLayer(m);
-    }
-
-    function boundsAround(p, px) {
-        var pt = map.latLngToLayerPoint([p[1], p[2]]);
-        var a = map.layerPointToLatLng([pt.x - px, pt.y - px]);
-        var b = map.layerPointToLatLng([pt.x + px, pt.y + px]);
-        return [[a.lat, a.lng], [b.lat, b.lng]];
     }
 
     function escapeHtml(s) {
@@ -78,7 +85,6 @@ window.dzMap = (function () {
             var p = pubs[i];
             if (!passes(p)) continue;
             if (p[5] & 4) { favs.push(p); continue; }
-            if (zoom < MIN_ZOOM_PUBS) continue;
             if (p[1] < s || p[1] > n || p[2] < w || p[2] > e) continue;
             visible.push(p);
         }
@@ -86,22 +92,45 @@ window.dzMap = (function () {
         if (visible.length <= CLUSTER_ABOVE) {
             visible.forEach(function (p) { addPub(pubLayer, p); });
         } else {
-            var buckets = {};
-            visible.forEach(function (p) {
-                var pt = map.project([p[1], p[2]], zoom);
-                var key = Math.floor(pt.x / CLUSTER_PX) + '_' + Math.floor(pt.y / CLUSTER_PX);
-                (buckets[key] = buckets[key] || []).push(p);
+            // shluky podle vzdálenosti (ne pevná mřížka – ta dělala nepřirozenou šachovnici):
+            // vezme bod, přibere všechny volné do CLUSTER_PX okolo, střed = průměr
+            var pts = visible.map(function (p) { var pt = map.project([p[1], p[2]], zoom); return { p: p, x: pt.x, y: pt.y, used: false }; });
+            var grid = {};
+            pts.forEach(function (q) {
+                var k = Math.floor(q.x / CLUSTER_PX) + '_' + Math.floor(q.y / CLUSTER_PX);
+                (grid[k] = grid[k] || []).push(q);
             });
-            Object.keys(buckets).forEach(function (k) {
-                var list = buckets[k];
-                if (list.length === 1) { addPub(pubLayer, list[0]); return; }
-                var lat = 0, lon = 0;
-                list.forEach(function (p) { lat += p[1]; lon += p[2]; });
-                lat /= list.length; lon /= list.length;
-                var size = list.length > 99 ? 40 : 34;
-                var icon = L.divIcon({ className: 'dz-cluster', html: '<span>' + list.length + '</span>', iconSize: [size, size] });
-                var m = L.marker([lat, lon], { icon: icon, keyboard: false });
-                m.on('click', function () { map.setView([lat, lon], Math.min(zoom + 2, 18)); });
+            // hustá místa první → shluky sedí na centrech měst, ne na náhodném okraji
+            pts.sort(function (a, b) {
+                var ka = grid[Math.floor(a.x / CLUSTER_PX) + '_' + Math.floor(a.y / CLUSTER_PX)].length;
+                var kb = grid[Math.floor(b.x / CLUSTER_PX) + '_' + Math.floor(b.y / CLUSTER_PX)].length;
+                return kb - ka;
+            });
+            var r2 = CLUSTER_PX * CLUSTER_PX;
+            pts.forEach(function (q) {
+                if (q.used) return;
+                q.used = true;
+                var members = [q];
+                var gx = Math.floor(q.x / CLUSTER_PX), gy = Math.floor(q.y / CLUSTER_PX);
+                for (var dx = -1; dx <= 1; dx++) for (var dy = -1; dy <= 1; dy++) {
+                    var cell = grid[(gx + dx) + '_' + (gy + dy)];
+                    if (!cell) continue;
+                    cell.forEach(function (o) {
+                        if (o.used) return;
+                        var ex = o.x - q.x, ey = o.y - q.y;
+                        if (ex * ex + ey * ey <= r2) { o.used = true; members.push(o); }
+                    });
+                }
+                if (members.length === 1) { addPub(pubLayer, q.p); return; }
+                var mx = 0, my = 0;
+                members.forEach(function (o) { mx += o.x; my += o.y; });
+                var c = map.unproject([mx / members.length, my / members.length], zoom);
+                var count = members.length;
+                var size = count < 10 ? 28 : count < 100 ? 32 : count < 1000 ? 38 : 44;
+                var icon = L.divIcon({ className: 'dz-cluster', html: '<span>' + count + '</span>', iconSize: [size, size] });
+                var m = L.marker(c, { icon: icon, keyboard: false });
+                // shluk → přiblížit na něj
+                m.on('click', clicked(function () { map.setView(c, Math.min(zoom + 2, 18)); }));
                 clusterLayer.addLayer(m);
             });
         }
@@ -120,8 +149,8 @@ window.dzMap = (function () {
         create: function (elId, dotnetRef, lat, lon, zoom) {
             ref = dotnetRef;
             if (map) { map.remove(); map = null; }
-            map = L.map(elId, { zoomControl: false, attributionControl: true, preferCanvas: true, tap: true });
-            renderer = L.canvas({ padding: 0.5, tolerance: 6 });
+            map = L.map(elId, { zoomControl: false, attributionControl: true });
+            renderer = L.svg({ padding: 0.5 });
             L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 maxZoom: 19,
                 attribution: '© přispěvatelé <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>'
@@ -134,7 +163,7 @@ window.dzMap = (function () {
             meLayer = L.layerGroup().addTo(map);
             map.setView([lat, lon], zoom);
             map.on('moveend zoomend', scheduleRender);
-            map.on('click', function () { ref.invokeMethodAsync('OnMapClick'); });
+            map.on('click', function () { if (!layerClicked) ref.invokeMethodAsync('OnMapClick'); });
             setTimeout(function () { map.invalidateSize(); }, 50);
         },
         destroy: function () {
@@ -156,9 +185,9 @@ window.dzMap = (function () {
             if (!map) return;
             friendLayer.clearLayers();
             list.forEach(function (f) {
-                var m = L.circleMarker([f.lat, f.lon], { radius: 9, color: '#FFFFFF', weight: 3, fillColor: '#466EAA', fillOpacity: 1 });
-                m.bindTooltip(escapeHtml(f.label), { permanent: true, direction: 'top', offset: [0, -10], className: 'dz-friend' });
-                m.on('click', function (e) { L.DomEvent.stopPropagation(e); ref.invokeMethodAsync('OnFriendClick', f.group); });
+                var m = L.circleMarker([f.lat, f.lon], { radius: 8, color: '#FFFFFF', weight: 3, fillColor: '#466EAA', fillOpacity: 1, bubblingMouseEvents: false });
+                m.bindTooltip(escapeHtml(f.label), { permanent: true, direction: 'top', offset: [0, -10], className: 'dz-friend', interactive: true });
+                m.on('click', clicked(function () { ref.invokeMethodAsync('OnFriendClick', f.group); }));
                 friendLayer.addLayer(m);
             });
         },

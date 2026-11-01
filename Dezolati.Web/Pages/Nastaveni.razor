@@ -117,8 +117,10 @@
         <PencilButton Text="Uložit změny" Class="mt24" Disabled="saving" OnClick="Save" />
 
         <div class="small center" style="margin-top:18px">Dezoláti @AppInfo.Current.VersionString</div>
-        <div class="small soft center">Na webu zatím nejsou hry a připomínky. Ty jsou v appce pro Android.</div>
-        <PencilButton Text="Odhlásit se" Variant="PencilVariant.Danger" Class="mt12" OnClick="Logout" />
+        <div class="small soft center">Na webu nejsou kostky, šipky a připomínky. Ty jsou v appce pro Android.</div>
+        <PencilButton Text="Odhlásit se" Variant="PencilVariant.Danger" Class="mt12" Disabled="deleting" OnClick="Logout" />
+        <PencilButton Text="@(deleting ? "Mažu účet…" : "Smazat účet")" Variant="PencilVariant.Secondary" Small="true" Class="mt24"
+                      Disabled="deleting" OnClick="DeleteAccount" />
     </div>
 </div>
 
@@ -376,6 +378,37 @@
         {
             saving = false;
         }
+    }
+
+    private bool deleting;
+
+    private async Task DeleteAccount()
+    {
+        if (AuthSession.Uid == null) return;
+        if (!await Note.ConfirmAsync("Smazat účet?",
+                "Zmizí všechno: lístky, statistiky, kámoši, připíjení i přezdívka. Kámošům prostě zmizíš ze seznamu. " +
+                "Úpravy hospod zůstanou, jen bez tvého jména. Vrátit to nejde.",
+                "Smazat všechno", "Nechat", danger: true))
+            return;
+        if (!await Note.ConfirmAsync("Fakt?", "Poslední šance. Pak už jen nový účet a čistý lístek.",
+                "Ano, smazat", "Ne, nechat", danger: true))
+            return;
+        try
+        {
+            deleting = true;
+            StateHasChanged();
+            await PushService.UnregisterAsync();
+            await AccountService.DeleteAsync();
+        }
+        catch (Exception ex)
+        {
+            deleting = false;
+            await Note.AlertAsync("Nepovedlo se", Net.IsNetworkError(ex) ? "Bez signálu to nepůjde." : ex.Message);
+            return;
+        }
+        AccountService.ForgetLocal();
+        await Note.AlertAsync("Hotovo", "Účet je pryč. Kdyby ses vrátil, lístek začne načisto.");
+        Nav.NavigateTo("prihlaseni", replace: true);
     }
 
     private async Task Logout()

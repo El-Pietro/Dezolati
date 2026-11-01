@@ -385,6 +385,42 @@ public partial class Settings : ContentPage
         await Shell.Current.GoToAsync("//SignIn");
     }
 
+    private async void OnDeleteAccountClicked(object sender, EventArgs e)
+    {
+        if (AuthSession.Uid == null) return;
+        if (!await Listek.ConfirmAsync(this, "Smazat účet?",
+                "Zmizí všechno: lístky, statistiky, kámoši, připíjení i přezdívka. Kámošům prostě zmizíš ze seznamu. " +
+                "Úpravy hospod zůstanou, jen bez tvého jména. Vrátit to nejde.",
+                "Smazat všechno", "Nechat", danger: true))
+            return;
+        if (!await Listek.ConfirmAsync(this, "Fakt?", "Poslední šance. Pak už jen nový účet a čistý lístek.",
+                "Ano, smazat", "Ne, nechat", danger: true))
+            return;
+
+        var busy = Listek.ShowBusy(this, "Mažu účet", "Chvilku to trvá…");
+        try
+        {
+            DeleteAccountButton.IsEnabled = LogoutButton.IsEnabled = false;
+            await PushService.UnregisterAsync();
+            await AccountService.DeleteAsync();
+        }
+        catch (Exception ex)
+        {
+            busy?.Dispose();
+            await Task.Delay(60);
+            DeleteAccountButton.IsEnabled = LogoutButton.IsEnabled = true;
+            await Listek.AlertAsync(this, "Nepovedlo se", Net.IsNetworkError(ex) ? "Bez signálu to nepůjde." : ex.Message);
+            return;
+        }
+        busy?.Dispose();
+        await Task.Delay(60);
+        try { Reminders.Cancel(); } catch { }
+        AccountService.ForgetLocal();
+        Preferences.Remove("LastPassword");
+        await Listek.AlertAsync(this, "Hotovo", "Účet je pryč. Kdyby ses vrátil, lístek začne načisto.");
+        await Shell.Current.GoToAsync("//SignIn");
+    }
+
     private void OnZpetClicked(object sender, EventArgs e) => OnBackButtonPressed();
 
     // systémové tlačítko Zpět: nejdřív zavřít případný lístek s hláškou, pak o stránku zpátky

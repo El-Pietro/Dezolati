@@ -84,11 +84,13 @@ public partial class Friends : ContentPage
         try
         {
             // jeden dotaz na žádosti i přátele
-            var (requests, list) = await firestoreService.GetFriendsOverview(userId);
+            var (requests, outgoing, list) = await firestoreService.GetFriendsOverviewAll(userId);
             PendingRequestsList.ItemsSource = requests;
             PendingHeader.IsVisible = PendingRequestsList.IsVisible = requests.Count > 0;
+            RenderOutgoing(outgoing);
             friends = list;
             FriendBadge.Set(requests.Count);   // odznak na lístku bez dalšího čtení
+            _ = RefreshInvitesAsync();
             FriendsNow.RememberFriends(friends);
             RenderFriends(new());               // hned seznam, kdo pije se doplní
             // můj řádek v adresáři (přezdívka + kámoši) – zapíše se jen, když se něco změnilo
@@ -134,6 +136,8 @@ public partial class Friends : ContentPage
         EmptyLabel.IsVisible = friends.Count == 0;
 
         var byUid = drinking.GroupBy(f => f.Uid).ToDictionary(g => g.Key, g => g.First());
+        uncheered = byUid.Values.Where(d => d.SessionId is string s && !Cheers.Reacted(s)).ToList();
+        CheerAllButton.IsVisible = uncheered.Count >= 2;
         var ordered = friends
             .OrderBy(f => byUid.ContainsKey(f.UserId) ? 0 : 1)
             .ThenByDescending(f => byUid.TryGetValue(f.UserId, out var d) ? d.LastDrinkAt : DateTime.MinValue)
@@ -169,7 +173,7 @@ public partial class Friends : ContentPage
             var f = friend;
             tap.Tapped += async (_, _) => await Shell.Current.GoToAsync("//StatsFriend", new Dictionary<string, object>
             {
-                ["userId"] = f.UserId, ["nick"] = f.Display, ["back"] = "//Friends"
+                ["userId"] = f.UserId, ["nick"] = f.Display, ["ownNick"] = f.OwnNickname ?? "", ["back"] = "//Friends"
             });
             name.GestureRecognizers.Add(tap);
             row.Add(name, 0, 0);
@@ -200,6 +204,47 @@ public partial class Friends : ContentPage
             }
 
             FriendsStack.Add(row);
+        }
+    }
+
+    private async Task RefreshInvitesAsync()
+    {
+        try
+        {
+            await Pozvani.MineAsync();
+            FriendBadge.SetInvites(Pozvani.WaitingCount);
+            var n = Pozvani.WaitingCount;
+            InvitesButton.Text = n > 0 ? $"Pozvánky ({n} čeká)" : "Pozvánky do hospody";
+            InvitesButton.Variant = n > 0 ? PencilVariant.Primary : PencilVariant.Secondary;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Pozvánky: {ex.Message}");
+        }
+    }
+
+    private async void OnInvitesClicked(object? sender, EventArgs e) =>
+        await Shell.Current.GoToAsync("//Pozvanky");
+
+    private List<DrinkingFriend> uncheered = new();
+
+    private async void OnCheerAllClicked(object? sender, EventArgs e)
+    {
+        CheerAllButton.IsEnabled = false;
+        try
+        {
+            foreach (var d in uncheered.ToList())
+                await Cheers.SendAsync(d.Uid, d.SessionId!, "🍺");
+            CheerAllButton.IsVisible = false;
+            _ = LoadNowAsync();   // překreslit řádky na „připito ✔“
+        }
+        catch (Exception ex)
+        {
+            await Listek.AlertAsync(this, "Nepovedlo se", Net.IsNetworkError(ex) ? "Bez signálu se připít nedá." : ex.Message);
+        }
+        finally
+        {
+            CheerAllButton.IsEnabled = true;
         }
     }
 
@@ -398,6 +443,45 @@ public partial class Friends : ContentPage
 
     private async void OnAcceptRequestClicked(object sender, EventArgs e) =>
         await AnswerRequest(sender, "Accepted");
+
+    // ---------------- moje odeslané žádosti ----------------
+
+    private void RenderOutgoing(List<FriendsModel> outgoing)
+    {
+        OutgoingStack.Clear();
+        OutgoingHeader.IsVisible = OutgoingStack.IsVisible = outgoing.Count > 0;
+        foreach (var o in outgoing)
+        {
+            var since = o.CreatedAt is DateTime at ? at.ToLocalTime().ToString("d. M.", System.Globalization.CultureInfo.InvariantCulture) : null;
+            var row = new Grid { ColumnDefinitions = new ColumnDefinitionCollection(new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto)), ColumnSpacing = 6, Padding = new Thickness(0, 2) };
+            var name = new Label
+            {
+                Text = since == null ? o.Display : $"{o.Display}  (od {since})",
+                VerticalOptions = LayoutOptions.Center,
+                LineBreakMode = LineBreakMode.TailTruncation
+            };
+            name.SetDynamicResource(Label.FontSizeProperty, "FontBody");
+            var cancel = new PencilButton { Text = "Zrušit", Variant = PencilVariant.Secondary, CommandParameter = o.RequestId };
+            cancel.SetDynamicResource(HeightRequestProperty, "ButtonHeightSmall");
+            cancel.Clicked += async (_, _) =>
+            {
+                if (!await Listek.ConfirmAsync(this, "Zrušit žádost?", $"{o.Display} se nic nedozví, žádost prostě zmizí.", "Zrušit žádost", danger: true))
+                    return;
+                try
+                {
+                    await firestoreService.UpdateFriendRequest(o.RequestId, "Rejected");   // = smazat
+                    await LoadFriendsAndRequests();
+                }
+                catch (Exception ex)
+                {
+                    await Listek.AlertAsync(this, "Chyba", ex.Message);
+                }
+            };
+            row.Add(name, 0);
+            row.Add(cancel, 1);
+            OutgoingStack.Add(row);
+        }
+    }
 
     private async void OnRejectRequestClicked(object sender, EventArgs e) =>
         await AnswerRequest(sender, "Rejected");

@@ -54,6 +54,8 @@
         <!-- Lístek -->
         <Border Grid.Row="1" Style="{StaticResource Listek}" Margin="16,0,16,12">
             <Grid RowDefinitions="Auto, Auto, Auto, *">
+                <!-- mokrá kolečka od piv a vín (pod vším ostatním, ťuknutí propouští) -->
+                <GraphicsView x:Name="RingsView" Grid.RowSpan="4" InputTransparent="True" />
                 <Label Grid.Row="0" Text="Dezoláti!" Style="{StaticResource Title}" />
 
                 <Label x:Name="SouhrnLabel"
@@ -108,7 +110,7 @@
                             </FlexLayout.GestureRecognizers>
                         </FlexLayout>
 
-                        <Label Text="(ťukni na řádek a škrtni čárku)" Style="{StaticResource Small}" HorizontalTextAlignment="Center"
+                        <Label Text="(ťukni na řádek – připíšeš nebo škrtneš čárku)" Style="{StaticResource Small}" HorizontalTextAlignment="Center"
                                TextColor="{StaticResource InkSoft}" HorizontalOptions="Center" Margin="0,12,0,0" />
                     </VerticalStackLayout>
                 </ScrollView>

@@ -290,8 +290,15 @@ namespace Dezolati.Services
                 TotalPlacePub = Get2("pub"),
                 TotalPlaceOther = Get2("other"),
                 Pubs = pubsTask.Result ?? new(),
-                FavoritePubs = favorites
+                FavoritePubs = favorites,
+                // poslední zápis: u sebe ze session, u kámoše z profilu (čtení už proběhlo)
+                LastDrinkAt = userId == AuthSession.Uid ? UserSession.LastDrinkAt : userDoc?.Time("LastDrinkAt"),
+                LastDrinkKind = userDoc?.Str("LastDrinkKind")
             };
+            // místo jen když ho dotyčný hlásí a patří k tomu poslednímu zápisu
+            if (!string.IsNullOrWhiteSpace(pubName) && pubAt is DateTime pa && stats.LastDrinkAt is DateTime la
+                && Math.Abs((la.ToUniversalTime() - pa.ToUniversalTime()).TotalMinutes) < 2)
+                stats.LastDrinkPlace = pubName;
             if (Mask.AppliesTo(userDoc)) ApplyMask(stats);
             return stats;
         }
@@ -321,6 +328,7 @@ namespace Dezolati.Services
             s.CurrentPubAt = null;
             s.PromileValue = null;
             s.PromileAt = null;
+            s.LastDrinkPlace = null;   // kdy a co ano (třetina pití je pořád pití), kde ne
             s.Masked = true;
         }
 
@@ -477,9 +485,18 @@ namespace Dezolati.Services
         /// </summary>
         public async Task<(List<FriendsModel> Incoming, List<UserModel> Friends)> GetFriendsOverview(string userId)
         {
+            var (incoming, _, friends) = await GetFriendsOverviewAll(userId);
+            return (incoming, friends);
+        }
+
+        /// <summary>To samé + odchozí žádosti (komu jsem poslal a čekám). Pořád jeden dotaz.</summary>
+        public async Task<(List<FriendsModel> Incoming, List<FriendsModel> Outgoing, List<UserModel> Friends)> GetFriendsOverviewAll(string userId)
+        {
             var docs = await FirestoreRest.QueryAsync("Friends", new[] { Filter.ArrayContains("Members", userId) });
+            await FriendAliases.EnsureLoadedAsync();   // moje přezdívky kámošů (1 čtení za spuštění)
 
             var incoming = new List<FriendsModel>();
+            var outgoing = new List<FriendsModel>();
             var friends = new List<UserModel>();
 
             foreach (var d in docs)
@@ -493,7 +510,12 @@ namespace Dezolati.Services
                 switch (d.Str("Status"))
                 {
                     case "Accepted":
-                        friends.Add(new UserModel { Id = other, UserId = other, Nickname = otherNick });
+                        friends.Add(new UserModel
+                        {
+                            Id = other, UserId = other,
+                            Nickname = FriendAliases.Display(other, otherNick),
+                            OwnNickname = otherNick
+                        });
                         break;
                     case "Pending" when to == userId:
                         incoming.Add(new FriendsModel
@@ -506,10 +528,23 @@ namespace Dezolati.Services
                             FromNickname = otherNick
                         });
                         break;
+                    case "Pending" when from == userId:
+                        outgoing.Add(new FriendsModel
+                        {
+                            RequestId = d.Id,
+                            UserId = other,
+                            FriendId = other,
+                            Status = "Pending",
+                            CreatedAt = d.Time("CreatedAt"),
+                            FromNickname = otherNick
+                        });
+                        break;
                 }
             }
 
-            return (incoming, friends.OrderBy(f => f.Display, StringComparer.CurrentCultureIgnoreCase).ToList());
+            return (incoming,
+                outgoing.OrderByDescending(o => o.CreatedAt).ToList(),
+                friends.OrderBy(f => f.Display, StringComparer.CurrentCultureIgnoreCase).ToList());
         }
 
         /// <summary>Pošle žádost. Vrací null při úspěchu, jinak text, proč to nešlo.</summary>

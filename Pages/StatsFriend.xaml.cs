@@ -16,6 +16,7 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
 
     private string? userId;
     private string? nick;
+    private string? ownNick;   // kámošova vlastní přezdívka (nick může být moje přezdívka pro něj)
     private string back = "//Friends";
 
     public StatsFriend()
@@ -27,6 +28,7 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
     {
         userId = query.TryGetValue("userId", out var u) ? u as string : null;
         nick = query.TryGetValue("nick", out var n) ? n as string : null;
+        ownNick = query.TryGetValue("ownNick", out var o) && o is string os && os.Length > 0 ? os : null;
         back = query.TryGetValue("back", out var b) && b is string s ? s : "//Friends";
 
         TitleLabel.Text = nick == "Moje" ? "Moje statistiky" : $"Statistiky: {nick}";
@@ -50,8 +52,9 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
         MonthsToggle.Text = "(ukázat)";
         SpendBox.IsVisible = PlacesBox.IsVisible = PubsBox.IsVisible = false;
         isMe = userId == AuthSession.Uid;
-        RemoveFriendButton.IsVisible = MaskButton.IsVisible = !string.IsNullOrEmpty(userId) && !isMe;
+        RemoveFriendButton.IsVisible = MaskButton.IsVisible = AliasBox.IsVisible = !string.IsNullOrEmpty(userId) && !isMe;
         RenderMaskButton();
+        RenderAlias();
         EditHint.IsVisible = isMe;
         stats = null;
 
@@ -112,6 +115,7 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
         AddRow(SummaryGrid, "Rekord", record == null ? "—"
             : $"{record.Day.ToString("d. M. yyyy", Cs)} ({Cz.Plural(record.Total, "kousek", "kousky", "kousků")})");
         AddRow(SummaryGrid, "Srdcovka", fav);
+        AddRow(SummaryGrid, "Naposledy", stats.LastDrinkText());
         // průměry na den (i dny bez pití): posledních 30 dní a celkem od prvního zápisu
         AvgBox.Clear();
         if (stats.FirstDay is DateTime first && celkem.Total > 0)
@@ -483,6 +487,43 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
         }
     }
 
+    // ---------------- moje přezdívka pro kámoše ----------------
+
+    private void RenderAlias()
+    {
+        if (string.IsNullOrEmpty(userId) || isMe) return;
+        var alias = FriendAliases.Of(userId);
+        AliasEntry.Text = alias ?? "";
+        AliasEntry.Placeholder = ownNick ?? nick ?? "přezdívka";
+        AliasHint.Text = alias != null && !string.IsNullOrEmpty(ownNick)
+            ? $"Sám si říká „{ownNick}“. Smazáním se vrátí jeho."
+            : "Uvidíš ji v kámoších, na mapě, ve statistikách i v oznámeních. On se to nedozví.";
+    }
+
+    private async void OnAliasSaveClicked(object? sender, EventArgs e)
+    {
+        if (string.IsNullOrEmpty(userId) || isMe) return;
+        var alias = AliasEntry.Text?.Trim();
+        try
+        {
+            AliasSaveButton.IsEnabled = false;
+            await FriendAliases.SetAsync(userId, alias);
+            FriendsNow.Invalidate();
+            nick = FriendAliases.Display(userId, ownNick ?? nick);
+            TitleLabel.Text = $"Statistiky: {nick}";
+            AliasEntry.Unfocus();
+            RenderAlias();
+        }
+        catch (Exception ex)
+        {
+            await Listek.AlertAsync(this, "Nepovedlo se", Net.IsNetworkError(ex) ? "Bez signálu to nepůjde." : ex.Message);
+        }
+        finally
+        {
+            AliasSaveButton.IsEnabled = true;
+        }
+    }
+
     private async void OnRemoveFriendClicked(object sender, EventArgs e)
     {
         if (AuthSession.Uid is not string me || string.IsNullOrEmpty(userId) || userId == me) return;
@@ -497,6 +538,7 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
         {
             RemoveFriendButton.IsEnabled = false;
             await firestoreService.RemoveFriend(me, userId);
+            FriendAliases.Forget(userId);
             await Shell.Current.GoToAsync("//Friends");
         }
         catch (Exception ex)

@@ -103,6 +103,61 @@ window.dz = (function () {
             });
         },
         baseUri: function () { return document.baseURI; },
+        // hry: šířka prvku (přepočet prstu na scénu) a „chycení“ prstu, ať tah neuteče mimo obrázek
+        elWidth: function (el) { return safe(function () { return el.getBoundingClientRect().width; }, 360); },
+        capture: function (el, pointerId) { safe(function () { el.setPointerCapture(pointerId); }); },
+        elLeft: function (el) { return safe(function () { return el.getBoundingClientRect().left; }, 0); },
+        elTop: function (el) { return safe(function () { return el.getBoundingClientRect().top; }, 0); },
+        // náklon telefonu (číšník): iPhone chce povolení po ťuknutí; vrací true, když senzor jde
+        motionStart: async function () {
+            try {
+                if (typeof DeviceOrientationEvent === 'undefined') return false;
+                if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                    var r = await DeviceOrientationEvent.requestPermission();
+                    if (r !== 'granted') return false;
+                }
+                if (!window.dzTiltHooked) {
+                    window.dzTiltHooked = true;
+                    window.addEventListener('deviceorientation', function (e) {
+                        if (e.gamma !== null && e.gamma !== undefined) window.dzTilt = e.gamma;
+                    });
+                }
+                return true;
+            } catch (e) { return false; }
+        },
+        // stupně, kladně = pravý okraj dolů; -999 = nic nepřišlo
+        motionTilt: function () { return typeof window.dzTilt === 'number' ? window.dzTilt : -999; },
+        // foukání skla: hlasitost z mikrofonu (nic se nenahrává, jen síla zvuku 0–1)
+        micStart: async function () {
+            try {
+                if (window.dzMic) return true;
+                var stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false } });
+                var ctx = new (window.AudioContext || window.webkitAudioContext)();
+                var src = ctx.createMediaStreamSource(stream);
+                var an = ctx.createAnalyser();
+                an.fftSize = 1024;
+                src.connect(an);
+                window.dzMic = { ctx: ctx, an: an, stream: stream, buf: new Float32Array(an.fftSize), level: 0 };
+                return true;
+            } catch (e) { return false; }
+        },
+        micLevel: function () {
+            var m = window.dzMic;
+            if (!m) return 0;
+            m.an.getFloatTimeDomainData(m.buf);
+            var sum = 0;
+            for (var i = 0; i < m.buf.length; i++) sum += m.buf[i] * m.buf[i];
+            var rms = Math.sqrt(sum / m.buf.length);
+            m.level = m.level * 0.6 + Math.min(1, rms * 6) * 0.4;
+            return m.level;
+        },
+        micStop: function () {
+            var m = window.dzMic;
+            if (!m) return;
+            safe(function () { m.stream.getTracks().forEach(function (t) { t.stop(); }); });
+            safe(function () { m.ctx.close(); });
+            window.dzMic = null;
+        },
         openUrl: function (url) { safe(function () { window.open(url, '_blank', 'noopener'); }); },
 
         // ---- drobnosti ----
