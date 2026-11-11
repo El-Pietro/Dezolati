@@ -158,7 +158,7 @@ namespace Dezolati.Services
                         double? Dbl(string f) => d.Fields[f]?["doubleValue"]?.GetValue<double>();
                         friends.TryGetValue(uid, out var nick);
                         result.Add(new DrinkingFriend(uid,
-                            nick ?? d.Str("Nickname") ?? "?",
+                            FriendAliases.Display(uid, nick ?? d.Str("Nickname")) ?? "?",   // moje přezdívka pro něj (i na mapě)
                             d.Time("LastDrinkAt") ?? DateTime.UtcNow,
                             pubFresh ? d.Str("CurrentPubName") : null,
                             pubFresh ? Dbl("CurrentPubLat") : null,

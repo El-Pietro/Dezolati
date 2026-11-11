@@ -1,0 +1,191 @@
+@namespace Dezolati.Web.Pages
+@page "/kostky"
+@using System.Globalization
+@inject NavigationManager Nav
+
+@* Kostky rozšířené (Pages/Kostky v appce): appka hlídá pravidla. Logika sdílená (Services/Games.cs). *@
+<BackBar To="hry" />
+
+<div class="listek grow">
+    <div class="stack">
+        <div class="title">@(game == null ? "Kostky" : $"Kostky do {N(game.Target)}")</div>
+
+        @if (game == null || game.Players.Count == 0)
+        {
+            <div class="heading center">Žádná hra. Založ ji v Hrách.</div>
+        }
+        else
+        {
+            var winners = game.Finished ? game.Winners() : new List<int>();
+            @for (var i = 0; i < game.Players.Count; i++)
+            {
+                var current = !game.Finished && i == game.Current;
+                var win = winners.Contains(i);
+                <div class="friend-row" style="min-height:32px">
+                    <div class="@(current || win ? "heading" : "body") grow-1">@game.Players[i]@(win ? " – vítěz!" : current ? "  (hází)" : "")</div>
+                    <div class="heading">@N(game.Totals[i])</div>
+                </div>
+            }
+            <div class="small center">@game.LastEvent</div>
+            @if (game.FinalBy is int f && !game.Finished)
+            {
+                <div class="field-label center">Poslední kolo! @game.Players[f] přehodil(a) @N(game.Target).</div>
+            }
+
+            @if (game.Finished)
+            {
+                <div class="heading center mt12">@(winners.Count == 1 ? $"Vyhrál(a) {game.Players[winners[0]]}! 🎲" : "Remíza: " + string.Join(", ", winners.Select(w => game.Players[w])))</div>
+                <div class="body center">Poražení platí rundu.</div>
+            }
+            else
+            {
+                <div class="heading center mt12">Hází @game.Players[game.Current]</div>
+                <div class="body center">@(game.TurnPoints == 0 && game.Rolls == 0
+                    ? $"Nový tah: do {DiceGame.RollsForMin} hodů aspoň {DiceGame.MinTurn}"
+                    : $"V tahu {N(game.TurnPoints)} · {game.Rolls}. hod za sebou · zbývá kostek {game.DiceLeft}")</div>
+                <div class="small center">@Hint()</div>
+
+                @if (roll == null)
+                {
+                    <PencilButton Text="Hodit za mě" Small="true" Variant="PencilVariant.Secondary" OnClick="Roll" />
+                }
+                else
+                {
+                    <div class="hold-row" style="justify-content:center">
+                        @for (var i = 0; i < roll.Count; i++)
+                        {
+                            var idx = i;
+                            var used = usedFromRoll.Contains(i);
+                            <PencilButton Text="@roll[i].ToString()" Variant="@(used ? PencilVariant.Primary : PencilVariant.Secondary)"
+                                          Style="@($"width:46px;flex:0 0 46px{(used ? ";opacity:.5" : "")}")" OnClick="() => ToggleRollDie(idx)" />
+                        }
+                    </div>
+                }
+
+                <div class="field-label center">@SelectionText()</div>
+                <div class="grid3">
+                    @for (var face = 1; face <= 6; face++)
+                    {
+                        var f2 = face;
+                        <PencilButton Text="@f2.ToString()" Variant="PencilVariant.Secondary" Style="font-size:24px" OnClick="() => AddDie(f2)" />
+                    }
+                </div>
+                <PencilButton Text="Smazat výběr" Small="true" Variant="PencilVariant.Secondary" OnClick="ClearSelection" />
+                <PencilButton Text="Odložit a házet dál" OnClick="() => Act(g => g.Keep(selection.ToList(), bank: false))" />
+                <div class="grid2">
+                    <PencilButton Text="Zapsat body" Variant="PencilVariant.Secondary"
+                                  OnClick="() => Act(g => selection.Count > 0 ? g.Keep(selection.ToList(), bank: true) : g.Bank())" />
+                    <PencilButton Text="Nic nepadlo" Variant="PencilVariant.Danger" OnClick="() => Act(g => g.Nothing())" />
+                </div>
+            }
+        }
+
+        <div class="grid2 mt12">
+            <PencilButton Text="Zpět o krok" Small="true" Variant="PencilVariant.Secondary" Disabled="@(game?.CanUndo != true)" OnClick="Undo" />
+            <PencilButton Text="Konec hry" Small="true" Variant="PencilVariant.Danger" OnClick="End" />
+        </div>
+    </div>
+</div>
+
+@code {
+    private static readonly CultureInfo Cs = WebPlatform.Cs;
+    private DiceGame? game;
+    private readonly List<int> selection = new();
+    private List<int>? roll;
+    private readonly HashSet<int> usedFromRoll = new();
+    private string? hintOverride;
+
+    protected override void OnInitialized() => game = DiceGame.LoadSaved(DiceGame.Key);
+
+    private static string N(int v) => v.ToString("#,0", Cs);
+
+    private string Hint()
+    {
+        if (hintOverride != null) return hintOverride;
+        if (game == null) return "";
+        if (roll != null && !DiceGame.AnyScore(roll, game.Pairs)) return "Nic nepadlo. Ťukni na „Nic nepadlo“.";
+        return game.HotDice ? "Všech 6 bodovalo – musíš házet znovu všemi šesti!"
+            : game.NeedsMin && game.Rolls > 0
+                ? $"Do {DiceGame.MinTurn} chybí {DiceGame.MinTurn - game.TurnPoints}, zbývá {game.RollsLeftForMin} {Cz.Plural(game.RollsLeftForMin, "hod", "hody", "hodů")}."
+                : !game.NeedsMin ? "Můžeš zapsat, nebo riskovat dál." : "";
+    }
+
+    private string SelectionText()
+    {
+        if (game == null || selection.Count == 0) return "Ťukni, které kostky odkládáš:";
+        var score = DiceGame.Score(selection, game.Pairs);
+        var dice = string.Join(" ", selection.OrderBy(d => d));
+        return score is int s ? $"Odkládám {dice} = {N(s)}" : $"Odkládám {dice} – tohle se nepočítá";
+    }
+
+    private void AddDie(int face)
+    {
+        hintOverride = null;
+        if (game == null || selection.Count >= game.DiceLeft) return;
+        selection.Add(face);
+    }
+
+    private void ToggleRollDie(int index)
+    {
+        if (roll == null) return;
+        if (usedFromRoll.Remove(index)) selection.Remove(roll[index]);
+        else { usedFromRoll.Add(index); selection.Add(roll[index]); }
+    }
+
+    private void ClearSelection()
+    {
+        selection.Clear();
+        usedFromRoll.Clear();
+    }
+
+    private void Roll()
+    {
+        if (game == null) return;
+        hintOverride = null;
+        roll = Enumerable.Range(0, game.DiceLeft).Select(_ => Random.Shared.Next(1, 7)).OrderBy(d => d).ToList();
+        ClearSelection();
+    }
+
+    private void Act(Func<DiceGame, DiceResult> action)
+    {
+        if (game == null || game.Finished) return;
+        hintOverride = null;
+        switch (action(game))
+        {
+            case DiceResult.Invalid:
+                hintOverride = selection.Count == 0 ? "Nejdřív ťukni, které kostky odkládáš." : "Tyhle kostky se nepočítají – odkládají se jen bodované.";
+                return;
+            case DiceResult.TooMany:
+                hintOverride = $"Házíš jen {game.DiceLeft} {Cz.Plural(game.DiceLeft, "kostkou", "kostkami", "kostkami")}.";
+                return;
+            case DiceResult.NotYet:
+                hintOverride = $"Zapsat jde až od {DiceGame.MinTurn}.";
+                return;
+            case DiceResult.MustRoll:
+                if (selection.Count > 0) game.Keep(selection.ToList(), bank: false);
+                hintOverride = "Všech 6 bodovalo – musíš házet znovu všemi šesti!";
+                break;
+        }
+        ClearSelection();
+        roll = null;
+    }
+
+    private void Undo()
+    {
+        if (game?.Undo() is { } prev)
+        {
+            game = prev;
+            ClearSelection();
+            roll = null;
+            hintOverride = null;
+        }
+    }
+
+    private async Task End()
+    {
+        if (game != null && !game.Finished && !await Note.ConfirmAsync("Konec hry?", "Rozehraná hra se zahodí.", "Konec", danger: true))
+            return;
+        game?.Clear();
+        Nav.NavigateTo("hry");
+    }
+}

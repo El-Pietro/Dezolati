@@ -28,7 +28,15 @@
                 @foreach (var (label, value) in summary)
                 {
                     <div class="field-label">@label</div>
-                    <div class="body">@value</div>
+                    @if (label == "Naposledy" && !isMe && s.LastPubLat is double plat && s.LastPubLon is double plon)
+                    {
+                        @* ťuk na místo → mapa s hospodou a kámošem *@
+                        <div class="body"><a class="ink-link" @onclick="() => OpenLastPub(plat, plon)">@value</a></div>
+                    }
+                    else
+                    {
+                        <div class="body">@value</div>
+                    }
                 }
             </div>
 
@@ -490,6 +498,14 @@
         {
             busyAction = false;
         }
+    }
+
+    private void OpenLastPub(double lat, double lon)
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var nick = aliasShown ?? Nick ?? "";
+        Nav.NavigateTo($"hospody?lat={lat.ToString(inv)}&lon={lon.ToString(inv)}&pub={Uri.EscapeDataString(stats?.LastPubId ?? "")}" +
+                       $"&uid={Uri.EscapeDataString(userId ?? "")}&nick={Uri.EscapeDataString(nick)}");
     }
 
     private async Task AliasKey(KeyboardEventArgs e) { if (e.Key == "Enter") await SaveAlias(); }

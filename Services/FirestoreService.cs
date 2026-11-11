@@ -298,7 +298,16 @@ namespace Dezolati.Services
             // místo jen když ho dotyčný hlásí a patří k tomu poslednímu zápisu
             if (!string.IsNullOrWhiteSpace(pubName) && pubAt is DateTime pa && stats.LastDrinkAt is DateTime la
                 && Math.Abs((la.ToUniversalTime() - pa.ToUniversalTime()).TotalMinutes) < 2)
+            {
                 stats.LastDrinkPlace = pubName;
+                if (userDoc != null)
+                {
+                    double? Dbl(string f) => userDoc.Fields[f]?["doubleValue"]?.GetValue<double>();
+                    stats.LastPubId = userDoc.Str("CurrentPubId");
+                    stats.LastPubLat = Dbl("CurrentPubLat");
+                    stats.LastPubLon = Dbl("CurrentPubLon");
+                }
+            }
             if (Mask.AppliesTo(userDoc)) ApplyMask(stats);
             return stats;
         }
@@ -329,6 +338,8 @@ namespace Dezolati.Services
             s.PromileValue = null;
             s.PromileAt = null;
             s.LastDrinkPlace = null;   // kdy a co ano (třetina pití je pořád pití), kde ne
+            s.LastPubId = null;
+            s.LastPubLat = s.LastPubLon = null;
             s.Masked = true;
         }
 

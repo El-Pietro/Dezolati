@@ -131,6 +131,12 @@
     private enum Mode { Normal, Add, Home }
 
     [SupplyParameterFromQuery(Name = "mode")] public string? QueryMode { get; set; }
+    // ze statistik kámoše: hospoda posledního zápisu (a on sám)
+    [SupplyParameterFromQuery(Name = "lat")] public double? FocusLat { get; set; }
+    [SupplyParameterFromQuery(Name = "lon")] public double? FocusLon { get; set; }
+    [SupplyParameterFromQuery(Name = "pub")] public string? FocusPub { get; set; }
+    [SupplyParameterFromQuery(Name = "uid")] public string? FocusUid { get; set; }
+    [SupplyParameterFromQuery(Name = "nick")] public string? FocusNick { get; set; }
 
     private static readonly (string, string)[] AddKinds =
         { ("pub", "Hospoda"), ("bar", "Bar"), ("restaurant", "Restaurace"), ("biergarten", "Zahrádka") };
@@ -174,6 +180,7 @@
         // výchozí pohled: Brno (domov, když je nastavený)
         var (lat, lon, zoom) = (49.1951, 16.6068, 13);
         if (HomePlace.Location is { } h) (lat, lon, zoom) = (h.Lat, h.Lon, mode == Mode.Home ? 17 : 15);
+        if (FocusLat is double fl && FocusLon is double fo) (lat, lon, zoom) = (fl, fo, 17);
         await JS.InvokeVoidAsync("dzMap.create", "dzmap", self, lat, lon, zoom);
         await JS.InvokeVoidAsync("dzMap.setFilter", onlyFav, showClosed, kinds.ToArray());
         await ShowHomeAsync();
@@ -195,7 +202,14 @@
             await PushPubsAsync();
             loadingText = null;
             StateHasChanged();
-            if (mode == Mode.Normal) await CenterOnMeAsync(silent: true);
+            if (FocusLat is double fl && FocusLon is double fo)
+            {
+                // přišlo se ze statistik kámoše → ukázat tu hospodu, ne mě
+                var pub = (string.IsNullOrEmpty(FocusPub) ? null : PubService.Find(FocusPub)) ?? PubService.Nearest(fl, fo, 40);
+                if (pub != null) ShowCard(pub, null);
+                await JS.InvokeVoidAsync("dzMap.flyTo", fl, fo, 17);
+            }
+            else if (mode == Mode.Normal) await CenterOnMeAsync(silent: true);
             _ = ShowFriendsAsync();
         }
         catch (Exception ex)
@@ -340,6 +354,12 @@
         try
         {
             var drinking = await FriendsNow.GetAsync();
+            // kámoš ze statistik, který teď nepije: ukázat ho aspoň u jeho poslední hospody
+            if (!string.IsNullOrEmpty(FocusUid) && FocusLat is double fl && FocusLon is double fo
+                && drinking.All(d => d.Uid != FocusUid || !d.HasPubLocation))
+                drinking = drinking.Where(d => d.Uid != FocusUid)
+                    .Append(new DrinkingFriend(FocusUid, $"{FocusNick} (naposledy)", DateTime.UtcNow, null, fl, fo, null, null))
+                    .ToList();
             friendGroups = drinking.Where(f => f.HasPubLocation)
                 .GroupBy(f => (Math.Round(f.PubLat!.Value, 4), Math.Round(f.PubLon!.Value, 4)))
                 .Select(g => g.ToList()).ToList();

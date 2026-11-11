@@ -2,7 +2,7 @@
 @page "/hry"
 @inject NavigationManager Nav
 
-@* Hry (Pages/Hry v appce). Na webu zatím jen čepování, kostky a spol. přijdou později. *@
+@* Hry (Pages/Hry v appce). Na webu všechno kromě šipek. *@
 <BackBar To="" />
 
 <div class="listek grow">
@@ -53,12 +53,59 @@
         }
         <PencilButton Text="Vařit" OnClick="@(() => Nav.NavigateTo("varna"))" />
 
-        <div class="small soft" style="margin-top:16px">Kostky jsou zatím jen v appce.</div>
+        <div class="heading" style="margin-top:16px">Kostky</div>
+        <div class="field-label">Kdo hraje:</div>
+        @for (var i = 0; i < players.Count; i++)
+        {
+            var idx = i;
+            <div class="friend-row" style="min-height:38px">
+                <div class="body grow-1">@(i + 1). @players[i]</div>
+                <PencilButton Text="Pryč" Small="true" Variant="PencilVariant.Secondary" Style="width:84px;flex:0 0 84px" OnClick="() => RemovePlayer(idx)" />
+            </div>
+        }
+        @if (players.Count == 0)
+        {
+            <div class="small">Zatím nikdo. Hrát sám se sebou je smutný.</div>
+        }
+        <div class="hold-row">
+            <input class="entry" placeholder="Jméno hráče" maxlength="20" @bind="newName" @bind:event="oninput" @onkeydown="Key" />
+            <PencilButton Text="Přidat" Small="true" Variant="PencilVariant.Secondary" Style="max-width:110px" OnClick="AddPlayer" />
+        </div>
+        @if (players.Count > 1)
+        {
+            <PencilButton Text="Zamíchat pořadí" Small="true" Variant="PencilVariant.Secondary" OnClick="Shuffle" />
+        }
+        <div class="hold-row" style="align-items:center">
+            <div class="field-label">Hraje se do:</div>
+            <input class="entry" inputmode="numeric" maxlength="6" placeholder="10000" @bind="targetText" />
+        </div>
+        <div class="grid2">
+            <Chip Text="Dvojičky" Selected="pairs" OnClick="() => SetPairs(true)" />
+            <Chip Text="Bez dvojiček" Selected="!pairs" OnClick="() => SetPairs(false)" />
+        </div>
+        <PencilButton Text="Kostky zjednodušené" OnClick="StartSimple" />
+        @if (dice2Running)
+        {
+            <PencilButton Text="Pokračovat v rozehraných" Variant="PencilVariant.Secondary" OnClick="@(() => Nav.NavigateTo("kostky2"))" />
+        }
+        <div class="small">Jen kalkulačka – hody a pravidla si hlídáte sami.</div>
+        <PencilButton Text="Kostky rozšířené" Class="mt12" OnClick="StartFull" />
+        @if (diceRunning)
+        {
+            <PencilButton Text="Pokračovat v rozehraných" Variant="PencilVariant.Secondary" OnClick="@(() => Nav.NavigateTo("kostky"))" />
+        }
+        <div class="small">Rozšířené hlídají pravidla: 1 = 100, 5 = 50, trojice = číslo × 100 (tři jedničky 1 000), čtyři stejné ×2, pět ×4, šest ×8, postupka 1–6 = 1 500, tři dvojice = 1 000. V každém tahu do 3 hodů aspoň 300, jinak nic. Když nic nepadne, body z tahu propadnou. Odložíš všech 6 → házíš znovu všemi. Kdo přehodí cíl, kolo se dohraje.</div>
+        <div class="small soft" style="margin-top:16px">Šipky jsou zatím jen v appce.</div>
     </div>
 </div>
 
 @code {
     private int best, slideBest, waiterBest, glassBest, brewBest;
+    // kostky: hráči u stolu (stejný seznam jako kvíz), cíl, dvojičky
+    private List<string> players = new();
+    private string newName = "", targetText = "";
+    private bool pairs = Preferences.Get("hry_kostky_dvojicky", true);
+    private bool diceRunning, dice2Running;
 
     protected override void OnInitialized()
     {
@@ -67,5 +114,72 @@
         waiterBest = Preferences.Get(Cisnik.BestKey, -1);
         glassBest = Preferences.Get(Sklo.BestKey, -1);
         brewBest = Preferences.Get(Varna.BestKey, -1);
+        players = GamePlayers.Load();
+        if (players.Count == 0 && UserSession.Profile?.Nickname is string me && me.Length > 0) players.Add(me);
+        targetText = Preferences.Get("hry_kostky_cil", 10000).ToString();
+        diceRunning = DiceGame.LoadSaved(DiceGame.Key) is { Finished: false };
+        dice2Running = SimpleDiceGame.LoadSaved(SimpleDiceGame.Key) is { Finished: false };
+    }
+
+    private void AddPlayer()
+    {
+        var n = newName.Trim();
+        if (n.Length == 0) return;
+        players.Add(n.Length > 20 ? n[..20] : n);
+        newName = "";
+        GamePlayers.Save(players);
+    }
+
+    private void Key(KeyboardEventArgs e) { if (e.Key == "Enter") AddPlayer(); }
+
+    private void RemovePlayer(int i)
+    {
+        players.RemoveAt(i);
+        GamePlayers.Save(players);
+    }
+
+    private void Shuffle()
+    {
+        players = players.OrderBy(_ => Random.Shared.Next()).ToList();
+        GamePlayers.Save(players);
+    }
+
+    private void SetPairs(bool on)
+    {
+        pairs = on;
+        Preferences.Set("hry_kostky_dvojicky", on);
+    }
+
+    private int Target()
+    {
+        var t = int.TryParse(targetText.Trim(), out var v) && v >= 300 ? v : 10000;
+        Preferences.Set("hry_kostky_cil", t);
+        return t;
+    }
+
+    private async Task<bool> ReadyAsync(bool running)
+    {
+        if (players.Count < 1)
+        {
+            await Note.AlertAsync("Kdo hraje?", "Přidej aspoň jednoho hráče.");
+            return false;
+        }
+        return !running || await Note.ConfirmAsync("Nová hra?", "Rozehraná hra se zahodí.", "Nová hra", danger: true);
+    }
+
+    private async Task StartFull()
+    {
+        var target = Target();
+        if (!await ReadyAsync(diceRunning)) return;
+        new DiceGame { Players = players.ToList(), Totals = players.Select(_ => 0).ToList(), Target = target, Pairs = pairs }.Save();
+        Nav.NavigateTo("kostky");
+    }
+
+    private async Task StartSimple()
+    {
+        var target = Target();
+        if (!await ReadyAsync(dice2Running)) return;
+        new SimpleDiceGame { Players = players.ToList(), Totals = players.Select(_ => 0).ToList(), Target = target }.Save();
+        Nav.NavigateTo("kostky2");
     }
 }

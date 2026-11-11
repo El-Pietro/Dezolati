@@ -246,24 +246,11 @@ namespace Dezolati.Services
         }
 
         /// <summary>
-        /// Nainstaluje stažené APK: přednostně přes PackageInstaller (jedno „Aktualizovat?“, bez výběru aplikace
-        /// a bez obrazovky „Otevřít / Hotovo“), když to nejde, postaru přes otevření souboru.
+        /// Otevře instalátor Androidu se staženým APK. (Instalace přes PackageInstaller přímo z appky
+        /// byla v 3.11 zkusmo, ale Play Protect pak appku označil za škodlivou – „appka instaluje appky“.)
         /// </summary>
-        public static async Task InstallAsync(string apkPath)
-        {
-#if ANDROID
-            try
-            {
-                Dezolati.Droid.ApkInstaller.Install(apkPath);
-                return;
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"PackageInstaller: {ex.Message} – zkouším otevřít soubor");
-            }
-#endif
-            await Launcher.Default.OpenAsync(new OpenFileRequest("Aktualizace Dezoláti",
+        public static Task InstallAsync(string apkPath) =>
+            Launcher.Default.OpenAsync(new OpenFileRequest("Aktualizace Dezoláti",
                 new ReadOnlyFile(apkPath, "application/vnd.android.package-archive")));
-        }
     }
 }

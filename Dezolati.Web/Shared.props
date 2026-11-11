@@ -25,6 +25,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)..\Services\Cisnik.cs" Link="Shared\Services\Cisnik.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)..\Services\Sklo.cs" Link="Shared\Services\Sklo.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)..\Services\Varna.cs" Link="Shared\Services\Varna.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\Services\Games.cs" Link="Shared\Services\Games.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)..\Services\Kviz.cs" Link="Shared\Services\Kviz.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)..\Services\AccountService.cs" Link="Shared\Services\AccountService.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)..\Services\Pozvani.cs" Link="Shared\Services\Pozvani.cs" />

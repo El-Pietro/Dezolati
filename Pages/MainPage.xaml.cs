@@ -257,7 +257,8 @@ namespace Dezolati.Pages
                         WidthRequest = 40,
                         Rotation = -80 + rot,
                         Scale = scale,
-                        Margin = new Thickness(-17, -10 + dy, 0, 0)
+                        // přes střed čtyř čárek (krok 18 px), za ním mezera před další pětkou
+                        Margin = new Thickness(-45, -10 + dy, 19, 0)
                     });
                 }
                 else
@@ -270,7 +271,7 @@ namespace Dezolati.Pages
                         Rotation = rot,
                         Scale = scale,
                         TranslationY = dy,
-                        Margin = new Thickness(0, 0, -12, 0)
+                        Margin = new Thickness(0, 0, -22, 0)   // čárky těsně vedle sebe
                     });
                 }
             }

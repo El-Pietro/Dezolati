@@ -26,7 +26,7 @@
                 </div>
             }
             <div class="hold-row">
-                <input class="entry" placeholder="Jméno hráče" maxlength="30" @bind="newName" @onkeydown="Key" />
+                <input class="entry" placeholder="Jméno hráče" maxlength="30" @bind="newName" @bind:event="oninput" @onkeydown="Key" />
                 <PencilButton Text="Přidat" Small="true" Variant="PencilVariant.Secondary" Style="max-width:110px" OnClick="Add" />
             </div>
             <div class="field-label">Otázek na hráče:</div>

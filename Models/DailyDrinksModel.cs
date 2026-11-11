@@ -67,6 +67,10 @@
         public DateTime? LastDrinkAt { get; set; }
         public string? LastDrinkKind { get; set; }
         public string? LastDrinkPlace { get; set; }
+        /// <summary>Hospoda posledního zápisu na mapě (jen když ji hlásí): id a poloha – ťuk na „Naposledy“ otevře mapu.</summary>
+        public string? LastPubId { get; set; }
+        public double? LastPubLat { get; set; }
+        public double? LastPubLon { get; set; }
 
         /// <summary>„před 3 h – pivo, U Lojzy“ / „včera 23:40 – víno“ / „12. 10. 21:15 – panák“ (appka i web).</summary>
         public string LastDrinkText()

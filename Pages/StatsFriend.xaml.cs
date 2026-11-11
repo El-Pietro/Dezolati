@@ -115,7 +115,20 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
         AddRow(SummaryGrid, "Rekord", record == null ? "—"
             : $"{record.Day.ToString("d. M. yyyy", Cs)} ({Cz.Plural(record.Total, "kousek", "kousky", "kousků")})");
         AddRow(SummaryGrid, "Srdcovka", fav);
-        AddRow(SummaryGrid, "Naposledy", stats.LastDrinkText());
+        var last = AddRow(SummaryGrid, "Naposledy", stats.LastDrinkText());
+        if (stats.LastPubLat is double plat && stats.LastPubLon is double plon && !string.IsNullOrEmpty(userId))
+        {
+            // ťuk na místo → mapa s hospodou a kámošem
+            last.TextDecorations = TextDecorations.Underline;
+            var tap = new TapGestureRecognizer();
+            var uid = userId;
+            tap.Tapped += async (_, _) => await Shell.Current.GoToAsync("//Hospody", new Dictionary<string, object>
+            {
+                ["focusLat"] = plat, ["focusLon"] = plon, ["focusPub"] = stats.LastPubId ?? "",
+                ["focusUid"] = uid, ["focusNick"] = nick ?? "", ["focusPlace"] = stats.LastDrinkPlace ?? ""
+            });
+            last.GestureRecognizers.Add(tap);
+        }
         // průměry na den (i dny bez pití): posledních 30 dní a celkem od prvního zápisu
         AvgBox.Clear();
         if (stats.FirstDay is DateTime first && celkem.Total > 0)
@@ -635,12 +648,14 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
         }
     }
 
-    private static void AddRow(Grid grid, string label, string value)
+    private static Label AddRow(Grid grid, string label, string value)
     {
         var row = grid.RowDefinitions.Count;
         grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
         grid.Add(new Label { Text = label, Style = AppStyle("FieldLabel"), Margin = 0 }, 0, row);
-        grid.Add(new Label { Text = value, Style = AppStyle("Body") }, 1, row);
+        var v = new Label { Text = value, Style = AppStyle("Body") };
+        grid.Add(v, 1, row);
+        return v;
     }
 
     private static Style? AppStyle(string key) =>

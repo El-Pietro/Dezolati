@@ -167,8 +167,21 @@ public partial class Hospody : ContentPage, IQueryAttributable
     // Shell u záložky volá ApplyQueryAttributes a OnAppearing v různém pořadí – napoprvé (stránka
     // se teprve vytváří) klidně až PO OnAppearing. Proto: když už je stránka vidět, otevřít domov hned,
     // jinak si to poznamenat pro OnAppearing. (Dřív se křížek ukázal až napodruhé.)
+    /// <summary>Ze statistik kámoše: ukázat hospodu, kde naposledy zapisoval, a jeho samotného.</summary>
+    private sealed record MapFocus(double Lat, double Lon, string PubId, string Uid, string Nick, string Place);
+    private MapFocus? focus;
+
     public void ApplyQueryAttributes(IDictionary<string, object> query)
     {
+        if (query.TryGetValue("focusLat", out var fla) && fla is double flat
+            && query.TryGetValue("focusLon", out var flo) && flo is double flon)
+        {
+            string S(string k) => query.TryGetValue(k, out var v) && v is string s ? s : "";
+            focus = new MapFocus(flat, flon, S("focusPub"), S("focusUid"), S("focusNick"), S("focusPlace"));
+            query.Clear();
+            if (appeared && loaded) Dispatcher.Dispatch(ApplyFocus);
+            return;   // jinak se použije po načtení hospod (OnAppearing → LoadPubsAsync)
+        }
         if (!(query.TryGetValue("mode", out var m) && m as string == "home")) return;
         query.Clear();   // ať se režim domova neotevře znovu při každém návratu na mapu
         if (appeared) Dispatcher.Dispatch(OpenHomeMode);
@@ -179,6 +192,7 @@ public partial class Hospody : ContentPage, IQueryAttributable
     {
         base.OnDisappearing();
         appeared = false;
+        focusFriend = null;   // „naposledy tady“ jen pro tu jednu návštěvu mapy
     }
 
     protected override async void OnAppearing()
@@ -196,6 +210,7 @@ public partial class Hospody : ContentPage, IQueryAttributable
         {
             // návrat z profilu hospody – mohl se změnit název, zavřít nebo smazat
             ShowPubs(await PubCatalog.GetAsync());
+            if (focus != null) ApplyFocus();
             _ = ShowFriendsAsync();
             if (selected != null && PubCard.IsVisible)
             {
@@ -255,7 +270,8 @@ public partial class Hospody : ContentPage, IQueryAttributable
             loaded = true;
             LoadingBox.IsVisible = false;
 
-            await CenterOnMeAsync(silent: true);
+            if (focus != null) ApplyFocus();             // přišlo se ze statistik kámoše → tam, ne ke mně
+            else await CenterOnMeAsync(silent: true);
             await EnsureViewportAsync(CancellationToken.None, showErrors: !PubCatalog.HasAny);
             _ = ShowFriendsAsync();
         }
@@ -368,12 +384,33 @@ public partial class Hospody : ContentPage, IQueryAttributable
 
     private readonly List<List<DrinkingFriend>> friendGroups = new();
 
+    /// <summary>Kámoš ze statistik, který teď nepije: ukázat ho aspoň u jeho poslední hospody.</summary>
+    private (string Uid, string Nick, double Lat, double Lon)? focusFriend;
+
+    private void ApplyFocus()
+    {
+        if (focus is not { } f || mapControl == null) return;
+        focus = null;
+        HideCard();
+        FilterCard.IsVisible = false;
+        var (x, y) = SphericalMercator.FromLonLat(f.Lon, f.Lat);
+        mapControl.Map.Navigator.CenterOnAndZoomTo(new MPoint(x, y), ResolutionStreet);
+        var pub = (f.PubId.Length > 0 ? PubService.Find(f.PubId) : null) ?? PubService.Nearest(f.Lat, f.Lon, 40);
+        if (pub != null) ShowCard(pub, null);
+        focusFriend = f.Uid.Length > 0 ? (f.Uid, f.Nick, f.Lat, f.Lon) : null;
+        _ = ShowFriendsAsync();
+    }
+
     private async Task ShowFriendsAsync()
     {
         if (friendsLayer == null) return;
         try
         {
             var drinking = await FriendsNow.GetAsync();
+            if (focusFriend is { } ff && drinking.All(d => d.Uid != ff.Uid || !d.HasPubLocation))
+                drinking = drinking.Where(d => d.Uid != ff.Uid)
+                    .Append(new DrinkingFriend(ff.Uid, $"{ff.Nick} (naposledy)", DateTime.UtcNow, null, ff.Lat, ff.Lon, null, null))
+                    .ToList();
             var features = new List<IFeature>();
             friendGroups.Clear();
             foreach (var g in drinking.Where(f => f.HasPubLocation)

@@ -1,0 +1,128 @@
+@namespace Dezolati.Web.Pages
+@page "/kostky2"
+@using System.Globalization
+@inject NavigationManager Nav
+
+@* Kostky zjednodušené (Pages/Kostky2 v appce): jen kalkulačka, pravidla si hlídá stůl. *@
+<BackBar To="hry" />
+
+<div class="listek grow">
+    <div class="stack">
+        <div class="title">@(game == null ? "Kostky" : $"Kostky do {N(game.Target)}")</div>
+        <a class="ink-link small" @onclick="Help">(návod)</a>
+
+        @if (game == null || game.Players.Count == 0)
+        {
+            <div class="heading center">Žádná hra. Založ ji v Hrách.</div>
+        }
+        else
+        {
+            var winners = game.Finished ? game.Winners() : new List<int>();
+            @for (var i = 0; i < game.Players.Count; i++)
+            {
+                var current = !game.Finished && i == game.Current;
+                var win = winners.Contains(i);
+                <div class="friend-row" style="min-height:32px">
+                    <div class="@(current || win ? "heading" : "body") grow-1">@game.Players[i]@(win ? " – vítěz!" : current ? "  (hází)" : "")</div>
+                    <div class="heading">@N(game.Totals[i])</div>
+                </div>
+            }
+            <div class="small center">@game.LastEvent</div>
+            @if (game.FinalBy is int f && !game.Finished)
+            {
+                <div class="field-label center">Poslední kolo! @game.Players[f] přehodil(a) @N(game.Target).</div>
+            }
+
+            @if (game.Finished)
+            {
+                <div class="heading center mt12">@(winners.Count == 1 ? $"Vyhrál(a) {game.Players[winners[0]]}! 🎲" : "Remíza: " + string.Join(", ", winners.Select(w => game.Players[w])))</div>
+            }
+            else
+            {
+                <div class="heading center mt12">Hází @game.Players[game.Current]</div>
+                <div class="heading center">@N(game.TurnPoints) + @N(EntryValue)</div>
+                <div class="grid3">
+                    <PencilButton Text="Zapsat" Small="true" OnClick="Bank" />
+                    <PencilButton Text="Další hod" Small="true" Variant="PencilVariant.Secondary" OnClick="NextRoll" />
+                    <PencilButton Text="Vynulovat" Small="true" Variant="PencilVariant.Danger" OnClick="Reset" />
+                </div>
+                <div class="grid3">
+                    @foreach (var key in Keys)
+                    {
+                        var k = key;
+                        <PencilButton Text="@k" Variant="PencilVariant.Secondary" Style="@(k == "Smaž" ? "" : "font-size:24px")" OnClick="() => OnKey(k)" />
+                    }
+                </div>
+            }
+        }
+
+        <div class="grid2 mt12">
+            <PencilButton Text="Zpět o krok" Small="true" Variant="PencilVariant.Secondary" Disabled="@(game?.CanUndo != true)" OnClick="Undo" />
+            <PencilButton Text="Konec hry" Small="true" Variant="PencilVariant.Danger" OnClick="End" />
+        </div>
+    </div>
+</div>
+
+@code {
+    private static readonly CultureInfo Cs = WebPlatform.Cs;
+    private static readonly string[] Keys = { "1", "2", "3", "4", "5", "6", "7", "8", "9", "Smaž", "0", "00" };
+    private SimpleDiceGame? game;
+    private string entry = "";
+
+    protected override void OnInitialized() => game = SimpleDiceGame.LoadSaved(SimpleDiceGame.Key);
+
+    private static string N(int v) => v.ToString("#,0", Cs);
+    private int EntryValue => int.TryParse(entry, out var v) ? v : 0;
+
+    private void OnKey(string key)
+    {
+        if (key == "Smaž") entry = entry.Length > 0 ? entry[..^1] : "";
+        else if (entry.Length < 6 && !(entry.Length == 0 && key.StartsWith('0'))) entry += key;
+    }
+
+    private void NextRoll()
+    {
+        if (game == null || EntryValue <= 0) return;
+        game.NextRoll(EntryValue);
+        entry = "";
+    }
+
+    private void Bank()
+    {
+        if (game == null) return;
+        game.Bank(EntryValue);
+        entry = "";
+    }
+
+    private async Task Reset()
+    {
+        if (game == null) return;
+        if (game.TurnPoints + EntryValue > 0 &&
+            !await Note.ConfirmAsync("Vynulovat?", $"{game.Players[game.Current]} přijde o {N(game.TurnPoints + EntryValue)} a hraje další.", "Vynulovat", danger: true))
+            return;
+        game.Reset();
+        entry = "";
+    }
+
+    private void Undo()
+    {
+        if (game?.Undo() is { } prev) { game = prev; entry = ""; }
+    }
+
+    private Task Help() => Note.AlertAsync("Návod",
+        "Hází se skutečnými kostkami, pravidla si hlídáte sami – appka jen počítá.\n\n" +
+        "– Napiš body z hodu na klávesnici (nahoře uvidíš „body z tahu + hod“).\n" +
+        "– Další hod – přičte hod k tahu, hází dál stejný hráč.\n" +
+        "– Zapsat – tah i s posledním hodem jde hráči do sloupce a hraje další.\n" +
+        "– Vynulovat – nic nepadlo (nebo nenahrál 300), tah propadá a hraje další.\n" +
+        "– Zpět o krok – oprava překlepu.\n\n" +
+        "Kdo přehodí cíl, kolo se dohraje. Vyhrává nejvíc bodů.");
+
+    private async Task End()
+    {
+        if (game != null && !game.Finished && !await Note.ConfirmAsync("Konec hry?", "Rozehraná hra se zahodí.", "Konec", danger: true))
+            return;
+        game?.Clear();
+        Nav.NavigateTo("hry");
+    }
+}

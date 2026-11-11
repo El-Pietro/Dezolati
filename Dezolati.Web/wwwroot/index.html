@@ -45,6 +45,11 @@
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('service-worker.js').then(function (reg) {
                 window.dzReg = reg;
+                // prohlížeč sám hledá novou verzi jen při načtení stránky; appka z plochy / karta vrácená
+                // z pozadí se nenačítá → zeptat se při každém návratu do appky a pak jednou za hodinu
+                var check = function () { reg.update().catch(function () { }); };
+                document.addEventListener('visibilitychange', function () { if (!document.hidden) check(); });
+                setInterval(check, 60 * 60 * 1000);
                 if (reg.waiting && navigator.serviceWorker.controller) dz.updateReady();
                 // nová verze webu: po načtení se rovnou přepne (žádné „zavři všechny karty“)
                 reg.addEventListener('updatefound', function () {
