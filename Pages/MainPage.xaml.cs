@@ -9,7 +9,7 @@ namespace Dezolati.Pages
 
         // co je právě na lístku (kvůli škrtání)
         private DateTime shownDay;
-        private int shownPivo, shownVino, shownPanaky;
+        private int shownPivo, shownVino, shownPanaky, shownMichacky;
 
         private static readonly string[] CarkyImages =
         {
@@ -191,7 +191,8 @@ namespace Dezolati.Pages
             Render(Math.Max(0, (today?.Pivo ?? 0) + pending.Pivo),
                    Math.Max(0, (today?.Vino ?? 0) + pending.Vino),
                    Math.Max(0, (today?.Panaky ?? 0) + pending.Panaky),
-                   pending.Count, offline);
+                   pending.Count, offline,
+                   Math.Max(0, (today?.Michacky ?? 0) + pending.Michacky));
         }
 
         private bool TryRenderFromCache(string userId)
@@ -208,15 +209,16 @@ namespace Dezolati.Pages
             }
         }
 
-        private void Render(int pivo, int vino, int panaky, int pendingCount = 0, bool offline = false)
+        private void Render(int pivo, int vino, int panaky, int pendingCount = 0, bool offline = false, int michacky = 0)
         {
             shownPivo = pivo;
             shownVino = vino;
             shownPanaky = panaky;
+            shownMichacky = michacky;
 
-            var text = pivo + vino + panaky == 0
+            var text = pivo + vino + panaky + michacky == 0
                 ? "Zatím čistý lístek."
-                : "Dnes: " + Cz.Souhrn(pivo, vino, panaky);
+                : "Dnes: " + Cz.Souhrn(pivo, vino, panaky, michacky);
 
             // kde sedím (poslední zápis dneška, z telefonu)
             if (AuthSession.Uid is string uid && PushService.LastPubName(uid, shownDay) is string pub)
@@ -235,6 +237,7 @@ namespace Dezolati.Pages
             DrawCarky(Pivo, pivo, new Random(1), shownDay, 0);
             DrawCarky(Vino, vino, new Random(2), shownDay, 1);
             DrawCarky(Panaky, panaky, new Random(3), shownDay, 2);
+            DrawCarky(Michacky, michacky, new Random(4), shownDay, 3);
             rings.Rings = Krouzky.For(shownDay, pivo, vino);
             RingsView.Invalidate();
         }
@@ -295,6 +298,7 @@ namespace Dezolati.Pages
             {
                 "Pivo" => (shownPivo, "Pívo", "jedno pivo"),
                 "Vino" => (shownVino, "Víno", "jedno víno"),
+                "Michacky" => (shownMichacky, "Míchačky", "jednu míchačku"),
                 _ => (shownPanaky, "Panáky", "jednoho panáka")
             };
 
@@ -306,13 +310,13 @@ namespace Dezolati.Pages
                 : await Listek.ShowAsync(this, $"{name}: zatím nic", "Připsat čárku?",
                     (add, PencilVariant.Primary), ("Nic", PencilVariant.Secondary));
 
-            int p = kind == "Pivo" ? 1 : 0, v = kind == "Vino" ? 1 : 0, s = kind == "Panaky" ? 1 : 0;
+            int p = kind == "Pivo" ? 1 : 0, v = kind == "Vino" ? 1 : 0, s = kind == "Panaky" ? 1 : 0, m = kind == "Michacky" ? 1 : 0;
             try
             {
                 if (choice == add)
-                    await firestoreService.RecordDrink(userId, AuthSession.DisplayName, p, v, s);
+                    await firestoreService.RecordDrink(userId, AuthSession.DisplayName, p, v, s, michacky: m);
                 else if (choice == strike)
-                    await firestoreService.RecordCorrection(userId, shownDay, p, v, s);
+                    await firestoreService.RecordCorrection(userId, shownDay, p, v, s, m);
                 else
                     return;
             }

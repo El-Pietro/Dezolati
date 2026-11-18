@@ -16,6 +16,8 @@
     <Compile Include="$(MSBuildThisFileDirectory)..\Services\Net.cs" Link="Shared\Services\Net.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)..\Services\NickDirectory.cs" Link="Shared\Services\NickDirectory.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)..\Services\Places.cs" Link="Shared\Services\Places.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\Services\PanakDruhy.cs" Link="Shared\Services\PanakDruhy.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\Services\PasswordService.cs" Link="Shared\Services\PasswordService.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)..\Services\PubDay.cs" Link="Shared\Services\PubDay.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)..\Services\UserSession.cs" Link="Shared\Services\UserSession.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)..\Services\Social.cs" Link="Shared\Services\Social.cs" />

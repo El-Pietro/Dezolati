@@ -26,6 +26,12 @@
                                                    FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
                                                    Clicked="OnAddPlayerClicked" />
                         </Grid>
+                        <Label Text="Okruhy (klidně víc najednou):" Style="{StaticResource FieldLabel}" />
+                        <Grid ColumnDefinitions="*, *, *" ColumnSpacing="8">
+                            <controls:PencilButton x:Name="OkruhPivo" Text="Pivo" Variant="Secondary" CommandParameter="Pivo" Clicked="OnOkruhClicked" />
+                            <controls:PencilButton x:Name="OkruhVino" Grid.Column="1" Text="Víno" Variant="Secondary" CommandParameter="Víno" Clicked="OnOkruhClicked" />
+                            <controls:PencilButton x:Name="OkruhTvrdej" Grid.Column="2" Text="Tvrdej" Variant="Secondary" CommandParameter="Tvrdej" Clicked="OnOkruhClicked" />
+                        </Grid>
                         <Label Text="Otázek na hráče:" Style="{StaticResource FieldLabel}" />
                         <Grid ColumnDefinitions="*, *, *" ColumnSpacing="8">
                             <controls:PencilButton x:Name="Rounds3" Text="3" Variant="Secondary" CommandParameter="3" Clicked="OnRoundsClicked" />

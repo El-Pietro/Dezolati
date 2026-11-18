@@ -28,11 +28,11 @@ namespace Dezolati.Services
         /// <summary>Součty (bez „aspoň 1“).</summary>
         public static DailyDrinksModel Shrink(DailyDrinksModel d, bool minOne = false)
         {
-            var beer = (int)Math.Round((Math.Max(0, d.Pivo) + Math.Max(0, d.Panaky)) / 3.0, MidpointRounding.AwayFromZero);
+            var beer = (int)Math.Round((Math.Max(0, d.Pivo) + Math.Max(0, d.Panaky) + Math.Max(0, d.Michacky)) / 3.0, MidpointRounding.AwayFromZero);
             var wine = (int)Math.Round(Math.Max(0, d.Vino) / 3.0, MidpointRounding.AwayFromZero);
             if (minOne && d.Total > 0 && beer + wine == 0)
             {
-                if (d.Vino > d.Pivo + d.Panaky) wine = 1; else beer = 1;
+                if (d.Vino > d.Pivo + d.Panaky + d.Michacky) wine = 1; else beer = 1;
             }
             return new DailyDrinksModel
             {

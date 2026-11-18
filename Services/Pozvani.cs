@@ -135,7 +135,7 @@ namespace Dezolati.Services
                     var day = doc == null ? new DailyDrinksModel() : FirestoreService.ToDaily(doc);
                     if (Mask.AppliesTo(user)) day = Mask.Day(day);
                     var nick = m.Uid == AuthSession.Uid ? "Ty" : FriendAliases.Display(m.Uid, m.Nick) ?? m.Nick;
-                    result.Add((nick, day.Total, day.Total == 0 ? "nic (nebo nezapsal)" : Cz.Souhrn(day.Pivo, day.Vino, day.Panaky)));
+                    result.Add((nick, day.Total, day.Total == 0 ? "nic (nebo nezapsal)" : Cz.Souhrn(day.Pivo, day.Vino, day.Panaky, day.Michacky)));
                 }
                 catch { }
             }

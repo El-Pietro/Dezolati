@@ -72,6 +72,8 @@ public partial class Friends : ContentPage
 
     private List<UserModel> friends = new();
 
+    private HashSet<string> pendingUids = new();
+
     private async Task LoadFriendsAndRequests()
     {
         var userId = AuthSession.Uid;
@@ -88,6 +90,7 @@ public partial class Friends : ContentPage
             PendingRequestsList.ItemsSource = requests;
             PendingHeader.IsVisible = PendingRequestsList.IsVisible = requests.Count > 0;
             RenderOutgoing(outgoing);
+            pendingUids = requests.Select(r => r.UserId).Concat(outgoing.Select(o => o.UserId)).ToHashSet();
             friends = list;
             FriendBadge.Set(requests.Count);   // odznak na lístku bez dalšího čtení
             _ = RefreshInvitesAsync();
@@ -294,7 +297,7 @@ public partial class Friends : ContentPage
         SuggestStack.Clear();
         SuggestStack.Add(new Label { Text = "Hledám…", Style = AppStyle("Small") });
         var dir = await NickDirectory.GetAsync();
-        var list = NickDirectory.Suggest(dir, friends.Select(f => f.UserId));
+        var list = NickDirectory.Suggest(dir, friends.Select(f => f.UserId), exclude: pendingUids);
         SuggestStack.Clear();
         if (list.Count == 0)
         {
@@ -315,7 +318,7 @@ public partial class Friends : ContentPage
             var text = new FormattedString();
             text.Spans.Add(InkSpan(s.Nick, "FontLabel", "Ink"));
             if (s.Mutual > 0)
-                text.Spans.Add(InkSpan($"  ({s.Mutual} {Cz.Plural(s.Mutual, "společný", "společní", "společných")})", "FontSmall", "InkSoft"));
+                text.Spans.Add(InkSpan($"  ({Cz.Plural(s.Mutual, "společný", "společní", "společných")})", "FontSmall", "InkSoft"));
             row.Add(new Label { FormattedText = text, VerticalOptions = LayoutOptions.Center, LineBreakMode = LineBreakMode.TailTruncation, MaxLines = 1 }, 0, 0);
             var add = new PencilButton
             {

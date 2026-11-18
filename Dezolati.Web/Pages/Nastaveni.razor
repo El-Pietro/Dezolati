@@ -118,6 +118,22 @@
 
         <div class="small center" style="margin-top:18px">Dezoláti @AppInfo.Current.VersionString</div>
         <div class="small soft center">Na webu nejsou kostky, šipky a připomínky. Ty jsou v appce pro Android.</div>
+        <div class="section-head" style="margin-top:14px" @onclick="() => pwOpen = !pwOpen">
+            <div class="heading">Změnit heslo</div>
+            <span class="link">@(pwOpen ? "(schovat)" : "(ukázat)")</span>
+        </div>
+        @if (pwOpen)
+        {
+            <div class="stack">
+                <input class="entry" type="password" placeholder="Současné heslo" autocomplete="current-password" @bind="pwOld" />
+                <input class="entry" type="password" placeholder="Nové heslo (aspoň 6 znaků)" autocomplete="new-password" @bind="pwNew" />
+                @if (pwError.Length > 0)
+                {
+                    <div class="error">@pwError</div>
+                }
+                <PencilButton Text="@(pwBusy ? "Měním…" : "Změnit heslo")" Variant="PencilVariant.Secondary" Disabled="pwBusy" OnClick="ChangePassword" />
+            </div>
+        }
         <PencilButton Text="Odhlásit se" Variant="PencilVariant.Danger" Class="mt12" Disabled="deleting" OnClick="Logout" />
         <PencilButton Text="@(deleting ? "Mažu účet…" : "Smazat účet")" Variant="PencilVariant.Secondary" Small="true" Class="mt24"
                       Disabled="deleting" OnClick="DeleteAccount" />
@@ -409,6 +425,43 @@
         AccountService.ForgetLocal();
         await Note.AlertAsync("Hotovo", "Účet je pryč. Kdyby ses vrátil, lístek začne načisto.");
         Nav.NavigateTo("prihlaseni", replace: true);
+    }
+
+    // ---------------- změna hesla ----------------
+
+    private bool pwOpen, pwBusy;
+    private string pwOld = "", pwNew = "", pwError = "";
+
+    private async Task ChangePassword()
+    {
+        if (pwBusy || AuthSession.Email is not string email) return;
+        pwError = "";
+        pwBusy = true;
+        try
+        {
+            var newPassword = pwNew;
+            var err = await PasswordService.ChangeAsync(email, pwOld, newPassword);
+            if (err != null) { pwError = err; return; }
+            pwOld = pwNew = "";
+            // Firebase po změně hesla zneplatní staré přihlášení → hned se přihlásit novým
+            try
+            {
+                await AuthSession.SignInAsync(email, newPassword);
+            }
+            catch
+            {
+                AuthSession.SignOut();
+                await Note.AlertAsync("Heslo změněno", "Přihlas se novým heslem.");
+                Nav.NavigateTo("prihlaseni", replace: true);
+                return;
+            }
+            pwOpen = false;
+            await Note.AlertAsync("Hotovo", "Heslo je změněné. Tak si ho tentokrát zapamatuj.");
+        }
+        finally
+        {
+            pwBusy = false;
+        }
     }
 
     private async Task Logout()

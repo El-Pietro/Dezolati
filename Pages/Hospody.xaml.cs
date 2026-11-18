@@ -654,7 +654,7 @@ public partial class Hospody : ContentPage, IQueryAttributable
             try
             {
                 var day = await fs.GetDailyDrinks(f.Uid, f.PubDayNow);
-                drunk = day == null || day.Total <= 0 ? "dnes: nic zapsaného" : "dnes: " + Cz.Souhrn(day.Pivo, day.Vino, day.Panaky);
+                drunk = day == null || day.Total <= 0 ? "dnes: nic zapsaného" : "dnes: " + Cz.Souhrn(day.Pivo, day.Vino, day.Panaky, day.Michacky);
             }
             catch
             {

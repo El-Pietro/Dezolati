@@ -80,6 +80,30 @@ namespace Dezolati.Models
             }
         }
 
+        /// <summary>Zapomenuté heslo: odkaz na nové heslo na e-mail z políčka nahoře.</summary>
+        [RelayCommand]
+        private async Task ForgotPassword()
+        {
+            if (IsBusy) return;
+            Error = "";
+            if (string.IsNullOrWhiteSpace(Email) || !Email.Contains('@'))
+            {
+                Error = "Napiš nahoru svůj e-mail a ťukni znovu.";
+                return;
+            }
+            try
+            {
+                IsBusy = true;
+                var err = await PasswordService.SendResetAsync(Email);
+                if (err != null) Error = err;
+                else await Dezolati.Controls.Listek.AlertAsync(null, "Odkaz odeslán", PasswordService.ResetSentText);
+            }
+            finally
+            {
+                IsBusy = false;
+            }
+        }
+
         [RelayCommand]
         private async Task NavigateSignUp()
         {

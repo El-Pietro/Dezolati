@@ -1,14 +1,15 @@
 ﻿namespace Dezolati.Controls
 {
-    /// <summary>Barvy pastelek pro druhy pití (pořadí: pivo, víno, panáky).</summary>
+    /// <summary>Barvy pastelek pro druhy pití (pořadí: pivo, víno, panáky, míchačky).</summary>
     public static class Pastelky
     {
         public static readonly Color Pivo = Color.FromArgb("#C27A12");
         public static readonly Color Vino = Color.FromArgb("#8E1B2A");
         public static readonly Color Panak = Color.FromArgb("#4A4A55");
+        public static readonly Color Michacka = Color.FromArgb("#2E7D6B");
         public static readonly Color Tuha = Color.FromArgb("#6B3E1E");
 
-        public static readonly Color[] Druhy = { Pivo, Vino, Panak };
+        public static readonly Color[] Druhy = { Pivo, Vino, Panak, Michacka };
     }
 
     public enum SketchMode
@@ -26,7 +27,7 @@
     /// </summary>
     public sealed class SketchChart : IDrawable
     {
-        /// <summary>Hodnoty: pro každý sloupec pole [pivo, víno, panáky].</summary>
+        /// <summary>Hodnoty: pro každý sloupec pole [pivo, víno, panáky, míchačky].</summary>
         public IReadOnlyList<int[]> Values { get; set; } = Array.Empty<int[]>();
 
         public SketchMode Mode { get; set; } = SketchMode.Columns;

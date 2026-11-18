@@ -6,6 +6,7 @@ namespace Dezolati.Pages;
 public partial class Zapis : ContentPage
 {
     private readonly FirestoreService firestoreService = new();
+    private string druh = PanakDruhy.Ostatni;
 
     public Zapis()
     {
@@ -38,6 +39,25 @@ public partial class Zapis : ContentPage
         PivaSlider.Value = drinkerType is "Vínopíč/ka" or "Tvrdopíč/ka" ? 0 : 1;
         VinoSlider.Value = drinkerType == "Vínopíč/ka" ? 1 : 0;
         PanakySlider.Value = drinkerType == "Tvrdopíč/ka" ? 1 : 0;
+        MichackySlider.Value = 0;
+        SetDruh(PanakDruhy.Ostatni);
+    }
+
+    private void SetDruh(string key)
+    {
+        var d = PanakDruhy.Find(key);
+        druh = d.Key;
+        DruhLabel.Text = $"{d.Name.ToLowerInvariant()} ▾";
+    }
+
+    /// <summary>Šipečka u panáků: slivovice, likér, rum, vodka, whisky, ostatní.</summary>
+    private async void OnDruhTapped(object? sender, TappedEventArgs e)
+    {
+        var buttons = PanakDruhy.All
+            .Select(d => (d.Name, d.Key == druh ? PencilVariant.Primary : PencilVariant.Secondary))
+            .ToArray();
+        var choice = await Listek.ShowAsync(this, "Jakej panák?", "Pořád je to panák, jen se líp spočítají promile.", buttons);
+        if (PanakDruhy.All.FirstOrDefault(d => d.Name == choice) is { } picked) SetDruh(picked.Key);
     }
 
     private void OnSliderValueChanged(object sender, ValueChangedEventArgs e)
@@ -54,6 +74,7 @@ public partial class Zapis : ContentPage
         if (slider == PivaSlider) PivaLabel.Text = text;
         else if (slider == VinoSlider) VinoLabel.Text = text;
         else if (slider == PanakySlider) PanakyLabel.Text = text;
+        else if (slider == MichackySlider) MichackyLabel.Text = text;
     }
 
     private async void OnZapsatClicked(object sender, EventArgs e)
@@ -61,8 +82,9 @@ public partial class Zapis : ContentPage
         int piva = (int)Math.Round(PivaSlider.Value);
         int vino = (int)Math.Round(VinoSlider.Value);
         int panaky = (int)Math.Round(PanakySlider.Value);
+        int michacky = (int)Math.Round(MichackySlider.Value);
 
-        if (piva + vino + panaky == 0)
+        if (piva + vino + panaky + michacky == 0)
         {
             await Listek.AlertAsync(this, "Nula?", "Zapsat nic? To si napiš do deníku, ne na lístek.");
             return;
@@ -79,7 +101,8 @@ public partial class Zapis : ContentPage
         {
             SetBusy(true);
             await Reminders.EnsurePermissionAsync();   // jednou se zeptá na povolení notifikací
-            await firestoreService.RecordDrink(userId, AuthSession.DisplayName, piva, vino, panaky);
+            await firestoreService.RecordDrink(userId, AuthSession.DisplayName, piva, vino, panaky,
+                michacky: michacky, panakDruh: druh);
             await Shell.Current.GoToAsync("//MainPage"); // MainPage si data načte sama
         }
         catch (Exception ex)

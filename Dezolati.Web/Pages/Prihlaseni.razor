@@ -13,6 +13,7 @@
             <div class="spinner"></div>
         }
         <PencilButton Type="submit" Text="Přihlásit se" Disabled="busy" />
+        <div class="small soft center" style="cursor:pointer;text-decoration:underline" @onclick="Forgot">Zapomenuté heslo?</div>
         <PencilButton Text="Nemáš účet? Zaregistruj se!" Variant="PencilVariant.Secondary" Small="true"
                       OnClick="@(() => Nav.NavigateTo("registrace"))" />
         @if (WebPlatform.IsIos && !WebPlatform.IsStandalone)
@@ -31,6 +32,29 @@
     protected override void OnInitialized()
     {
         if (AuthSession.IsSignedIn) Nav.NavigateTo("", replace: true);
+    }
+
+    /// <summary>Zapomenuté heslo: odkaz na nové heslo na e-mail z políčka nahoře.</summary>
+    private async Task Forgot()
+    {
+        if (busy) return;
+        error = "";
+        if (string.IsNullOrWhiteSpace(email) || !email.Contains('@'))
+        {
+            error = "Napiš nahoru svůj e-mail a ťukni znovu.";
+            return;
+        }
+        try
+        {
+            busy = true;
+            var err = await PasswordService.SendResetAsync(email);
+            if (err != null) error = err;
+            else await Note.AlertAsync("Odkaz odeslán", PasswordService.ResetSentText);
+        }
+        finally
+        {
+            busy = false;
+        }
     }
 
     private async Task SignIn()

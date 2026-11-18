@@ -23,7 +23,9 @@ namespace Dezolati.Services
         double? PubLat = null,  // poloha hospody – kámoši ji uvidí na mapě (jen při hlášení i s polohou)
         double? PubLon = null,
         bool PromileSet = false,       // zapsat odhad promile do profilu (kámoši ho uvidí); null hodnota = smazat
-        double? PromileValue = null);
+        double? PromileValue = null,
+        int Michacky = 0,              // míchané drinky (od 3.12)
+        string? PanakDruh = null);     // druh panáků v zápisu (Services/PanakDruhy.cs), null = Ostatní
 
     /// <summary>
     /// Fronta zápisů v telefonu. Každý zápis jde nejdřív sem a hned se zkusí odeslat.
@@ -104,10 +106,10 @@ namespace Dezolati.Services
         }
 
         /// <summary>Součet čekajících zápisů pro daný den (aby je lístek ukázal hned).</summary>
-        public static (int Pivo, int Vino, int Panaky, int Count) PendingFor(string uid, DateTime day)
+        public static (int Pivo, int Vino, int Panaky, int Count, int Michacky) PendingFor(string uid, DateTime day)
         {
             var items = Load(uid).Where(i => i.Day.Date == day.Date).ToList();
-            return (items.Sum(i => i.Pivo), items.Sum(i => i.Vino), items.Sum(i => i.Panaky), items.Count);
+            return (items.Sum(i => i.Pivo), items.Sum(i => i.Vino), items.Sum(i => i.Panaky), items.Count, items.Sum(i => i.Michacky));
         }
 
         public static int Count(string uid) => Load(uid).Count;
@@ -150,7 +152,7 @@ namespace Dezolati.Services
 
                     Remove(uid, item.Id);
                     // lístek v telefonu ví o zápisu i bez dalšího čtení ze serveru
-                    if (stored) LocalCache.ApplyDelta(uid, item.Day, item.Pivo, item.Vino, item.Panaky);
+                    if (stored) LocalCache.ApplyDelta(uid, item.Day, item.Pivo, item.Vino, item.Panaky, item.Michacky);
                 }
                 return true;
             }
@@ -176,6 +178,8 @@ namespace Dezolati.Services
                     ["Pivo"] = d.Pivo,
                     ["Vino"] = d.Vino,
                     ["Panaky"] = d.Panaky,
+                    ["Michacky"] = d.Michacky,
+                    ["PanakDruh"] = d.Panaky != 0 ? PanakDruhy.Find(d.PanakDruh).Key : null,
                     ["DrinkAt"] = d.At,
                     ["Date"] = key,
                     ["Day"] = iso,
@@ -211,7 +215,8 @@ namespace Dezolati.Services
                     : d.Place == Services.Place.Other ? "venku" : null;
                 var shared = d.SharePub && placeName != null;
                 // emoji u jména v Kámoších: čeho bylo v zápisu nejvíc (remíza → tvrdší)
-                var kind = d.Panaky > 0 && d.Panaky >= d.Pivo && d.Panaky >= d.Vino ? "panak"
+                var kind = d.Panaky > 0 && d.Panaky >= d.Pivo && d.Panaky >= d.Vino && d.Panaky >= d.Michacky ? "panak"
+                         : d.Michacky > 0 && d.Michacky >= d.Pivo && d.Michacky >= d.Vino ? "michacka"
                          : d.Vino > 0 && d.Vino >= d.Pivo ? "vino" : "pivo";
                 var userFields = new Dictionary<string, object?>
                 {
@@ -244,7 +249,7 @@ namespace Dezolati.Services
             }
 
             // 4) statistika hospod (kde nejčastěji piju) – jen u skutečného pití v hospodě
-            var total = d.Pivo + d.Vino + d.Panaky;
+            var total = d.Pivo + d.Vino + d.Panaky + d.Michacky;
             if (!d.Correction && d.PubId != null && total > 0)
             {
                 var seg = FieldSegment(d.PubId);
@@ -274,14 +279,18 @@ namespace Dezolati.Services
         /// <summary>Přičtení do denního součtu: kousky, útrata, místo.</summary>
         private static Dictionary<string, long> DailyIncrements(PendingDrink d)
         {
-            var total = d.Pivo + d.Vino + d.Panaky;
+            var total = d.Pivo + d.Vino + d.Panaky + d.Michacky;
             var inc = new Dictionary<string, long>
             {
                 ["Pivo"] = d.Pivo,
                 ["Vino"] = d.Vino,
                 ["Panaky"] = d.Panaky,
+                ["Michacky"] = d.Michacky,
                 ["Total"] = total
             };
+            // druhy panáků: vždy všechna pole (index na jejich součet bere jen dny, které je mají)
+            var druh = PanakDruhy.Find(d.PanakDruh);
+            foreach (var x in PanakDruhy.All) inc[x.Field] = x == druh ? d.Panaky : 0;
             // vždy všechna pole (i nula): součet ve statistikách jde přes složený index
             // a ten obsahuje jen dokumenty, které daná pole mají
             inc["Kc"] = d.Kc;

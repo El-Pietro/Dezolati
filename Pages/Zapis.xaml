@@ -28,9 +28,22 @@
                     <Slider x:Name="VinoSlider" Minimum="0" Maximum="10" Value="0" ValueChanged="OnSliderValueChanged" />
                     <Label x:Name="VinoLabel" Text="0" Style="{StaticResource Heading}" HorizontalOptions="Center" />
 
-                    <Label Text="Panáky (jakékoli, 4 cl):" Style="{StaticResource FieldLabel}" />
+                    <!-- druh panáku: schovaný za šipečkou, výchozí je „ostatní“ (stejně je to pořád panák) -->
+                    <Grid ColumnDefinitions="*, Auto">
+                        <Label Text="Panáky (4 cl):" Style="{StaticResource FieldLabel}" />
+                        <Label x:Name="DruhLabel" Grid.Column="1" Text="ostatní ▾" Style="{StaticResource Small}"
+                               TextColor="{StaticResource InkSoft}" VerticalOptions="End" Padding="12,4,4,0">
+                            <Label.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnDruhTapped" />
+                            </Label.GestureRecognizers>
+                        </Label>
+                    </Grid>
                     <Slider x:Name="PanakySlider" Minimum="0" Maximum="10" Value="0" ValueChanged="OnSliderValueChanged" />
                     <Label x:Name="PanakyLabel" Text="0" Style="{StaticResource Heading}" HorizontalOptions="Center" />
+
+                    <Label Text="Míchačky (drink s panákem):" Style="{StaticResource FieldLabel}" />
+                    <Slider x:Name="MichackySlider" Minimum="0" Maximum="10" Value="0" ValueChanged="OnSliderValueChanged" />
+                    <Label x:Name="MichackyLabel" Text="0" Style="{StaticResource Heading}" HorizontalOptions="Center" />
 
                     <controls:PencilButton x:Name="ZapsatButton" Text="Zapsat" Variant="Primary"
                                            Margin="0,12,0,0" Clicked="OnZapsatClicked" />

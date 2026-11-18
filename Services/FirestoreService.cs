@@ -145,7 +145,7 @@ namespace Dezolati.Services
         /// Vrací true = uloženo na serveru, false = čeká ve frontě.
         /// </summary>
         public async Task<bool> RecordDrink(string userId, string? name, int pivo, int vino, int panaky,
-            bool fromReminder = false)
+            bool fromReminder = false, int michacky = 0, string? panakDruh = null)
         {
             await UserSession.EnsureReadyAsync();
 
@@ -158,19 +158,22 @@ namespace Dezolati.Services
             var newVisit = place.PubId != null && place.PubId != last.PubId;
             var kc = await Prices.ForDrinkAsync(pivo, vino, panaky, place.PubId);
 
-            Promile.Log(userId, day, now, pivo, vino, panaky);   // dřív než zápis – odhad promile jde s ním
+            var druh = PanakDruhy.Find(panakDruh);
+            Promile.Log(userId, day, now, pivo, vino, panaky, michacky, druh.Abv);   // dřív než zápis – odhad promile jde s ním
+            if (panaky > 0) PanakDruhy.Remember(userId, day, druh.Key, panaky);
             DrinkQueue.Enqueue(userId, new PendingDrink(Guid.NewGuid().ToString("N"), now, day,
                 pivo, vino, panaky, Correction: false, Name: name ?? UserSession.Profile?.Nickname,
                 PubId: place.PubId, PubName: place.PubName, SharePub: PushService.SharePub,
                 Place: place.Place, Kc: kc, NewVisit: newVisit,
                 ShareDrink: PushService.ShareDrink, PubLat: place.Lat, PubLon: place.Lon,
-                PromileSet: true, PromileValue: SharedPromile(userId)));
+                PromileSet: true, PromileValue: SharedPromile(userId),
+                Michacky: michacky, PanakDruh: panaky > 0 ? druh.Key : null));
             if (PushService.DetectPub && place.Place != null)
                 PushService.RememberPlace(userId, day, place);   // pro lístek: „📍 U Peťky“
             UserSession.OnDrinkRecorded(now, day);
 
             // další připomínka za X minut (lokální notifikace)
-            try { await Reminders.OnDrinkRecordedAsync(day, pivo, vino, panaky, fromReminder); } catch { }
+            try { await Reminders.OnDrinkRecordedAsync(day, pivo, vino, panaky + michacky, fromReminder); } catch { }
 
             return await DrinkQueue.FlushAsync(userId);
         }
@@ -191,9 +194,11 @@ namespace Dezolati.Services
         /// Útrata se odečte cenou hospody, kde se ten den pilo naposledy, jinak výchozí cenou.
         /// Vrací true = uloženo, false = čeká ve frontě.
         /// </summary>
-        public async Task<bool> RecordCorrection(string userId, DateTime day, int pivo, int vino, int panaky)
+        public async Task<bool> RecordCorrection(string userId, DateTime day, int pivo, int vino, int panaky, int michacky = 0)
         {
-            pivo = Math.Abs(pivo); vino = Math.Abs(vino); panaky = Math.Abs(panaky);
+            pivo = Math.Abs(pivo); vino = Math.Abs(vino); panaky = Math.Abs(panaky); michacky = Math.Abs(michacky);
+            // škrtnutý panák = druh posledního zapsaného panáku toho dne (kvůli statistice i promile)
+            var druh = PanakDruhy.Find(panaky > 0 ? PanakDruhy.TakeForStrike(userId, day) : null);
             var last = PushService.LastPlace(userId, day);
             var kc = await Prices.ForDrinkAsync(pivo, vino, panaky, last.PubId);
 
@@ -201,11 +206,12 @@ namespace Dezolati.Services
             // (2 piva na lístku, ale 6 kousků v místech)
             var isToday = day.Date == UserSession.CurrentPubDay.Date;
             if (isToday)
-                Promile.Log(userId, day, DateTime.UtcNow, -pivo, -vino, -panaky);
+                Promile.Log(userId, day, DateTime.UtcNow, -pivo, -vino, -panaky, -michacky, druh.Abv);
             DrinkQueue.Enqueue(userId, new PendingDrink(Guid.NewGuid().ToString("N"), DateTime.UtcNow, day.Date,
                 -pivo, -vino, -panaky, Correction: true, Name: UserSession.Profile?.Nickname, Kc: -kc,
-                Place: last.Place, PromileSet: isToday, PromileValue: isToday ? SharedPromile(userId) : null));
-            Reminders.OnCorrection(day, pivo, vino, panaky);
+                Place: last.Place, PromileSet: isToday, PromileValue: isToday ? SharedPromile(userId) : null,
+                Michacky: -michacky, PanakDruh: panaky > 0 ? druh.Key : null));
+            Reminders.OnCorrection(day, pivo, vino, panaky + michacky);
 
             return await DrinkQueue.FlushAsync(userId);
         }
@@ -214,19 +220,20 @@ namespace Dezolati.Services
         /// Úprava staršího dne (max. 30 dní zpět): dopsat (kladné) nebo škrtnout (záporné).
         /// Jako korekce – neposouvá poslední pivo, místo „nevím“, útrata výchozími cenami.
         /// </summary>
-        public async Task<bool> RecordPastEdit(string userId, DateTime day, int pivo, int vino, int panaky)
+        public async Task<bool> RecordPastEdit(string userId, DateTime day, int pivo, int vino, int panaky, int michacky = 0)
         {
             if (day.Date < DateTime.Today.AddDays(-31)) throw new InvalidOperationException("Upravit jde jen posledních 30 dní.");
             var kc = Prices.Default(pivo, vino, panaky);
             var isToday = day.Date == UserSession.CurrentPubDay.Date;
             if (isToday)
             {
-                Reminders.Adjust(day, pivo, vino, panaky);
-                Promile.Log(userId, day, DateTime.UtcNow, pivo, vino, panaky);
+                Reminders.Adjust(day, pivo, vino, panaky + michacky);
+                Promile.Log(userId, day, DateTime.UtcNow, pivo, vino, panaky, michacky);
             }
             DrinkQueue.Enqueue(userId, new PendingDrink(Guid.NewGuid().ToString("N"), DateTime.UtcNow, day.Date,
                 pivo, vino, panaky, Correction: true, Name: UserSession.Profile?.Nickname, Kc: kc,
-                PromileSet: isToday, PromileValue: isToday ? SharedPromile(userId) : null));
+                PromileSet: isToday, PromileValue: isToday ? SharedPromile(userId) : null,
+                Michacky: michacky));
             return await DrinkQueue.FlushAsync(userId);
         }
 
@@ -258,17 +265,24 @@ namespace Dezolati.Services
                 new Dictionary<string, string> { ["kc"] = "Kc" }), "útrata");
             var placesTask = Optional(FirestoreRest.AggregateAsync("DailyDrinks", byUser,
                 new Dictionary<string, string> { ["home"] = "PlaceHome", ["other"] = "PlaceOther", ["pub"] = "PlacePub" }), "místa");
+            // míchačky a druhy panáků (od 3.12) – vlastní index, starší dny ho nemají (a nic v nich nebylo)
+            var druhyTask = Optional(FirestoreRest.AggregateAsync("DailyDrinks", byUser,
+                new Dictionary<string, string>
+                {
+                    ["mich"] = "Michacky", ["sliv"] = "PanakSlivovice", ["liker"] = "PanakLiker",
+                    ["rum"] = "PanakRum", ["vodka"] = "PanakVodka", ["whisky"] = "PanakWhisky"
+                }), "míchačky");
             var pubsTask = Optional(GetPubStats(userId), "hospody");
             // první zápis (průměr na den) – index UserId + Day vzestupně
             var firstTask = Optional(FirestoreRest.QueryAsync("DailyDrinks", byUser,
                 orderBy: "Day", descending: false, limit: 3), "první den");
 
-            await Task.WhenAll(aggTask, lastTask, recordTask, kcTask, placesTask, pubsTask, firstTask);
+            await Task.WhenAll(aggTask, lastTask, recordTask, kcTask, placesTask, druhyTask, pubsTask, firstTask);
 
             var agg = aggTask.Result;
             long Get(string k) => agg.TryGetValue(k, out var v) ? v : 0;
             var agg2 = new Dictionary<string, long>();
-            foreach (var kv in (kcTask.Result ?? new()).Concat(placesTask.Result ?? new())) agg2[kv.Key] = kv.Value;
+            foreach (var kv in (kcTask.Result ?? new()).Concat(placesTask.Result ?? new()).Concat(druhyTask.Result ?? new())) agg2[kv.Key] = kv.Value;
             long Get2(string k) => agg2.TryGetValue(k, out var v) ? v : 0;
 
             var (promile, promileAt) = PromileOf(userDoc);
@@ -278,7 +292,12 @@ namespace Dezolati.Services
                 Gender = userId == AuthSession.Uid ? UserSession.Profile?.Gender : userDoc?.Str("Gender"),
                 PromileValue = promile,
                 PromileAt = promileAt,
-                Totals = new DailyDrinksModel { Pivo = (int)Get("pivo"), Vino = (int)Get("vino"), Panaky = (int)Get("panaky") },
+                Totals = new DailyDrinksModel
+                {
+                    Pivo = (int)Get("pivo"), Vino = (int)Get("vino"), Panaky = (int)Get("panaky"), Michacky = (int)Get2("mich"),
+                    PanakSlivovice = (int)Get2("sliv"), PanakLiker = (int)Get2("liker"), PanakRum = (int)Get2("rum"),
+                    PanakVodka = (int)Get2("vodka"), PanakWhisky = (int)Get2("whisky")
+                },
                 Days = (int)Get("days"),
                 FirstDay = firstTask.Result?.Select(ToDaily).FirstOrDefault(d => d.Total > 0)?.Day,
                 Record = recordTask.Result.Select(ToDaily).FirstOrDefault(r => r.Total > 0),
@@ -317,13 +336,15 @@ namespace Dezolati.Services
         {
             var raw30 = new DailyDrinksModel
             {
-                Pivo = s.Last30.Sum(d => d.Pivo), Vino = s.Last30.Sum(d => d.Vino), Panaky = s.Last30.Sum(d => d.Panaky)
+                Pivo = s.Last30.Sum(d => d.Pivo), Vino = s.Last30.Sum(d => d.Vino), Panaky = s.Last30.Sum(d => d.Panaky),
+                Michacky = s.Last30.Sum(d => d.Michacky)
             };
             s.Last30 = s.Last30.Select(Mask.Day).ToList();
             // celkem = zamaskovaných 30 dní + třetina zbytku (ať „celkem“ nikdy není míň než „30 dní“)
             var rest = Mask.Shrink(new DailyDrinksModel
             {
-                Pivo = s.Totals.Pivo - raw30.Pivo, Vino = s.Totals.Vino - raw30.Vino, Panaky = s.Totals.Panaky - raw30.Panaky
+                Pivo = s.Totals.Pivo - raw30.Pivo, Vino = s.Totals.Vino - raw30.Vino, Panaky = s.Totals.Panaky - raw30.Panaky,
+                Michacky = s.Totals.Michacky - raw30.Michacky
             });
             s.Totals = new DailyDrinksModel
             {
@@ -358,7 +379,8 @@ namespace Dezolati.Services
             return new DailyDrinksModel
             {
                 Day = from,
-                Pivo = days.Sum(d => d.Pivo), Vino = days.Sum(d => d.Vino), Panaky = days.Sum(d => d.Panaky)
+                Pivo = days.Sum(d => d.Pivo), Vino = days.Sum(d => d.Vino), Panaky = days.Sum(d => d.Panaky),
+                Michacky = days.Sum(d => d.Michacky)
             };
         }
 
@@ -426,7 +448,7 @@ namespace Dezolati.Services
             {
                 if (d.Str("PubId") is not string pubId) continue;
                 if (d.Fields["Correction"]?["booleanValue"]?.GetValue<bool>() == true) continue;
-                var total = (int)(d.Int("Pivo") + d.Int("Vino") + d.Int("Panaky"));
+                var total = (int)(d.Int("Pivo") + d.Int("Vino") + d.Int("Panaky") + d.Int("Michacky"));
                 if (total <= 0) continue;
                 var at = d.Time("DrinkAt");
                 var cur = pubs.TryGetValue(pubId, out var x) ? x : (null, 0, new HashSet<string>(), null, 0);
@@ -681,6 +703,12 @@ namespace Dezolati.Services
             Pivo = (int)d.Int("Pivo"),
             Vino = (int)d.Int("Vino"),
             Panaky = (int)d.Int("Panaky"),
+            Michacky = (int)d.Int("Michacky"),
+            PanakSlivovice = (int)d.Int("PanakSlivovice"),
+            PanakLiker = (int)d.Int("PanakLiker"),
+            PanakRum = (int)d.Int("PanakRum"),
+            PanakVodka = (int)d.Int("PanakVodka"),
+            PanakWhisky = (int)d.Int("PanakWhisky"),
             Kc = d.Has("Kc") ? (int)d.Int("Kc") : null,
             KcEstimate = d.Fields["KcEstimate"]?["booleanValue"]?.GetValue<bool>() == true,
             PlacePub = (int)d.Int("PlacePub"),

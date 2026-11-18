@@ -183,6 +183,40 @@
           "order": "ASCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "DailyDrinks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "UserId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "Michacky",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "PanakLiker",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "PanakRum",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "PanakSlivovice",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "PanakVodka",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "PanakWhisky",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []

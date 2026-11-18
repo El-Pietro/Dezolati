@@ -83,7 +83,8 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
     {
         Pivo = days.Sum(d => d.Pivo),
         Vino = days.Sum(d => d.Vino),
-        Panaky = days.Sum(d => d.Panaky)
+        Panaky = days.Sum(d => d.Panaky),
+        Michacky = days.Sum(d => d.Michacky)
     };
 
     private void Render(UserStats stats)
@@ -104,14 +105,15 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
         var record = stats.Record;
 
         string fav = celkem.Total == 0 ? "—"
-            : celkem.Pivo >= celkem.Vino && celkem.Pivo >= celkem.Panaky ? "pivo"
-            : celkem.Vino >= celkem.Panaky ? "víno"
+            : celkem.Pivo >= celkem.Vino && celkem.Pivo >= celkem.Panaky && celkem.Pivo >= celkem.Michacky ? "pivo"
+            : celkem.Vino >= celkem.Panaky && celkem.Vino >= celkem.Michacky ? "víno"
+            : celkem.Michacky > celkem.Panaky ? "míchačky"
             : "tvrdej";
 
-        AddRow(SummaryGrid, "Dnes", dnes.Total == 0 ? "čistý lístek" : Cz.Souhrn(dnes.Pivo, dnes.Vino, dnes.Panaky));
-        AddRow(SummaryGrid, "7 dní", Cz.Souhrn(tyden.Pivo, tyden.Vino, tyden.Panaky));
-        AddRow(SummaryGrid, "30 dní", Cz.Souhrn(mesic.Pivo, mesic.Vino, mesic.Panaky));
-        AddRow(SummaryGrid, "Celkem", Cz.Souhrn(celkem.Pivo, celkem.Vino, celkem.Panaky));
+        AddRow(SummaryGrid, "Dnes", dnes.Total == 0 ? "čistý lístek" : Cz.Souhrn(dnes.Pivo, dnes.Vino, dnes.Panaky, dnes.Michacky));
+        AddRow(SummaryGrid, "7 dní", Cz.Souhrn(tyden.Pivo, tyden.Vino, tyden.Panaky, tyden.Michacky));
+        AddRow(SummaryGrid, "30 dní", Cz.Souhrn(mesic.Pivo, mesic.Vino, mesic.Panaky, mesic.Michacky));
+        AddRow(SummaryGrid, "Celkem", Cz.Souhrn(celkem.Pivo, celkem.Vino, celkem.Panaky, celkem.Michacky));
         AddRow(SummaryGrid, "Rekord", record == null ? "—"
             : $"{record.Day.ToString("d. M. yyyy", Cs)} ({Cz.Plural(record.Total, "kousek", "kousky", "kousků")})");
         AddRow(SummaryGrid, "Srdcovka", fav);
@@ -149,7 +151,9 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
             Avg("Průměrná spotřeba piva", mesic.Pivo, celkem.Pivo);
             Avg("Průměrná spotřeba vína", mesic.Vino, celkem.Vino);
             Avg("Průměrná spotřeba panáků", mesic.Panaky, celkem.Panaky);
+            if (celkem.Michacky > 0) Avg("Průměrná spotřeba míchaček", mesic.Michacky, celkem.Michacky);
         }
+        RenderDruhy(celkem);
         MonthsBox.IsVisible = celkem.Total > 0;
 
         RenderSpend(stats);
@@ -167,7 +171,7 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
             var date = today.Date.AddDays(-i);
             var text = date.ToString("ddd d. M.", Cs);
             if (byDay.TryGetValue(date, out var day) && day.Total > 0)
-                text += $" – {Cz.Souhrn(day.Pivo, day.Vino, day.Panaky)}";
+                text += $" – {Cz.Souhrn(day.Pivo, day.Vino, day.Panaky, day.Michacky)}";
             var label = new Label { Text = text, Style = AppStyle("Body") };
             if (isMe)
             {
@@ -327,7 +331,7 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
 
         var current = stats.Last30.FirstOrDefault(d => d.Day.Date == day.Date) ?? new DailyDrinksModel { Day = day.Date };
         var title = day.Date == stats.Today.Date ? "Dneska" : day.ToString("dddd d. M.", Cs);
-        var summary = current.Total == 0 ? "Čistý lístek." : Cz.Souhrn(current.Pivo, current.Vino, current.Panaky);
+        var summary = current.Total == 0 ? "Čistý lístek." : Cz.Souhrn(current.Pivo, current.Vino, current.Panaky, current.Michacky);
 
         const string add = "Dopsat", strike = "Škrtnout";
         var buttons = new List<(string, PencilVariant)> { (add, PencilVariant.Primary) };
@@ -341,15 +345,16 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
         if (sign > 0 || current.Pivo > 0) kinds.Add(("Pivo", PencilVariant.Primary));
         if (sign > 0 || current.Vino > 0) kinds.Add(("Víno", PencilVariant.Primary));
         if (sign > 0 || current.Panaky > 0) kinds.Add(("Panák", PencilVariant.Primary));
+        if (sign > 0 || current.Michacky > 0) kinds.Add(("Míchačka", PencilVariant.Primary));
         kinds.Add(("Nic", PencilVariant.Secondary));
         var kind = await Listek.ShowAsync(this, action == add ? "Co dopsat?" : "Co škrtnout?",
             "Po jednom kousku – klidně víckrát za sebou.", kinds.ToArray());
-        if (kind is not ("Pivo" or "Víno" or "Panák")) return;
+        if (kind is not ("Pivo" or "Víno" or "Panák" or "Míchačka")) return;
 
-        int p = kind == "Pivo" ? sign : 0, v = kind == "Víno" ? sign : 0, pa = kind == "Panák" ? sign : 0;
+        int p = kind == "Pivo" ? sign : 0, v = kind == "Víno" ? sign : 0, pa = kind == "Panák" ? sign : 0, m = kind == "Míchačka" ? sign : 0;
         try
         {
-            await firestoreService.RecordPastEdit(userId, day.Date, p, v, pa);
+            await firestoreService.RecordPastEdit(userId, day.Date, p, v, pa, m);
 
             // promítnout bez dalšího čtení
             if (!stats.Last30.Contains(current))
@@ -357,9 +362,9 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
                 stats.Last30.Add(current);
                 stats.Last30 = stats.Last30.OrderByDescending(d => d.Day).ToList();
             }
-            current.Pivo += p; current.Vino += v; current.Panaky += pa;
+            current.Pivo += p; current.Vino += v; current.Panaky += pa; current.Michacky += m;
             current.Kc = (current.Kc ?? 0) + Prices.Default(p, v, pa);
-            stats.Totals.Pivo += p; stats.Totals.Vino += v; stats.Totals.Panaky += pa;
+            stats.Totals.Pivo += p; stats.Totals.Vino += v; stats.Totals.Panaky += pa; stats.Totals.Michacky += m;
             stats.TotalKc += Prices.Default(p, v, pa);
             Render(stats);
             if (day.Date == stats.Today.Date) UserSession.RaiseDrinksChanged();
@@ -407,7 +412,7 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
         if (monthsOpen && MonthsGrid.Children.Count == 0) await LoadMonthsAsync();
     }
 
-    private record MonthCache(int Pivo, int Vino, int Panaky);
+    private record MonthCache(int Pivo, int Vino, int Panaky, int Michacky = 0);
 
     /// <summary>
     /// Posledních 12 měsíců (ne dřív než první zápis). Uzavřené měsíce (starší než 31 dní, už nejdou upravit)
@@ -435,16 +440,16 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
                 if (closed)
                     try { cached = System.Text.Json.JsonSerializer.Deserialize<MonthCache>(Preferences.Get(key, "")); } catch { }
                 if (cached != null)
-                    total = new DailyDrinksModel { Pivo = cached.Pivo, Vino = cached.Vino, Panaky = cached.Panaky };
+                    total = new DailyDrinksModel { Pivo = cached.Pivo, Vino = cached.Vino, Panaky = cached.Panaky, Michacky = cached.Michacky };
                 else
                 {
                     total = await firestoreService.GetMonthTotal(uid, month.Year, month.Month, s.Masked);
                     if (closed)
-                        Preferences.Set(key, System.Text.Json.JsonSerializer.Serialize(new MonthCache(total.Pivo, total.Vino, total.Panaky)));
+                        Preferences.Set(key, System.Text.Json.JsonSerializer.Serialize(new MonthCache(total.Pivo, total.Vino, total.Panaky, total.Michacky)));
                 }
                 if (stats != s) return;   // mezitím se přepnulo jinam
                 AddRow(MonthsGrid, month.ToString("MMMM yyyy", Cs),
-                    total.Total == 0 ? "čistý měsíc" : Cz.Souhrn(total.Pivo, total.Vino, total.Panaky));
+                    total.Total == 0 ? "čistý měsíc" : Cz.Souhrn(total.Pivo, total.Vino, total.Panaky, total.Michacky));
             }
         }
         catch (Exception ex)
@@ -574,11 +579,15 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
         ChartsBox.IsVisible = celkem.Total > 0 || history.Any(h => h.Total > 0);
         if (!ChartsBox.IsVisible) return;
 
-        static int[] Parts(DailyDrinksModel? d) => d == null ? new[] { 0, 0, 0 } : new[] { d.Pivo, d.Vino, d.Panaky };
+        static int[] Parts(DailyDrinksModel? d) => d == null ? new[] { 0, 0, 0, 0 } : new[] { d.Pivo, d.Vino, d.Panaky, d.Michacky };
+        // míchačky v grafech jen u toho, kdo je pije
+        var mich = celkem.Michacky > 0 || history.Any(h => h.Michacky > 0);
 
         // legenda
         Legend.Clear();
-        foreach (var (name, color) in new[] { ("pivo", Pastelky.Pivo), ("víno", Pastelky.Vino), ("panáky", Pastelky.Panak) })
+        var legend = new List<(string, Color)> { ("pivo", Pastelky.Pivo), ("víno", Pastelky.Vino), ("panáky", Pastelky.Panak) };
+        if (mich) legend.Add(("míchačky", Pastelky.Michacka));
+        foreach (var (name, color) in legend)
         {
             Legend.Add(new HorizontalStackLayout
             {
@@ -594,10 +603,10 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
         // 30 dní: index 0 = před 29 dny, 29 = dnes (jeden hospodský den = jeden dokument, ale radši sečíst)
         var byDay = history.GroupBy(h => h.Day.Date).ToDictionary(g => g.Key, g => new[]
         {
-            g.Sum(d => d.Pivo), g.Sum(d => d.Vino), g.Sum(d => d.Panaky)
+            g.Sum(d => d.Pivo), g.Sum(d => d.Vino), g.Sum(d => d.Panaky), g.Sum(d => d.Michacky)
         });
         var days = Enumerable.Range(0, 30)
-            .Select(i => byDay.TryGetValue(today.Date.AddDays(i - 29), out var v) ? v : new[] { 0, 0, 0 })
+            .Select(i => byDay.TryGetValue(today.Date.AddDays(i - 29), out var v) ? v : new[] { 0, 0, 0, 0 })
             .ToList();
         var max = days.Max(d => d.Sum());
         DaysMaxLabel.Text = max > 0 ? $"nejvíc {Cz.Plural(max, "kousek", "kousky", "kousků")} za den" : "čistý měsíc";
@@ -606,13 +615,14 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
         DaysChart.Invalidate();
 
         // dny v týdnu (z posledních 30 dní; hospodský den, takže sobota 1:00 je pořád pátek)
-        var week = Enumerable.Range(0, 7).Select(_ => new[] { 0, 0, 0 }).ToList();
+        var week = Enumerable.Range(0, 7).Select(_ => new[] { 0, 0, 0, 0 }).ToList();
         foreach (var d in history)
         {
             var i = ((int)d.Day.DayOfWeek + 6) % 7; // pondělí = 0
             week[i][0] += d.Pivo;
             week[i][1] += d.Vino;
             week[i][2] += d.Panaky;
+            week[i][3] += d.Michacky;
         }
         WeekChart.Drawable = new SketchChart { Values = week, Seed = 11 };
         WeekChart.Invalidate();
@@ -633,9 +643,14 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
 
         RatioLabels.Clear();
         var total = parts.Sum();
-        var names = new[] { "pivo", "víno", "panáky" };
-        var aligns = new[] { LayoutOptions.Start, LayoutOptions.Center, LayoutOptions.End };
-        for (var i = 0; i < 3; i++)
+        var names = new[] { "pivo", "víno", "panáky", "míchačky" };
+        var n = mich ? 4 : 3;
+        var aligns = mich
+            ? new[] { LayoutOptions.Start, LayoutOptions.Center, LayoutOptions.Center, LayoutOptions.End }
+            : new[] { LayoutOptions.Start, LayoutOptions.Center, LayoutOptions.End };
+        RatioLabels.ColumnDefinitions.Clear();
+        for (var i = 0; i < n; i++) RatioLabels.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+        for (var i = 0; i < n; i++)
         {
             var pct = total > 0 ? (int)Math.Round(100.0 * parts[i] / total) : 0;
             RatioLabels.Add(new Label
@@ -646,6 +661,37 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
                 HorizontalOptions = aligns[i]
             }, i, 0);
         }
+    }
+
+    // ---------------- panáky podle druhu ----------------
+
+    private bool druhyOpen;
+
+    private void RenderDruhy(DailyDrinksModel celkem)
+    {
+        DruhyGrid.Clear();
+        DruhyGrid.RowDefinitions.Clear();
+        DruhyBox.IsVisible = celkem.Panaky > 0 && !(stats?.Masked ?? false);
+        DruhyGrid.IsVisible = druhyOpen;
+        DruhyToggle.Text = druhyOpen ? "(schovat)" : "(ukázat)";
+        if (!DruhyBox.IsVisible) return;
+        var rows = new (string Name, int N)[]
+        {
+            ("Slivovice", celkem.PanakSlivovice), ("Likér", celkem.PanakLiker), ("Rum", celkem.PanakRum),
+            ("Vodka", celkem.PanakVodka), ("Whisky", celkem.PanakWhisky), ("Ostatní", celkem.PanakOstatni)
+        };
+        foreach (var (name, count) in rows.Where(r => r.N > 0).OrderByDescending(r => r.N))
+        {
+            var pct = (int)Math.Round(100.0 * count / Math.Max(1, celkem.Panaky));
+            AddRow(DruhyGrid, name, $"{Cz.Panaky(count)} ({pct} %)");
+        }
+    }
+
+    private void OnDruhyTapped(object? sender, TappedEventArgs e)
+    {
+        druhyOpen = !druhyOpen;
+        DruhyGrid.IsVisible = druhyOpen;
+        DruhyToggle.Text = druhyOpen ? "(schovat)" : "(ukázat)";
     }
 
     private static Label AddRow(Grid grid, string label, string value)

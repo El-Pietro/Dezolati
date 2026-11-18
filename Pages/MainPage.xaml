@@ -110,6 +110,18 @@
                             </FlexLayout.GestureRecognizers>
                         </FlexLayout>
 
+                        <Label x:Name="MichackyHeader" Text="Míchačky:" Style="{StaticResource Heading}">
+                            <Label.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnRowTapped" CommandParameter="Michacky" />
+                            </Label.GestureRecognizers>
+                        </Label>
+                        <FlexLayout x:Name="Michacky" Direction="Row" Wrap="Wrap" JustifyContent="Start"
+                                    AlignItems="Start" Margin="5" Padding="5" MinimumHeightRequest="30">
+                            <FlexLayout.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnRowTapped" CommandParameter="Michacky" />
+                            </FlexLayout.GestureRecognizers>
+                        </FlexLayout>
+
                         <Label Text="(ťukni na řádek – připíšeš nebo škrtneš čárku)" Style="{StaticResource Small}" HorizontalTextAlignment="Center"
                                TextColor="{StaticResource InkSoft}" HorizontalOptions="Center" Margin="0,12,0,0" />
                     </VerticalStackLayout>

@@ -406,9 +406,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .legend i { width: 14px; height: 14px; border-radius: 3px; display: inline-block; }
 .chart { width: 100%; display: block; }
 .week-labels { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; }
-.ratio-labels { display: grid; grid-template-columns: 1fr 1fr 1fr; }
-.ratio-labels :nth-child(2) { text-align: center; }
-.ratio-labels :nth-child(3) { text-align: right; }
+.ratio-labels { display: flex; justify-content: space-between; gap: 6px; }
 .history-day { cursor: default; }
 .history-day.editable { cursor: pointer; }
 

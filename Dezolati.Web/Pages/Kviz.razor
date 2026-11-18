@@ -29,6 +29,14 @@
                 <input class="entry" placeholder="Jméno hráče" maxlength="30" @bind="newName" @bind:event="oninput" @onkeydown="Key" />
                 <PencilButton Text="Přidat" Small="true" Variant="PencilVariant.Secondary" Style="max-width:110px" OnClick="Add" />
             </div>
+            <div class="field-label">Okruhy (klidně víc najednou):</div>
+            <div class="hold-row">
+                @foreach (var o in QuizBank.Okruhy)
+                {
+                    var ok = o;
+                    <PencilButton Text="@ok" Variant="@(okruhy.Contains(ok) ? PencilVariant.Primary : PencilVariant.Secondary)" OnClick="() => ToggleOkruh(ok)" />
+                }
+            </div>
             <div class="field-label">Otázek na hráče:</div>
             <div class="hold-row">
                 @foreach (var n in new[] { 3, 5, 10 })
@@ -38,7 +46,7 @@
                 }
             </div>
             <PencilButton Text="Začít kvíz" OnClick="StartQuiz" />
-            <div class="small">V balíku je @QuizBank.All.Count otázek o pivu, pivovarech a hospodách. Dokud neprojdete všechny, žádná se nezopakuje.</div>
+            <div class="small">Ve vybraných okruzích je @QuizBank.For(okruhy).Count otázek. Dokud neprojdete všechny, žádná se nezopakuje.</div>
         }
         else if (game.State is QuizGame.Phase.Question or QuizGame.Phase.Answered && game.Current is { } q)
         {
@@ -78,6 +86,7 @@
 @code {
     private QuizGame game = new();
     private List<string> players = new();
+    private List<string> okruhy = new() { "Pivo" };
     private string newName = "";
     private int rounds = 5;
     private readonly Stopwatch clock = Stopwatch.StartNew();
@@ -87,6 +96,15 @@
     {
         players = QuizGame.LoadPlayers();
         rounds = Preferences.Get("hry_kviz_kola", 5);
+        okruhy = QuizGame.LoadOkruhy();
+    }
+
+    /// <summary>Okruh zapnout / vypnout (aspoň jeden musí zůstat).</summary>
+    private void ToggleOkruh(string o)
+    {
+        if (okruhy.Contains(o)) { if (okruhy.Count > 1) okruhy.Remove(o); }
+        else okruhy.Add(o);
+        QuizGame.SaveOkruhy(okruhy);
     }
 
     private void Add()
@@ -114,7 +132,7 @@
 
     private void StartQuiz()
     {
-        game = new QuizGame { RoundsPerPlayer = rounds };
+        game = new QuizGame { RoundsPerPlayer = rounds, Okruhy = okruhy.ToList() };
         game.Start(players);
         _ = LoopAsync();
     }

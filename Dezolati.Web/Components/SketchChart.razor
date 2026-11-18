@@ -7,12 +7,12 @@
 </svg>
 
 @code {
-    public static readonly string[] Druhy = { "#C27A12", "#8E1B2A", "#4A4A55" };   // pivo, víno, panáky
+    public static readonly string[] Druhy = { "#C27A12", "#8E1B2A", "#4A4A55", "#2E7D6B" };   // pivo, víno, panáky, míchačky
     private const string Tuha = "#6B3E1E";
     private const float W = 360;
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
-    /// <summary>Pro každý sloupec [pivo, víno, panáky].</summary>
+    /// <summary>Pro každý sloupec [pivo, víno, panáky, míchačky].</summary>
     [Parameter] public IReadOnlyList<int[]> Values { get; set; } = Array.Empty<int[]>();
     [Parameter] public bool Ratio { get; set; }
     [Parameter] public int Seed { get; set; } = 7;

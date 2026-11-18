@@ -368,7 +368,8 @@
         suggestions = null;
         StateHasChanged();
         var dir = await NickDirectory.GetAsync();
-        suggestions = NickDirectory.Suggest(dir, friends.Select(f => f.UserId));
+        suggestions = NickDirectory.Suggest(dir, friends.Select(f => f.UserId),
+            exclude: requests.Select(r => r.UserId).Concat(outgoing.Select(o => o.UserId)));
         StateHasChanged();
     }
 

@@ -12,6 +12,7 @@ public partial class Kviz : ContentPage
 {
     private QuizGame game = new();
     private List<string> players = new();
+    private List<string> okruhy = QuizGame.LoadOkruhy();
     private int rounds = Preferences.Get("hry_kviz_kola", 5);
     private readonly Stopwatch clock = Stopwatch.StartNew();
     private double last;
@@ -45,7 +46,26 @@ public partial class Kviz : ContentPage
         QuestionBox.IsVisible = DoneBox.IsVisible = false;
         RenderPlayers();
         RenderRounds();
-        InfoLabel.Text = $"V balíku je {QuizBank.All.Count} otázek o pivu, pivovarech a hospodách. Dokud neprojdete všechny, žádná se nezopakuje.";
+        RenderOkruhy();
+    }
+
+    private void RenderOkruhy()
+    {
+        OkruhPivo.Variant = okruhy.Contains("Pivo") ? PencilVariant.Primary : PencilVariant.Secondary;
+        OkruhVino.Variant = okruhy.Contains("Víno") ? PencilVariant.Primary : PencilVariant.Secondary;
+        OkruhTvrdej.Variant = okruhy.Contains("Tvrdej") ? PencilVariant.Primary : PencilVariant.Secondary;
+        var n = QuizBank.For(okruhy).Count;
+        InfoLabel.Text = $"Ve vybraných okruzích je {n} otázek. Dokud neprojdete všechny, žádná se nezopakuje.";
+    }
+
+    /// <summary>Okruh zapnout / vypnout (aspoň jeden musí zůstat).</summary>
+    private void OnOkruhClicked(object? sender, EventArgs e)
+    {
+        if (sender is not PencilButton { CommandParameter: string o }) return;
+        if (okruhy.Contains(o)) { if (okruhy.Count > 1) okruhy.Remove(o); }
+        else okruhy.Add(o);
+        QuizGame.SaveOkruhy(okruhy);
+        RenderOkruhy();
     }
 
     private void RenderPlayers()
@@ -98,7 +118,7 @@ public partial class Kviz : ContentPage
 
     private void OnStartClicked(object sender, EventArgs e)
     {
-        game = new QuizGame { RoundsPerPlayer = rounds };
+        game = new QuizGame { RoundsPerPlayer = rounds, Okruhy = okruhy.ToList() };
         game.Start(players);
         SetupBox.IsVisible = false;
         QuestionBox.IsVisible = true;

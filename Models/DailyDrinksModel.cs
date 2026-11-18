@@ -12,6 +12,15 @@
         public int Pivo { get; set; }
         public int Vino { get; set; }
         public int Panaky { get; set; }
+        /// <summary>Míchané drinky (od 3.12).</summary>
+        public int Michacky { get; set; }
+        /// <summary>Panáky podle druhu (od 3.12). Ostatní = Panaky − tyhle (i všechno starší).</summary>
+        public int PanakSlivovice { get; set; }
+        public int PanakLiker { get; set; }
+        public int PanakRum { get; set; }
+        public int PanakVodka { get; set; }
+        public int PanakWhisky { get; set; }
+        public int PanakOstatni => Math.Max(0, Panaky - PanakSlivovice - PanakLiker - PanakRum - PanakVodka - PanakWhisky);
         /// <summary>Útrata v Kč (null = den z doby před sledováním útraty a bez odhadu).</summary>
         public int? Kc { get; set; }
         /// <summary>Útrata je jen zpětný odhad podle výchozích cen.</summary>
@@ -21,7 +30,7 @@
         public int PlaceHome { get; set; }
         public int PlaceOther { get; set; }
 
-        public int Total => Pivo + Vino + Panaky;
+        public int Total => Pivo + Vino + Panaky + Michacky;
     }
 
     /// <summary>Jedna hospoda ve statistice „kde nejčastěji piju“ (UserPubStats/{uid}).</summary>
@@ -87,7 +96,7 @@
                 : at.Date == now.Date.AddDays(-1) ? "včera " + at.ToString("H:mm", inv)
                 : at.Year == now.Year ? at.ToString("d. M. H:mm", inv)
                 : at.ToString("d. M. yyyy", inv);
-            var what = LastDrinkKind switch { "pivo" => "pivo", "vino" => "víno", "panak" => "panák", _ => null };
+            var what = LastDrinkKind switch { "pivo" => "pivo", "vino" => "víno", "panak" => "panák", "michacka" => "míchačka", _ => null };
             var tail = string.Join(", ", new[] { what, LastDrinkPlace }.Where(p => !string.IsNullOrWhiteSpace(p)));
             return tail.Length == 0 ? when : $"{when} – {tail}";
         }

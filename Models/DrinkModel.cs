@@ -9,6 +9,8 @@
         public int Pivo { get; set; }
         public int Vino { get; set; }
         public int Panaky { get; set; }
+        /// <summary>Míchané drinky (od 3.12; v promile jako jeden panák).</summary>
+        public int Michacky { get; set; }
         public DateTime DrinkAt { get; set; }
     }
 }

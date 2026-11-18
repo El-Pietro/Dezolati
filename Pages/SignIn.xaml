@@ -19,6 +19,12 @@
                     <Label Text="{Binding Error}" Style="{StaticResource Error}" />
                     <ActivityIndicator IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" Color="{StaticResource Pencil}" />
                     <controls:PencilButton Command="{Binding SignInCommand}" Text="Přihlásit se" Variant="Primary" />
+                    <Label Text="Zapomenuté heslo?" Style="{StaticResource Small}" TextColor="{StaticResource InkSoft}"
+                           TextDecorations="Underline" HorizontalOptions="Center" Padding="8,2">
+                        <Label.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding ForgotPasswordCommand}" />
+                        </Label.GestureRecognizers>
+                    </Label>
                     <controls:PencilButton Command="{Binding NavigateSignUpCommand}" Text="Nemáš účet? Zaregistruj se!"
                                            Variant="Secondary"
                                            FontSize="{DynamicResource FontButtonSmall}"

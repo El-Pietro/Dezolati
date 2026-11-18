@@ -164,15 +164,17 @@ namespace Dezolati.Services
         public static int BeerDegrees { get => Preferences.Get(KeyDegrees, 12); set => Preferences.Set(KeyDegrees, value is 10 or 11 or 12 ? value : 12); }
 
         /// <summary>Gramy alkoholu: pivo 0,5 l (10° 4 %, 11° 4,5 %, 12° 5 %), víno 2 dcl 12 %, panák 4 cl 40 %.</summary>
-        private static double Grams(int pivo, int vino, int panaky)
+        /// <remarks>Panák podle druhu (slivovice 55 %, likér 20 %, jinak 40 %), míchačka = jeden 40% panák.</remarks>
+        private static double Grams(int pivo, int vino, int panaky, int michacky = 0, double panakAbv = 0.40)
         {
             var beerAbv = BeerDegrees switch { 10 => 0.040, 11 => 0.045, _ => 0.050 };
-            return pivo * 500 * beerAbv * 0.789 + vino * 200 * 0.12 * 0.789 + panaky * 40 * 0.40 * 0.789;
+            return pivo * 500 * beerAbv * 0.789 + vino * 200 * 0.12 * 0.789
+                 + panaky * 40 * panakAbv * 0.789 + michacky * 40 * 0.40 * 0.789;
         }
 
         // ---------------- log dnešních zápisů (jen v telefonu) ----------------
 
-        private record LogItem(DateTime At, DateTime Day, int Pivo, int Vino, int Panaky);
+        private record LogItem(DateTime At, DateTime Day, int Pivo, int Vino, int Panaky, int Michacky = 0, double PanakAbv = 0.40);
 
         private static string LogKey(string uid) => $"promile_log_{uid}";
 
@@ -190,12 +192,13 @@ namespace Dezolati.Services
         }
 
         /// <summary>Každý zápis i škrtnutí dneška (záporné hodnoty). Starší dny se zahazují.</summary>
-        public static void Log(string uid, DateTime day, DateTime utcAt, int pivo, int vino, int panaky)
+        public static void Log(string uid, DateTime day, DateTime utcAt, int pivo, int vino, int panaky,
+            int michacky = 0, double panakAbv = 0.40)
         {
             try
             {
                 var items = LoadLog(uid).Where(i => i.Day.Date >= day.Date.AddDays(-1)).ToList();
-                items.Add(new LogItem(utcAt, day.Date, pivo, vino, panaky));
+                items.Add(new LogItem(utcAt, day.Date, pivo, vino, panaky, michacky, panakAbv));
                 Preferences.Set(LogKey(uid), JsonSerializer.Serialize(items));
             }
             catch { }
@@ -245,7 +248,7 @@ namespace Dezolati.Services
             foreach (var i in items)
             {
                 if (last is DateTime l) bac = Math.Max(0, bac - Burn * (i.At - l).TotalHours);
-                var g = Grams(i.Pivo, i.Vino, i.Panaky);
+                var g = Grams(i.Pivo, i.Vino, i.Panaky, i.Michacky, i.PanakAbv);
                 bac = Math.Max(0, bac + g / (WeightKg * r));
                 last = i.At;
             }

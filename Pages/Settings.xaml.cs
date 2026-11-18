@@ -376,6 +376,52 @@ public partial class Settings : ContentPage
         }
     }
 
+    // ---------------- změna hesla ----------------
+
+    private void OnPasswordToggleTapped(object? sender, TappedEventArgs e)
+    {
+        PasswordBox.IsVisible = !PasswordBox.IsVisible;
+        PasswordToggle.Text = PasswordBox.IsVisible ? "(schovat)" : "(ukázat)";
+    }
+
+    private async void OnChangePasswordClicked(object sender, EventArgs e)
+    {
+        if (AuthSession.Email is not string email) return;
+        PasswordError.IsVisible = false;
+        ChangePasswordButton.IsEnabled = false;
+        try
+        {
+            var newPassword = NewPasswordEntry.Text ?? "";
+            var err = await PasswordService.ChangeAsync(email, OldPasswordEntry.Text ?? "", newPassword);
+            if (err != null)
+            {
+                PasswordError.Text = err;
+                PasswordError.IsVisible = true;
+                return;
+            }
+            OldPasswordEntry.Text = NewPasswordEntry.Text = "";
+            // Firebase po změně hesla zneplatní staré přihlášení → hned se přihlásit novým
+            try
+            {
+                await AuthSession.Client.SignInWithEmailAndPasswordAsync(email, newPassword);
+            }
+            catch
+            {
+                AuthSession.SignOut();
+                await Listek.AlertAsync(this, "Heslo změněno", "Přihlas se novým heslem.");
+                await Shell.Current.GoToAsync("//SignIn");
+                return;
+            }
+            PasswordBox.IsVisible = false;
+            PasswordToggle.Text = "(ukázat)";
+            await Listek.AlertAsync(this, "Hotovo", "Heslo je změněné. Tak si ho tentokrát zapamatuj.");
+        }
+        finally
+        {
+            ChangePasswordButton.IsEnabled = true;
+        }
+    }
+
     private async void OnLogoutClicked(object sender, EventArgs e)
     {
         await PushService.UnregisterAsync();   // tenhle telefon už nemá chodit oznámení pro tenhle účet

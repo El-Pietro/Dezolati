@@ -40,6 +40,19 @@
                         <Grid x:Name="MonthsGrid" ColumnDefinitions="Auto, *" ColumnSpacing="12" RowSpacing="4" IsVisible="False" />
                     </VerticalStackLayout>
 
+                    <!-- panáky podle druhu (schované, je to spíš pro zvědavce) -->
+                    <VerticalStackLayout x:Name="DruhyBox" Spacing="4" IsVisible="False">
+                        <Grid ColumnDefinitions="*, Auto" Margin="0,12,0,0">
+                            <Grid.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnDruhyTapped" />
+                            </Grid.GestureRecognizers>
+                            <Label Text="Panáky podle druhu" Style="{StaticResource Heading}" />
+                            <Label x:Name="DruhyToggle" Grid.Column="1" Text="(ukázat)" Style="{StaticResource Small}"
+                                   TextColor="{StaticResource InkSoft}" VerticalOptions="End" Padding="12,0,4,4" />
+                        </Grid>
+                        <Grid x:Name="DruhyGrid" ColumnDefinitions="Auto, *" ColumnSpacing="12" RowSpacing="4" IsVisible="False" />
+                    </VerticalStackLayout>
+
                     <!-- útrata (jen u sebe) -->
                     <VerticalStackLayout x:Name="SpendBox" Spacing="4" IsVisible="False">
                         <!-- sbalené, ťuk na řádek rozbalí -->
@@ -94,7 +107,7 @@
 
                         <Label Text="Poměr pití (celkově)" Style="{StaticResource Heading}" Margin="0,12,0,0" />
                         <GraphicsView x:Name="RatioChart" HeightRequest="38" />
-                        <Grid x:Name="RatioLabels" ColumnDefinitions="*, *, *" />
+                        <Grid x:Name="RatioLabels" ColumnDefinitions="*, *, *, *" />
                     </VerticalStackLayout>
 
                     <Label Text="Poslední tahy" Style="{StaticResource Heading}" Margin="0,16,0,0" />

@@ -119,10 +119,11 @@ namespace Dezolati.Services
         /// „Možná znáš“: všichni uživatelé, které ještě nemám v kámoších (přátelství se stejně musí schválit).
         /// Nahoře ti s nejvíc společnými kámoši, pak podle abecedy.
         /// </summary>
-        public static List<FriendSuggestion> Suggest(Dictionary<string, DirectoryEntry> dir, IEnumerable<string> myFriends, int max = 100)
+        public static List<FriendSuggestion> Suggest(Dictionary<string, DirectoryEntry> dir, IEnumerable<string> myFriends, int max = 100, IEnumerable<string>? exclude = null)
         {
             var me = AuthSession.Uid;
             var mine = myFriends.ToHashSet();
+            var skip = exclude?.ToHashSet() ?? new HashSet<string>();   // čekající žádosti (oběma směry)
             var counts = new Dictionary<string, int>();
             foreach (var f in mine)
             {
@@ -134,7 +135,7 @@ namespace Dezolati.Services
                 }
             }
             return dir.Values
-                .Where(e => e.Uid != me && !mine.Contains(e.Uid))
+                .Where(e => e.Uid != me && !mine.Contains(e.Uid) && !skip.Contains(e.Uid))
                 .Select(e => new FriendSuggestion(e.Uid, e.Nick, counts.GetValueOrDefault(e.Uid)))
                 .OrderByDescending(s => s.Mutual)
                 .ThenBy(s => s.Nick, StringComparer.CurrentCultureIgnoreCase)

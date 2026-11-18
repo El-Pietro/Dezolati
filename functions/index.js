@@ -145,14 +145,24 @@ async function friendsOf(uid) {
     .filter(Boolean);
 }
 
-/** „pivo“, „2 piva“, „víno a panáka“ … (4. pád). */
+// druh panáku (od 3.12, Services/PanakDruhy.cs) → 4. pád: [1, 2–4, 5+]
+const PANAK_DRUHY = {
+  Slivovice: ["slivovici", "slivovice", "slivovic"],
+  Liker: ["likér", "likéry", "likérů"],
+  Rum: ["rum", "rumy", "rumů"],
+  Vodka: ["vodku", "vodky", "vodek"],
+  Whisky: ["whisky", "whisky", "whisky"],
+};
+
+/** „pivo“, „2 piva“, „víno a slivovici“, „míchačku“ … (4. pád). */
 function whatDrank(d) {
   const n = (x) => Math.max(0, Number(x) || 0);
   const form = (k, one, few, many) => (k === 1 ? one : k >= 2 && k <= 4 ? `${k} ${few}` : `${k} ${many}`);
   const parts = [];
   if (n(d.Pivo) > 0) parts.push(form(n(d.Pivo), "pivo", "piva", "piv"));
   if (n(d.Vino) > 0) parts.push(form(n(d.Vino), "víno", "vína", "vín"));
-  if (n(d.Panaky) > 0) parts.push(form(n(d.Panaky), "panáka", "panáky", "panáků"));
+  if (n(d.Panaky) > 0) parts.push(form(n(d.Panaky), ...(PANAK_DRUHY[d.PanakDruh] || ["panáka", "panáky", "panáků"])));
+  if (n(d.Michacky) > 0) parts.push(form(n(d.Michacky), "míchačku", "míchačky", "míchaček"));
   if (parts.length === 0) return "něco";
   return parts.length === 1 ? parts[0] : parts.slice(0, -1).join(", ") + " a " + parts[parts.length - 1];
 }
@@ -168,7 +178,7 @@ const SESSION_GAP_MS = 3 * 60 * 60 * 1000;
 exports.atThePub = onDocumentCreated("Drinks/{id}", async (event) => {
   const d = event.data?.data();
   if (!d || d.Correction || !d.UserId) return;
-  const total = (Number(d.Pivo) || 0) + (Number(d.Vino) || 0) + (Number(d.Panaky) || 0);
+  const total = (Number(d.Pivo) || 0) + (Number(d.Vino) || 0) + (Number(d.Panaky) || 0) + (Number(d.Michacky) || 0);
   if (total <= 0) return;
 
   const at = d.DrinkAt?.toMillis ? d.DrinkAt.toMillis() : Date.now();
@@ -625,7 +635,8 @@ exports.alkoholikDne = onSchedule({ schedule: "0 7 * * *", region: "europe-west3
   const totals = new Map();
   const masked = new Map();   // tajný režim: stejná třetina jako v appce (Services/Mask.cs)
   for (const d of daily.docs) {
-    const p = Math.max(0, Number(d.get("Pivo")) || 0), v = Math.max(0, Number(d.get("Vino")) || 0), s = Math.max(0, Number(d.get("Panaky")) || 0);
+    const p = Math.max(0, Number(d.get("Pivo")) || 0), v = Math.max(0, Number(d.get("Vino")) || 0),
+      s = Math.max(0, Number(d.get("Panaky")) || 0) + Math.max(0, Number(d.get("Michacky")) || 0);
     const t = p + v + s;
     if (t > 0 && d.get("UserId")) {
       totals.set(d.get("UserId"), t);

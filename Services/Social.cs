@@ -76,7 +76,7 @@ namespace Dezolati.Services
         public (double Promile, DateTime SoberAtLocal)? PromileNow => Promile.FromShared(PromileValue, PromileAt);
 
         /// <summary>Co si zapsal naposledy (starší verze appky to neposílají → pivo).</summary>
-        public string Emoji => LastKind switch { "vino" => "🍷", "panak" => "🥃", _ => "🍺" };
+        public string Emoji => LastKind switch { "vino" => "🍷", "panak" => "🥃", "michacka" => "🍹", _ => "🍺" };
     }
 
     /// <summary>

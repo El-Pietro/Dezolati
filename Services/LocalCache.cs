@@ -10,7 +10,7 @@ namespace Dezolati.Services
     public static class LocalCache
     {
         private record ProfileSnapshot(UserModel Profile, DateTime? LastDrinkAt, DateTime? LastDrinkDay);
-        private record DailySnapshot(DateTime Day, int Pivo, int Vino, int Panaky);
+        private record DailySnapshot(DateTime Day, int Pivo, int Vino, int Panaky, int Michacky = 0);
 
         private static string ProfileKey(string uid) => $"cache_profile_{uid}";
         private static string DailyKey(string uid) => $"cache_daily_{uid}";
@@ -26,13 +26,13 @@ namespace Dezolati.Services
 
         /// <summary>Ukládá jen jeden (poslední zobrazený) den – víc lístek nepotřebuje.</summary>
         public static void SaveDaily(string uid, DateTime day, DailyDrinksModel? daily) =>
-            Save(DailyKey(uid), new DailySnapshot(day.Date, daily?.Pivo ?? 0, daily?.Vino ?? 0, daily?.Panaky ?? 0));
+            Save(DailyKey(uid), new DailySnapshot(day.Date, daily?.Pivo ?? 0, daily?.Vino ?? 0, daily?.Panaky ?? 0, daily?.Michacky ?? 0));
 
         public static DailyDrinksModel? LoadDaily(string uid, DateTime day)
         {
             var s = Load<DailySnapshot>(DailyKey(uid));
             if (s == null || s.Day.Date != day.Date) return null;
-            return new DailyDrinksModel { UserId = uid, Day = s.Day, Pivo = s.Pivo, Vino = s.Vino, Panaky = s.Panaky };
+            return new DailyDrinksModel { UserId = uid, Day = s.Day, Pivo = s.Pivo, Vino = s.Vino, Panaky = s.Panaky, Michacky = s.Michacky };
         }
 
         // ---------------- „lístek v telefonu je aktuální“ (úspora čtení) ----------------
@@ -56,11 +56,11 @@ namespace Dezolati.Services
         public static void MarkStale() => _freshKey = null;
 
         /// <summary>Odeslaný zápis přičíst k lístku v telefonu (jen když je to ten samý den).</summary>
-        public static void ApplyDelta(string uid, DateTime day, int pivo, int vino, int panaky)
+        public static void ApplyDelta(string uid, DateTime day, int pivo, int vino, int panaky, int michacky = 0)
         {
             var s = Load<DailySnapshot>(DailyKey(uid));
             if (s == null || s.Day.Date != day.Date) return;
-            Save(DailyKey(uid), new DailySnapshot(s.Day, Math.Max(0, s.Pivo + pivo), Math.Max(0, s.Vino + vino), Math.Max(0, s.Panaky + panaky)));
+            Save(DailyKey(uid), new DailySnapshot(s.Day, Math.Max(0, s.Pivo + pivo), Math.Max(0, s.Vino + vino), Math.Max(0, s.Panaky + panaky), Math.Max(0, s.Michacky + michacky)));
         }
 
         public static void Clear(string uid)

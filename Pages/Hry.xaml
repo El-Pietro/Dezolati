@@ -31,7 +31,7 @@
 
                     <!-- hospodský kvíz – pro partu u stolu -->
                     <Label Text="Hospodský kvíz" Style="{StaticResource Heading}" Margin="0,16,0,0" />
-                    <Label Text="Přes sto ověřených otázek o pivu, pivovarech a hospodách. Hráči se střídají u jednoho telefonu, kdo prohraje, platí rundu." Style="{StaticResource Small}" />
+                    <Label Text="Přes dvě stě ověřených otázek: pivo, víno a tvrdej. Hráči se střídají u jednoho telefonu, kdo prohraje, platí rundu." Style="{StaticResource Small}" />
                     <controls:PencilButton Text="Hrát kvíz" Variant="Primary" Clicked="OnQuizClicked" />
 
                     <!-- čepování – hra pro jednoho -->

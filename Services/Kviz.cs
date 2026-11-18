@@ -22,6 +22,8 @@ namespace Dezolati.Services
         public List<string> Players { get; } = new();
         public int[] Scores { get; private set; } = Array.Empty<int>();
         public int RoundsPerPlayer { get; set; } = 5;
+        /// <summary>Okruhy otázek (Pivo / Víno / Tvrdej, libovolně kombinované).</summary>
+        public List<string> Okruhy { get; set; } = new() { "Pivo" };
         public List<QuizQuestion> Deck { get; } = new();
         public int Index { get; private set; }
         public QuizQuestion? Current => Index < Deck.Count ? Deck[Index] : null;
@@ -42,6 +44,23 @@ namespace Dezolati.Services
         public static void SavePlayers(List<string> players) =>
             Preferences.Set(PlayersKey, JsonSerializer.Serialize(players));
 
+        private const string OkruhyKey = "hry_kviz_okruhy";
+
+        /// <summary>Naposledy zvolené okruhy (aspoň jeden; poprvé pivo).</summary>
+        public static List<string> LoadOkruhy()
+        {
+            try
+            {
+                var list = (JsonSerializer.Deserialize<List<string>>(Preferences.Get(OkruhyKey, "[]")) ?? new())
+                    .Where(o => QuizBank.Okruhy.Contains(o)).Distinct().ToList();
+                return list.Count > 0 ? list : new() { "Pivo" };
+            }
+            catch { return new() { "Pivo" }; }
+        }
+
+        public static void SaveOkruhy(List<string> okruhy) =>
+            Preferences.Set(OkruhyKey, JsonSerializer.Serialize(okruhy));
+
         public void Start(IEnumerable<string> players)
         {
             Players.Clear();
@@ -54,19 +73,23 @@ namespace Dezolati.Services
             Ask();
         }
 
-        /// <summary>Vybere otázky, které hráči v tomhle zařízení ještě neviděli (když dojdou, začne se znovu).</summary>
+        /// <summary>
+        /// Vybere otázky z daných okruhů, které hráči v tomhle zařízení ještě neviděli. Když v okruzích dojdou,
+        /// zapomenou se jen ty z vybraných okruhů (ostatní okruhy si „viděné“ drží dál).
+        /// </summary>
         private List<QuizQuestion> Pick(int count)
         {
             HashSet<int> seen;
             try { seen = JsonSerializer.Deserialize<HashSet<int>>(Preferences.Get(SeenKey, "[]")) ?? new(); }
             catch { seen = new(); }
-            var fresh = QuizBank.All.Where(q => !seen.Contains(q.Id)).OrderBy(_ => rnd.Next()).ToList();
+            var pool = QuizBank.For(Okruhy);
+            var fresh = pool.Where(q => !seen.Contains(q.Id)).OrderBy(_ => rnd.Next()).ToList();
             if (fresh.Count < count)
             {
-                seen.Clear();
-                fresh.AddRange(QuizBank.All.Where(q => fresh.All(f => f.Id != q.Id)).OrderBy(_ => rnd.Next()));
+                foreach (var q in pool) seen.Remove(q.Id);
+                fresh.AddRange(pool.Where(q => fresh.All(f => f.Id != q.Id)).OrderBy(_ => rnd.Next()));
             }
-            var picked = fresh.Take(Math.Min(count, QuizBank.All.Count)).ToList();
+            var picked = fresh.Take(Math.Min(count, pool.Count)).ToList();
             foreach (var q in picked) seen.Add(q.Id);
             Preferences.Set(SeenKey, JsonSerializer.Serialize(seen));
             return picked;
@@ -147,7 +170,9 @@ namespace Dezolati.Services
         private const string Cz = "České pivo", Br = "Pivovary a značky", Hist = "Historie", Svet = "Pivo ve světě",
             Vyroba = "Výroba piva", Hosp = "Hospoda";
 
-        public static readonly List<QuizQuestion> All = new()
+        // Okruhy (od 3.12): Pivo = původních 120 otázek, Víno, Tvrdej. Pořadí seznamů se nesmí měnit –
+        // Id otázek jde po sobě a telefon si podle něj pamatuje, co už padlo.
+        public static readonly List<QuizQuestion> Pivo = new()
         {
             // ---------------- historie ----------------
             Q(Hist, "Kde je v Česku poprvé doloženo vaření piva?", "V Břevnovském klášteře", "Na Vyšehradě", "Ve Strahovském klášteře", "V Plzni",
@@ -401,5 +426,303 @@ namespace Dezolati.Services
             Q(Hosp, "Koho předobrazem je Maryška z Postřižin?", "Hrabalovy matky", "Hrabalovy ženy", "Hrabalovy sestry", "Herečky Magdy Vášáryové",
                 "Ve filmu ji hrála Magda Vášáryová."),
         };
+
+        // ======================= VÍNO =======================
+        // Ověřeno 18. 11. 2026: Wikipedie (Czech wine, Tokaji, Port wine, Sherry, Prosecco, Retsina, Ice wine, Beaujolais nouveau,
+        // Phylloxera, Malbec, Grüner Veltliner, Riesling, Mulled wine), vinarskecentrum.cz (vinařské oblasti), epravo.cz (burčák),
+        // e15.cz (svatomartinské víno), decanter.com (velikosti lahví), thewhiskyexchange.com (šampaňské),
+        // chianticlassico.com (legenda o černém kohoutovi), winefolly.com (Rioja).
+        private const string CzV = "Česká vína", SvetV = "Víno ve světě", Bubl = "Bubliny a sladká vína", PojmyV = "Vinařské pojmy";
+
+        public static readonly List<QuizQuestion> Vino = new()
+        {
+            // ---------------- česká vína ----------------
+            Q(CzV, "Kolik českých vinic leží na Moravě?", "Asi 96 %", "Asi 50 %", "Asi 70 %", "Asi 85 %",
+                "Čechy mají jen kolem 700 hektarů, Morava přes 17 tisíc."),
+            Q(CzV, "Kolik vinařských podoblastí má Morava?", "Čtyři", "Dvě", "Tři", "Šest",
+                "Mikulovská, Znojemská, Velkopavlovická a Slovácká."),
+            Q(CzV, "Která z těchto podoblastí NENÍ moravská?", "Mělnická", "Mikulovská", "Znojemská", "Slovácká",
+                "Mělnická je v Čechách, spolu s Litoměřickou."),
+            Q(CzV, "Které dvě vinařské podoblasti mají Čechy?", "Mělnickou a Litoměřickou", "Mělnickou a Pražskou", "Litoměřickou a Mosteckou", "Roudnickou a Kutnohorskou",
+                "Vinice jsou i v Praze nebo u Mostu, ale patří pod tyhle dvě."),
+            Q(CzV, "Ve kterém zámku sídlí Salon vín České republiky?", "Ve Valticích", "V Lednici", "V Mikulově", "Ve Znojmě",
+                "Do Salonu se každý rok vybírá stovka nejlepších českých vín."),
+            Q(CzV, "Která obec má nejvíc vinic v Česku?", "Velké Bílovice", "Valtice", "Mikulov", "Čejkovice",
+                "Podle Národního vinařského centra kolem 777 hektarů (2023)."),
+            Q(CzV, "Kdy se smí prodávat burčák?", "Od 1. srpna do 30. listopadu", "Od 15. srpna do 15. listopadu", "Od 1. září do 31. prosince", "Celý rok",
+                "A jen z hroznů sklizených v tom roce, dokud ještě kvasí."),
+            Q(CzV, "Odkud musí být hrozny, aby se tomu smělo říkat burčák?", "Sklizené i zpracované v Česku", "Z celé EU", "Jen z Moravy", "Odkudkoli, když se kvasí tady",
+                "Z dovezených hroznů je to jen „částečně zkvašený hroznový mošt“."),
+            Q(CzV, "Kdy se otevírá svatomartinské víno?", "11. 11. v 11:11", "1. 11. v poledne", "11. 11. o půlnoci", "Třetí čtvrtek v listopadu",
+                "Třetí čtvrtek v listopadu je Beaujolais nouveau, to je jiná pohádka."),
+            Q(CzV, "Která bílá odrůda může být svatomartinským vínem?", "Müller Thurgau", "Ryzlink rýnský", "Chardonnay", "Sauvignon",
+                "Dál Veltlínské červené rané a Muškát moravský."),
+            Q(CzV, "Která modrá odrůda může být červeným svatomartinským?", "Modrý Portugal", "Frankovka", "Cabernet Sauvignon", "Merlot",
+                "Druhou je Svatovavřinecké."),
+            Q(CzV, "Který z těchto přívlastků je nejnižší (nejméně cukru v moštu)?", "Kabinetní víno", "Pozdní sběr", "Výběr z hroznů", "Výběr z bobulí",
+                "Kabinet 19 °NM, pozdní sběr 21, výběr z hroznů 24, z bobulí 27."),
+            Q(CzV, "Který přívlastek potřebuje nejsladší mošt?", "Výběr z cibéb", "Výběr z bobulí", "Ledové víno", "Pozdní sběr",
+                "Aspoň 32 °NM – cibéby jsou bobule napadené ušlechtilou plísní."),
+            Q(CzV, "Při jaké teplotě se nejvýš smí lisovat hrozny na české ledové víno?", "−7 °C", "0 °C", "−3 °C", "−12 °C",
+                "Voda zůstane v ledu, ven teče jen sladký koncentrát."),
+            Q(CzV, "Jak dlouho se nejméně suší hrozny na slámové víno?", "Tři měsíce", "Týden", "Měsíc", "Rok",
+                "Suší se na slámě nebo rákosu, odtud jméno."),
+            Q(CzV, "Kdo dostal roku 1249 Mikulovsko od Přemysla Otakara II.?", "Lichtenštejnové", "Rožmberkové", "Pernštejnové", "Habsburkové",
+                "Mikulov pak patřil k největším vinařským centrům Moravy."),
+            Q(CzV, "Jak se česky jmenuje Grüner Veltliner?", "Veltlínské zelené", "Ryzlink vlašský", "Rulandské bílé", "Sylvánské zelené",
+                "V Rakousku je to nejvysazovanější odrůda."),
+            Q(CzV, "Co mají společného Ryzlink rýnský a Ryzlink vlašský?", "Nic, nejsou příbuzné", "Je to totéž", "Vlašský je potomek rýnského", "Rýnský je mutace vlašského",
+                "Vlašský (Welschriesling) má s Ryzlinkem rýnským společné jen jméno."),
+
+            // ---------------- víno ve světě ----------------
+            Q(SvetV, "Odkud se do Evropy zavlekla mšička révokaz, která v 19. století zničila vinice?", "Ze Severní Ameriky", "Z Asie", "Z Afriky", "Z Austrálie",
+                "Americké révy jsou vůči ní částečně odolné."),
+            Q(SvetV, "Jak se Evropa nakonec ubránila révokazu?", "Roubováním na americké podnože", "Postřiky", "Vypalováním vinic", "Přesunem vinic na sever",
+                "Evropská réva roste dodnes většinou na amerických kořenech."),
+            Q(SvetV, "Která vinařská země se révokazu skoro vyhnula díky poušti, oceánu a Andám?", "Chile", "Argentina", "Francie", "Itálie",
+                "Chile chrání poušť Atacama, Tichý oceán a Andy."),
+            Q(SvetV, "Z jakého údolí pochází portské víno?", "Z údolí řeky Douro", "Z údolí Loiry", "Z údolí Rioja", "Z údolí Tejo",
+                "Zraje ve sklepech ve Vila Nova de Gaia naproti Portu."),
+            Q(SvetV, "Čím se zastaví kvašení portského?", "Přidáním vínovice", "Zmrazením", "Sírou", "Medem",
+                "Neutrální vínovice (aguardente) zabije kvasinky – zůstane cukr a víc alkoholu."),
+            Q(SvetV, "Kolik alkoholu má obvykle portské?", "Kolem 19–20 %", "Kolem 12 %", "Kolem 30 %", "Kolem 40 %",
+                "Je to dezertní víno, ne pálenka."),
+            Q(SvetV, "Kdy byla vymezena oblast portského – jedna z prvních chráněných vinařských oblastí?", "1756", "1703", "1855", "1935",
+                "V roce 1703 byla Methuenská smlouva s Anglií, která portskému otevřela trh."),
+            Q(SvetV, "Ze kterého města pochází sherry?", "Jerez de la Frontera", "Sevilla", "Málaga", "Porto",
+                "„Sherry“ je zangličtělé Xeres, tedy Jerez."),
+            Q(SvetV, "Z jaké odrůdy je většina sherry?", "Palomino", "Pedro Ximénez", "Tempranillo", "Albariño",
+                "Palomino tvoří asi 90 %, Pedro Ximénez hlavně sladká sherry."),
+            Q(SvetV, "Co je u sherry „flor“?", "Vrstva kvasinek na víně v sudu", "Druh sudu", "Sklenička na sherry", "Sladký přídavek",
+                "Chrání víno před oxidací – pod ní zraje fino a manzanilla."),
+            Q(SvetV, "Jak se jmenuje systém sudů, kde se mladší sherry postupně mísí se starším?", "Solera", "Barrique", "Remuage", "Assemblage",
+                "V každé lahvi je tak kus hodně starého vína."),
+            Q(SvetV, "Čím je ochucená řecká retsina?", "Pryskyřicí borovice", "Anýzem", "Medem", "Mořskou vodou",
+                "Pryskyřicí se ve starověku těsnily amfory a víno ji načichlo."),
+            Q(SvetV, "Ze které odrůdy je Beaujolais nouveau?", "Gamay", "Pinot noir", "Merlot", "Syrah",
+                "Lahvuje se jen 6–8 týdnů po sklizni."),
+            Q(SvetV, "Kdy se pouští na trh Beaujolais nouveau?", "Třetí čtvrtek v listopadu", "11. listopadu", "1. prosince", "Na první adventní neděli",
+                "Jednotné datum platí od roku 1985."),
+            Q(SvetV, "Ve které zemi je Malbec nejvysazovanější modrou odrůdou?", "V Argentině", "V Chile", "Ve Francii", "V Austrálii",
+                "Nejvíc ho roste v Mendoze, původem je ale z Francie."),
+            Q(SvetV, "Ve které zemi je Veltlínské zelené nejvysazovanější odrůdou?", "V Rakousku", "V Německu", "V Maďarsku", "Ve Slovinsku",
+                "Zabírá asi třetinu rakouských vinic."),
+            Q(SvetV, "Odkud pochází Ryzlink rýnský?", "Z Porýní v Německu", "Z Alsaska", "Z Moravy", "Z rakouské Wachau",
+                "První zmínka je z roku 1435 z Rüsselsheimu."),
+            Q(SvetV, "Které víno občas po letech zrání voní po petroleji?", "Ryzlink rýnský", "Chardonnay", "Muškát", "Merlot",
+                "Může za to látka TDN – a fajnšmekři to milují."),
+            Q(SvetV, "Která odrůda je hlavní v Rioji?", "Tempranillo", "Garnacha", "Sangiovese", "Malbec",
+                "Rioja leží na severu Španělska v údolí řeky Ebro."),
+            Q(SvetV, "Jak dlouho nejméně zraje červená Rioja Gran Reserva?", "5 let", "2 roky", "3 roky", "10 let",
+                "Z toho aspoň 2 roky v sudu. Crianza stačí 2 roky celkem."),
+            Q(SvetV, "Která dvě města se podle legendy přela o Chianti závodem rytířů, které vyslali kohouti?", "Florencie a Siena", "Řím a Florencie", "Pisa a Siena", "Benátky a Verona",
+                "Rytíři vyrazili, jakmile kohout zakokrhal."),
+            Q(SvetV, "Jakou barvu měl vítězný kohout, dnes symbol Chianti Classico?", "Černou", "Bílou", "Červenou", "Zlatou",
+                "Florenťané ho nechali vyhladovět v tmavém kurníku, tak kokrhal dávno před svítáním."),
+
+            // ---------------- bubliny a sladká vína ----------------
+            Q(Bubl, "Které tři odrůdy jsou hlavní v šampaňském?", "Chardonnay, Pinot noir, Pinot meunier", "Chardonnay, Ryzlink, Muškát", "Pinot noir, Merlot, Gamay", "Sauvignon, Sémillon, Chardonnay",
+                "Pár dalších je povoleno, ale skoro se nepoužívají."),
+            Q(Bubl, "Co znamená na šampaňském „Blanc de blancs“?", "Jen z bílých hroznů", "Jen z modrých hroznů", "Bez cukru", "Z jednoho ročníku",
+                "Blanc de noirs je naopak bílé víno z modrých hroznů."),
+            Q(Bubl, "Co je „Brut nature“?", "Šampaňské skoro bez cukru (do 3 g/l)", "Nejsladší šampaňské", "Růžové šampaňské", "Šampaňské bez bublin",
+                "Běžný brut mívá kolem 15 g cukru na litr."),
+            Q(Bubl, "Kolik litrů má láhev Magnum?", "1,5 l", "1 l", "2 l", "3 l",
+                "Dvě normální lahve v jedné."),
+            Q(Bubl, "Jak se jmenuje 3litrová láhev šampaňského?", "Jeroboam", "Magnum", "Methuselah", "Balthazar",
+                "Pozor, v Bordeaux má Jeroboam 5 litrů."),
+            Q(Bubl, "Kolik normálních lahví se vejde do Nebukadnesaru?", "20", "8", "12", "16",
+                "Má 15 litrů. Unese ho jen silný číšník."),
+            Q(Bubl, "Z jaké odrůdy se dělá Prosecco?", "Glera", "Trebbiano", "Moscato", "Pinot grigio",
+                "Do roku 2009 se odrůda jmenovala taky Prosecco."),
+            Q(Bubl, "Kde druhotně kvasí většina Prosecca?", "Ve velkých nerezových tancích", "V lahvi", "V dubových sudech", "V amforách",
+                "Říká se tomu metoda Charmat – na rozdíl od šampaňského, které kvasí v lahvi."),
+            Q(Bubl, "Který slavný drink je původně z Prosecca?", "Bellini", "Margarita", "Cuba libre", "Negroni",
+                "Prosecco je i základ Spritzu Veneziano."),
+            Q(Bubl, "Ze které země je tokajské víno (většina oblasti)?", "Z Maďarska", "Z Rakouska", "Z Rumunska", "Z Chorvatska",
+                "Malý kousek oblasti je i na Slovensku."),
+            Q(Bubl, "Která odrůda je hlavní v tokajských výběrech?", "Furmint", "Tramín", "Muškát", "Ryzlink",
+                "Furmint zabírá asi 60 % oblasti, další je Hárslevelű."),
+            Q(Bubl, "Co udávají u tokaje „puttony“?", "Sladkost výběru", "Stáří vína", "Obsah alkoholu", "Velikost lahve",
+                "Původně počet nůší cibéb (asi 25 kg) přidaných do sudu."),
+            Q(Bubl, "Jak se odedávna říká tokajskému?", "Víno králů, král vín", "Krev Kristova", "Zlato Dunaje", "Slzy Panny Marie",
+                "Latinsky Vinum regum, rex vinorum – připisuje se Ludvíku XIV."),
+            Q(Bubl, "Kolik alkoholu má tokajská Eszencia?", "Jen asi 5–6 %", "Kolem 12 %", "Kolem 18 %", "Přes 40 %",
+                "Má 500–700 gramů cukru na litr, kvasinky se v tom skoro utopí."),
+            Q(Bubl, "Při jaké teplotě se v Kanadě musí sbírat hrozny na ledové víno?", "−8 °C a méně", "−2 °C", "−4 °C", "−15 °C",
+                "V Německu a Rakousku stačí −7 °C."),
+            Q(Bubl, "Která země vyrábí nejvíc ledového vína?", "Kanada", "Německo", "Rakousko", "Česko",
+                "Víc než všechny ostatní země dohromady."),
+
+            // ---------------- vinařské pojmy ----------------
+            Q(PojmyV, "Jak se říká svařenému vínu v Německu?", "Glühwein", "Glögg", "Vin chaud", "Grzaniec",
+                "Glögg je severský, vin chaud francouzský, grzaniec polský."),
+            Q(PojmyV, "Odkud je svařené víno glögg?", "Ze Skandinávie", "Z Německa", "Z Polska", "Z Francie",
+                "Podává se s rozinkami a mandlemi, někdy s panákem akvavitu."),
+            Q(PojmyV, "Které koření patří do svařáku nejčastěji?", "Skořice, hřebíček a badyán", "Pepř a kmín", "Paprika a česnek", "Majoránka a tymián",
+                "Často přijde i pomeranč, muškátový oříšek nebo zázvor."),
+        };
+
+        // ======================= TVRDEJ =======================
+        // Ověřeno 18. 11. 2026: Wikipedie (Slivovitz, Becherovka, Jan Becher, Tuzemák, Fernet Stock, Borovička, Absinthe,
+        // Scotch whisky, Tequila, Gin, Jägermeister, Rum, Caipirinha, Negroni, Bloody Mary, Piña colada, Margarita, Calvados,
+        // Grappa, Ouzo, Pálinka), diffordsguide.com (koňak VS/VSOP/XO).
+        private const string CzT = "Česká kořalka", SvetT = "Kořalky světa", Whisky = "Whisky, gin a rum", Koktejly = "Koktejly";
+
+        public static readonly List<QuizQuestion> Tvrdej = new()
+        {
+            // ---------------- česká kořalka ----------------
+            Q(CzT, "Národním nápojem kterého státu je podle Wikipedie slivovice (šljivovica)?", "Srbska", "Polska", "Rakouska", "Řecka",
+                "UNESCO zapsalo srbskou šljivovicu na seznam nehmotného dědictví."),
+            Q(CzT, "Ve kterém městě se vyrábí Becherovka?", "V Karlových Varech", "V Mariánských Lázních", "V Plzni", "Ve Vizovicích",
+                "Vymyslel ji karlovarský lékárník Josef Becher."),
+            Q(CzT, "Ve kterém roce se Becherovka začala prodávat?", "1807", "1842", "1889", "1918",
+                "Lékárník Josef Becher předtím dva roky ladil recept."),
+            Q(CzT, "Pod jakým jménem Josef Becher svůj likér zpočátku prodával?", "English Bitter", "Karlsbader Kräuter", "Aqua vitae", "Becherův elixír",
+                "Recept prý probíral s anglickým lékařem Frobrigem."),
+            Q(CzT, "Jak se jmenuje Becherovka s tonikem?", "Beton", "Cihla", "Malta", "Štěrk",
+                "Vznikl pro Expo 67 v Montrealu."),
+            Q(CzT, "Kolik alkoholu má Becherovka?", "38 %", "30 %", "40 %", "45 %",
+                "Bylin a koření je v ní přes dvacet, přesný recept je tajný."),
+            Q(CzT, "Z čeho se vyrábí tuzemák?", "Z brambor nebo cukrové řepy", "Z cukrové třtiny", "Z obilí", "Ze švestek",
+                "Chuť mu dávají rumové esence."),
+            Q(CzT, "Proč se tuzemský rum od roku 2003 nesmí jmenovat rum?", "Rum smí být jen z cukrové třtiny", "Je moc slabý", "Má špatnou barvu", "Kvůli spotřební dani",
+                "Proto se dnes prodává jako Tuzemák nebo Tuzemský."),
+            Q(CzT, "Kde se vyrábí Fernet Stock?", "V Plzni-Božkově", "V Karlových Varech", "V Praze", "Ve Vizovicích",
+                "V Božkově se vyrábí od roku 1927."),
+            Q(CzT, "Ve kterém městě založil Lionello Stock v roce 1884 svou firmu?", "V Terstu", "V Benátkách", "Ve Vídni", "V Plzni",
+                "Terst tehdy patřil Rakousku-Uhersku."),
+            Q(CzT, "Kolik alkoholu má Fernet Stock Citrus?", "30 %", "20 %", "38 %", "40 %",
+                "Původní Fernet má kolem 40 %. Citrus přišel v roce 1997."),
+            Q(CzT, "Čím je ochucená borovička?", "Jalovcem", "Borovým jehličím", "Anýzem", "Pelyňkem",
+                "Žádná borovice. Proto chutná trochu jako gin."),
+            Q(CzT, "Odkud borovička pochází?", "Ze Slovenska", "Z Polska", "Z Maďarska", "Z Rakouska",
+                "Pálí se od 16. století, tradičně na Liptově."),
+            Q(CzT, "Čím se liší český „absinth“ od klasického absintu?", "Obvykle v něm chybí anýz a fenykl", "Je z brambor", "Je bez pelyňku", "Je modrý",
+                "Je blíž pelyňkové hořké. A zapalování je moderní vynález."),
+
+            // ---------------- kořalky světa ----------------
+            Q(SvetT, "Která bylina dala absintu jméno?", "Pelyněk", "Jalovec", "Máta", "Heřmánek",
+                "Latinsky Artemisia absinthium. Dál je v něm anýz a fenykl."),
+            Q(SvetT, "Jak se přezdívá absintu?", "Zelená víla", "Zelený ďábel", "Ledová královna", "Bílá paní",
+                "Francouzsky la fée verte."),
+            Q(SvetT, "Ve které zemi vznikl absint?", "Ve Švýcarsku", "Ve Francii", "V Čechách", "V Itálii",
+                "V kantonu Neuchâtel na konci 18. století."),
+            Q(SvetT, "Jak se absint tradičně ředí?", "Ledovou vodou přes kostku cukru na děrované lžičce", "Zapálením cukru", "Colou", "Mlékem",
+                "Zakalí se – tomu se říká louche."),
+            Q(SvetT, "Z čeho se vyrábí tequila?", "Z modré agáve", "Z kukuřice", "Z cukrové třtiny", "Z kaktusu opuncie",
+                "Pečou se jádra agáve, kterým se říká piña."),
+            Q(SvetT, "Ve kterém mexickém státě se vyrábí většina tequily?", "Jalisco", "Oaxaca", "Sonora", "Yucatán",
+                "Městečko Tequila je kousek od Guadalajary."),
+            Q(SvetT, "Jak dlouho zraje tequila reposado?", "Aspoň 2 měsíce, ale méně než rok", "Vůbec nezraje", "1 až 3 roky", "Přes 3 roky",
+                "Añejo zraje 1–3 roky, extra añejo přes 3."),
+            Q(SvetT, "Patří do lahve tequily červ?", "Ne, regulační rada to zakazuje", "Ano, vždycky", "Jen do añejo", "Jen pro export",
+                "Červ bývá v některých mezcalech – a je to marketing."),
+            Q(SvetT, "Kolik agáve musí mít nejlevnější tequila (mixto)?", "Aspoň 51 %", "Aspoň 10 %", "Aspoň 75 %", "100 %",
+                "Zbytek můžou být jiné cukry."),
+            Q(SvetT, "Odkud je ouzo?", "Z Řecka", "Z Turecka", "Z Itálie", "Z Bulharska",
+                "Nejslavnější je z ostrova Lesbos, z Plomari."),
+            Q(SvetT, "Co se stane s ouzem, když do něj nalijete vodu?", "Zbělá", "Zezelená", "Zpění", "Nic",
+                "Anetol z anýzu se ve vodě nerozpustí a udělá mléčnou emulzi."),
+            Q(SvetT, "Ze které země je pálinka?", "Z Maďarska", "Z Rumunska", "Ze Slovenska", "Ze Srbska",
+                "Od roku 2004 je v EU chráněná – ovoce musí být maďarské."),
+            Q(SvetT, "Co znamená u pálinky „kisüsti“?", "Pálená dvakrát v malém kotli", "Z divokého ovoce", "Bez cukru", "Zrála v sudu",
+                "Kotel smí mít nejvýš 1000 litrů."),
+            Q(SvetT, "Z čeho se pálí grappa?", "Z matolin po lisování hroznů", "Z rozinek", "Z fíků", "Z citronů",
+                "Slupky, semínka a třapiny, co zbydou po výrobě vína."),
+            Q(SvetT, "Co je caffè corretto?", "Espreso s grappou", "Espreso s mlékem", "Káva s citronem", "Studená káva",
+                "„Opravená“ káva. Italové vědí."),
+            Q(SvetT, "Z čeho se vyrábí calvados?", "Z jablek (a hrušek)", "Z hroznů", "Ze švestek", "Z třešní",
+                "Pálí se z normandského cideru."),
+            Q(SvetT, "Co je „trou normand“?", "Calvados mezi chody jídla", "Normandská hospoda", "Sud na calvados", "Kocovina po calvadosu",
+                "„Normandská díra“ má udělat místo pro další chod."),
+            Q(SvetT, "Co znamená VS na lahvi koňaku?", "Very Special", "Very Strong", "Vintage Selection", "Very Smooth",
+                "VSOP je Very Superior Old Pale, XO Extra Old."),
+            Q(SvetT, "Kolik bylin a koření je v Jägermeisteru?", "56", "13", "27", "99",
+                "Má 35 % a jméno znamená „vrchní lovčí“."),
+            Q(SvetT, "Ze kterého města pochází Jägermeister?", "Z Wolfenbüttelu", "Z Mnichova", "Z Hamburku", "Z Kolína nad Rýnem",
+                "Recept vymyslel Curt Mast, prodává se od roku 1935."),
+            Q(SvetT, "Co je v logu Jägermeistera?", "Jelen se zářícím křížem mezi parohy", "Orel", "Kanec", "Liška",
+                "Odkaz na patrony lovců, svatého Huberta a Eustacha."),
+
+            // ---------------- whisky, gin a rum ----------------
+            Q(Whisky, "Kolik let nejméně musí zrát skotská whisky?", "3 roky", "1 rok", "5 let", "10 let",
+                "V dubových sudech do 700 litrů, ve Skotsku."),
+            Q(Whisky, "Kolik alkoholu musí mít nejméně skotská whisky v lahvi?", "40 %", "35 %", "37,5 %", "43 %",
+                "Silnější smí být, slabší ne."),
+            Q(Whisky, "Co znamená „single malt“?", "Z jedné palírny, jen ze sladového ječmene", "Z jednoho sudu", "Jednou pálená", "Z jednoho roku",
+                "Pálí se po várkách v destilačním kotli."),
+            Q(Whisky, "Co udává číslo let na lahvi whisky?", "Věk nejmladší whisky v ní", "Průměrný věk", "Věk nejstarší whisky", "Rok lahvování",
+                "Dvanáctiletá tedy může obsahovat i starší."),
+            Q(Whisky, "Kdo je v roce 1494 zapsán, že dostal slad na výrobu aqua vitae – nejstarší zmínka o skotské whisky?", "Mnich John Cor", "Johnnie Walker", "Jack Daniel", "William Grant",
+                "Zápis je ve skotských daňových rolích, opatství Lindores."),
+            Q(Whisky, "Která whisky se píše s „e“ (whiskey)?", "Irská", "Skotská", "Kanadská", "Japonská",
+                "Skotská, kanadská i japonská je whisky."),
+            Q(Whisky, "Která z těchto je oficiální skotská whisky oblast?", "Speyside", "Kentucky", "Cognac", "Jalisco",
+                "Dál Highlands, Lowlands, Islay a Campbeltown."),
+            Q(Whisky, "Čím musí v ginu převládat chuť?", "Jalovcem", "Anýzem", "Pelyňkem", "Koriandrem",
+                "Jalovec je v ginu to samé co chmel v pivu."),
+            Q(Whisky, "Kolik alkoholu musí mít v EU nejméně gin?", "37,5 %", "30 %", "40 %", "45 %",
+                "Jalovcové kořalky smí mít i 30 %."),
+            Q(Whisky, "Proč se v britských koloniích pil gin s tonikem?", "Tonik s chininem chránil před malárií", "Proti kurdějím", "Na trávení", "Na lepší spaní",
+                "Gin přebil hořkou chuť chininu."),
+            Q(Whisky, "Kdy zachvátil Anglii „Gin Craze“, kdy byla v Londýně ginovna skoro na každém rohu?", "Kolem roku 1700", "Kolem roku 1800", "Ve 20. letech 20. století", "Ve středověku",
+                "Zhruba 1695–1735. Přes polovinu londýnských výčepů tvořily ginovny."),
+            Q(Whisky, "Odkud je nejstarší známý záznam o rumu?", "Z Barbadosu", "Z Kuby", "Z Jamajky", "Z Portorika",
+                "Dokument z roku 1651."),
+            Q(Whisky, "Co skončilo 31. července 1970, na „Black Tot Day“?", "Denní příděl rumu v britském námořnictvu", "Prohibice v Americe", "Výroba tuzemáku", "Rumová stezka do Indie",
+                "Dodnes se rum vydá jen při rozkazu „splice the mainbrace“."),
+            Q(Whisky, "Co byl původně grog?", "Rum zředěný vodou", "Rum s čajem", "Svařené víno", "Pivo s rumem",
+                "Zavedl ho admirál Vernon kolem roku 1740."),
+            Q(Whisky, "Čemu se říká „andělský podíl“?", "Tomu, co se ze sudu odpaří", "První kapce z kotle", "Tomu, co si nechá palírník", "Zbytku v lahvi",
+                "U rumu v tropech až 10 % ročně, ve Skotsku kolem 2 %."),
+            Q(Whisky, "Z čeho se dělá rhum agricole?", "Z čerstvé šťávy z cukrové třtiny", "Z melasy", "Z cukrové řepy", "Z kukuřice",
+                "Typický je z Martiniku. Většina ostatních rumů je z melasy."),
+
+            // ---------------- koktejly ----------------
+            Q(Koktejly, "Která kořalka patří do caipirinhy?", "Cachaça", "Bílý rum", "Vodka", "Tequila",
+                "Brazilský národní koktejl: cachaça, limetka, cukr."),
+            Q(Koktejly, "Co je caipiroska?", "Caipirinha s vodkou", "Caipirinha bez alkoholu", "Caipirinha s pivem", "Caipirinha s ginem",
+                "Smirnoff si to jméno dokonce zaregistroval."),
+            Q(Koktejly, "Co patří do Negroni?", "Gin, Campari a červený vermut", "Vodka, Campari a tonik", "Rum, cola a limetka", "Gin, tonik a okurka",
+                "Všeho stejně. Podle legendy vznikl ve Florencii v roce 1919."),
+            Q(Koktejly, "Čím se v Negroni Sbagliato nahrazuje gin?", "Proseccem", "Vodkou", "Sodou", "Tequilou",
+                "Sbagliato znamená italsky „chybný“."),
+            Q(Koktejly, "Ze kterého drinku vzniklo Negroni, když si hrabě řekl o gin místo sody?", "Z Americana", "Z Martini", "Z Manhattanu", "Ze Spritzu",
+                "Hrabě Camillo Negroni – jestli to vůbec byl hrabě."),
+            Q(Koktejly, "Co je základem Bloody Mary?", "Vodka a rajčatová šťáva", "Gin a rajčatová šťáva", "Rum a grenadina", "Vodka a brusinky",
+                "Bez alkoholu je to Virgin Mary, s tequilou Bloody Maria."),
+            Q(Koktejly, "Ve kterém baru prý vznikla Bloody Mary?", "V Harry's New York Bar v Paříži", "V hotelu Ritz v Londýně", "V Bodeguita del Medio v Havaně", "V Raffles v Singapuru",
+                "Barman Fernand Petiot, kolem roku 1921."),
+            Q(Koktejly, "Co znamená piña colada?", "Přecezený ananas", "Kokosový ráj", "Sladká pláž", "Ananas s rumem",
+                "Rum, kokosový krém a ananasová šťáva."),
+            Q(Koktejly, "Kde je piña colada od roku 1978 oficiálním národním drinkem?", "V Portoriku", "Na Kubě", "Na Jamajce", "V Mexiku",
+                "Hotel Caribe Hilton v San Juanu tvrdí, že ji vymyslel v roce 1954."),
+            Q(Koktejly, "Co znamená ve španělštině „margarita“?", "Sedmikráska", "Perla", "Slzička", "Princezna",
+                "Je to i španělská podoba jména Markéta."),
+            Q(Koktejly, "Co patří do klasické margarity?", "Tequila, triple sec a limetka", "Tequila, cola a citron", "Rum, máta a limetka", "Vodka, pomeranč a sůl",
+                "Sůl na okraji skleničky je jen volitelná."),
+            Q(Koktejly, "Kde vymysleli stroj na mraženou margaritu?", "V Dallasu", "V Mexico City", "V Las Vegas", "V Miami",
+                "Mariano Martinez, rok 1971."),
+        };
+
+        /// <summary>Okruhy, jak je hráč vidí (klíč = název).</summary>
+        public static readonly string[] Okruhy = { "Pivo", "Víno", "Tvrdej" };
+
+        public static List<QuizQuestion> Of(string okruh) => okruh switch
+        {
+            "Víno" => Vino,
+            "Tvrdej" => Tvrdej,
+            _ => Pivo
+        };
+
+        /// <summary>Všechny otázky vybraných okruhů (nic nevybráno = pivo).</summary>
+        public static List<QuizQuestion> For(IEnumerable<string> okruhy)
+        {
+            var list = okruhy.Distinct().SelectMany(Of).ToList();
+            return list.Count > 0 ? list : Pivo;
+        }
+
+        public static int Count => Pivo.Count + Vino.Count + Tvrdej.Count;
     }
 }

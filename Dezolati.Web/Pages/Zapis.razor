@@ -10,7 +10,18 @@
 
         @foreach (var row in rows)
         {
-            <div class="field-label">@row.Label</div>
+            @if (row == panaky)
+            {
+                @* druh panáku: schovaný za šipečkou, výchozí „ostatní“ (pořád je to panák) *@
+                <div style="display:flex;align-items:flex-end">
+                    <div class="field-label" style="flex:1">@row.Label</div>
+                    <div class="small soft" style="cursor:pointer;padding:4px 4px 0 12px" @onclick="PickDruh">@(PanakDruhy.Find(druh).Name.ToLowerInvariant()) ▾</div>
+                </div>
+            }
+            else
+            {
+                <div class="field-label">@row.Label</div>
+            }
             <input class="slider" type="range" min="0" max="10" step="1"
                    style="--fill:@(row.Value * 10)%"
                    value="@row.Value" @oninput="e => SetValue(row, e)" />
@@ -34,8 +45,21 @@
 
     private readonly Row pivo = new() { Label = "Piva (velké 0,5 l):", Value = 1 };
     private readonly Row vino = new() { Label = "Víno (sklenka 2 dcl):" };
-    private readonly Row panaky = new() { Label = "Panáky (jakékoli, 4 cl):" };
-    private Row[] rows => new[] { pivo, vino, panaky };
+    private readonly Row panaky = new() { Label = "Panáky (4 cl):" };
+    private readonly Row michacky = new() { Label = "Míchačky (drink s panákem):" };
+    private Row[] rows => new[] { pivo, vino, panaky, michacky };
+    private string druh = PanakDruhy.Ostatni;
+
+    /// <summary>Šipečka u panáků: slivovice, likér, rum, vodka, whisky, ostatní.</summary>
+    private async Task PickDruh()
+    {
+        var buttons = PanakDruhy.All
+            .Select(d => (d.Name, d.Key == druh ? PencilVariant.Primary : PencilVariant.Secondary))
+            .ToArray();
+        var choice = await Note.ShowAsync("Jakej panák?", "Pořád je to panák, jen se líp spočítají promile.", buttons);
+        if (PanakDruhy.All.FirstOrDefault(d => d.Name == choice) is { } picked) druh = picked.Key;
+        StateHasChanged();
+    }
     private bool busy;
 
     private static void SetValue(Row row, ChangeEventArgs e) =>
@@ -66,12 +90,13 @@
         pivo.Value = drinkerType is "Vínopíč/ka" or "Tvrdopíč/ka" ? 0 : 1;
         vino.Value = drinkerType == "Vínopíč/ka" ? 1 : 0;
         panaky.Value = drinkerType == "Tvrdopíč/ka" ? 1 : 0;
+        michacky.Value = 0;
     }
 
     private async Task Zapsat()
     {
         if (busy) return;
-        if (pivo.Value + vino.Value + panaky.Value == 0)
+        if (pivo.Value + vino.Value + panaky.Value + michacky.Value == 0)
         {
             await Note.AlertAsync("Nula?", "Zapsat nic? To si napiš do deníku, ne na lístek.");
             return;
@@ -87,7 +112,8 @@
         try
         {
             busy = true;
-            await new FirestoreService().RecordDrink(userId, AuthSession.DisplayName, pivo.Value, vino.Value, panaky.Value);
+            await new FirestoreService().RecordDrink(userId, AuthSession.DisplayName, pivo.Value, vino.Value, panaky.Value,
+                michacky: michacky.Value, panakDruh: druh);
             Nav.NavigateTo("");
         }
         catch (Exception ex)
