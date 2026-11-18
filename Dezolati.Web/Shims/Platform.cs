@@ -30,10 +30,15 @@ namespace Microsoft.Maui.Networking
 
 namespace Microsoft.Maui.ApplicationModel
 {
-    /// <summary>Verze webu – do adresáře se zapíše „web 1.0“, ať je ve „Verze u lidí“ vidět, kdo jede přes web.</summary>
+    /// <summary>Verze webu – do adresáře se zapíše „web 3.12“, ať je ve „Verze u lidí“ vidět, kdo jede přes web.</summary>
     public sealed class AppInfo
     {
-        public const string WebVersion = "1.0";
+        /// <summary>Verze z Dezolati.csproj (ApplicationDisplayVersion) – dosadí ji build webu.</summary>
+        public static readonly string WebVersion =
+            System.Reflection.Assembly.GetExecutingAssembly()
+                .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+                .OfType<System.Reflection.AssemblyInformationalVersionAttribute>()
+                .FirstOrDefault()?.InformationalVersion ?? "?";
         public static AppInfo Current { get; } = new();
         public string VersionString => "web " + WebVersion;
         public string BuildString => WebVersion;

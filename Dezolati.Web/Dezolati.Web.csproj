@@ -31,4 +31,15 @@
 
   <Import Project="Shared.props" />
 
+  <!-- verze webu = verze appky (ApplicationDisplayVersion z Dezolati.csproj), ať se nepřepisuje na dvou místech -->
+  <PropertyGroup>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
+  <Target Name="DezolatiVersion" BeforeTargets="GetAssemblyVersion;GenerateAssemblyInfo">
+    <XmlPeek XmlInputPath="$(MSBuildThisFileDirectory)../Dezolati.csproj"
+             Query="/Project/PropertyGroup/ApplicationDisplayVersion/text()">
+      <Output TaskParameter="Result" PropertyName="InformationalVersion" />
+    </XmlPeek>
+  </Target>
+
 </Project>
