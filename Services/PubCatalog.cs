@@ -183,6 +183,16 @@ namespace Dezolati.Services
             lock (MemLock) return _byId.TryGetValue(id, out var p) ? p : null;
         }
 
+        /// <summary>Hospody do maxMeters, od nejbližší (ruční oprava místa na lístku).</summary>
+        public static List<(PubInfo Pub, double Meters)> Around(double lat, double lon, double maxMeters, int count)
+        {
+            List<PubInfo> pubs;
+            lock (MemLock) pubs = _pubs;
+            return pubs.Where(p => Math.Abs(p.Lat - lat) < 0.01 && Math.Abs(p.Lon - lon) < 0.015)
+                .Select(p => (p, DistanceMeters(lat, lon, p.Lat, p.Lon)))
+                .Where(x => x.Item2 <= maxMeters).OrderBy(x => x.Item2).Take(count).ToList();
+        }
+
         /// <summary>Nejbližší hospoda do maxMeters (null = nic v dosahu).</summary>
         public static PubInfo? Nearest(double lat, double lon, double maxMeters)
         {

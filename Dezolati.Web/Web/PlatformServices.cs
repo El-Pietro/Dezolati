@@ -124,6 +124,15 @@ namespace Dezolati.Services
         /// Kde teď jsem (stejně jako v appce): doma do 80 m, hospoda do 60 m, jinde, nebo nevím.
         /// Poloha z prohlížeče (poprvé se zeptá), max. pár sekund – zápis nesmí čekat.
         /// </summary>
+        /// <summary>Přesná poloha teď (hlášení trhů), max. 10 s. Null = nejde (WebGeo.LastError říká proč).</summary>
+        public static async Task<(double Lat, double Lon, double? Accuracy)?> LocateAsync()
+        {
+            var loc = await Dezolati.Web.WebGeo.GetAsync(TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(30));
+            if (loc is not { } l) return null;
+            LastLocation.Remember(l.Lat, l.Lon);
+            return (l.Lat, l.Lon, l.Accuracy);
+        }
+
         public static async Task<PlaceInfo> PlaceHereAsync()
         {
             if (!DetectPub && !SharePub) return PlaceInfo.Unknown;
@@ -133,8 +142,9 @@ namespace Dezolati.Services
                 if (loc is not { } l) return PlaceInfo.Unknown;
 
                 LastLocation.Remember(l.Lat, l.Lon);
-                if (HomePlace.IsNear(l.Lat, l.Lon))
-                    return new PlaceInfo(Place.Home, null, null, l.Lat, l.Lon);
+                // domov má přednost před hospodou vedle (ruční oprava na lístku to přebije)
+                var homeDist = HomePlace.Location is { } home ? PubCatalog.DistanceMeters(l.Lat, l.Lon, home.Lat, home.Lon) : double.MaxValue;
+                var nearHome = homeDist <= HomePlace.RadiusMeters;
 
                 try
                 {
@@ -144,6 +154,9 @@ namespace Dezolati.Services
                 catch { }
                 await PubService.LoadOverlayAsync();
                 var pub = PubService.Nearest(l.Lat, l.Lon, PubRadiusMeters);
+                // do 80 m od domova je doma, i když je hospoda blíž (poloha doma skáče; opravit jde ťuknutím na lístek)
+                if (nearHome)
+                    return new PlaceInfo(Place.Home, null, null, l.Lat, l.Lon);
                 return pub == null
                     ? new PlaceInfo(Place.Other, null, null, l.Lat, l.Lon)
                     : new PlaceInfo(Place.Pub, pub.Id, PubService.NameOf(pub), pub.Lat, pub.Lon);

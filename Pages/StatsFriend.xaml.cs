@@ -68,6 +68,7 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
             // ~35 čtení bez ohledu na to, jak dlouho už dotyčný chlastá
             stats = await firestoreService.GetStats(userId);
             Render(stats);
+            _ = LoadBadgesAsync(userId);
         }
         catch (Exception ex)
         {
@@ -685,6 +686,87 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
             var pct = (int)Math.Round(100.0 * count / Math.Max(1, celkem.Panaky));
             AddRow(DruhyGrid, name, $"{Cz.Panaky(count)} ({pct} %)");
         }
+    }
+
+    // ---------------- odznaky z eventu ----------------
+
+    private bool badgesOpen = Preferences.Get("badges_open", true);
+
+    private async Task LoadBadgesAsync(string uid)
+    {
+        BadgesBox.IsVisible = false;
+        if (Events.Current == null) return;
+        try
+        {
+            var state = await Badges.LoadAsync(uid);
+            if (uid != userId || (!Events.Active && state.Got.Count == 0)) return;   // mezitím jiný člověk / nic k ukázání
+            RenderBadges(state);
+        }
+        catch
+        {
+            // bez odznaků se statistiky obejdou
+        }
+    }
+
+    private void RenderBadges(BadgeState state)
+    {
+        BadgesBox.IsVisible = true;
+        BadgesDetail.IsVisible = badgesOpen;
+        BadgesToggle.Text = badgesOpen ? "(schovat)" : "(ukázat)";
+        var (got, total) = Badges.Count(state);
+        BadgesEvent.Text = (Events.Current?.Name ?? "") + " ";
+        BadgesCount.Text = $"{got}/{total} ";
+        BadgesProgress.Progress = total == 0 ? 0 : (double)got / total;
+
+        BadgesGrid.Children.Clear();
+        BadgesGrid.RowDefinitions.Clear();
+        var views = Badges.Views(state);
+        for (var i = 0; i < views.Count; i++)
+        {
+            var v = views[i];
+            if (i % 3 == 0) BadgesGrid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+            var icon = new GraphicsView
+            {
+                WidthRequest = 56, HeightRequest = 56, HorizontalOptions = LayoutOptions.Center,
+                InputTransparent = true,   // ťuknutí na obrázek patří celému odznaku
+                Drawable = new EventFxDrawable { Scene = (_, _) => EventScene.Badge(v.Badge.Icon, v.Badge.Color, v.Got) }
+            };
+            var cell = new VerticalStackLayout
+            {
+                Spacing = 1,
+                Children =
+                {
+                    icon,
+                    new Label
+                    {
+                        Text = v.Badge.Name + " ", FontFamily = "CaveatBold", FontSize = 16, LineHeight = 0.95,
+                        HorizontalTextAlignment = TextAlignment.Center,
+                        TextColor = Color.FromArgb(v.Got ? "#1E1E2A" : "#8A7D60")
+                    },
+                    new Label
+                    {
+                        Text = v.Sub.Length > 0 ? v.Sub + " " : "", FontSize = 14,
+                        HorizontalTextAlignment = TextAlignment.Center, TextColor = Color.FromArgb("#6B5A3A"),
+                        IsVisible = v.Sub.Length > 0
+                    }
+                }
+            };
+            var tap = new TapGestureRecognizer();
+            tap.Tapped += async (_, _) => await Listek.AlertAsync(this, v.Badge.Name,
+                v.Badge.Desc + (v.Got ? $"\n\nZískáno{(v.Sub.Length > 0 ? $": {v.Sub}" : "")} ✔" : v.IsProgress ? $"\n\nZatím {v.Sub}" : ""));
+            cell.GestureRecognizers.Add(tap);
+            Grid.SetRow(cell, i / 3);
+            Grid.SetColumn(cell, i % 3);
+            BadgesGrid.Children.Add(cell);
+        }
+    }
+
+    private void OnBadgesTapped(object? sender, TappedEventArgs e)
+    {
+        badgesOpen = !badgesOpen;
+        Preferences.Set("badges_open", badgesOpen);
+        BadgesDetail.IsVisible = badgesOpen;
+        BadgesToggle.Text = badgesOpen ? "(schovat)" : "(ukázat)";
     }
 
     private void OnDruhyTapped(object? sender, TappedEventArgs e)

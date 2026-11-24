@@ -12,6 +12,14 @@ namespace Dezolati
             Typo.Apply(Resources);
 
             MainPage = new AppShell();
+
+            // event (Vánoce …): světýlka, čepice na lístcích a sníh na všech stránkách
+            PageAppearing += (_, page) => EventDecor.Attach(page);
+            PageDisappearing += (_, page) => EventDecor.Detach(page);
+            Services.Events.Changed += (_, _) => Dispatcher.Dispatch(() =>
+            {
+                if ((MainPage as Shell)?.CurrentPage is Page p) EventDecor.Attach(p);
+            });
         }
 
         // návrat do appky (třeba po zápisu z notifikace nebo ráno po 6:00) → obnovit lístek

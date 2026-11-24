@@ -41,7 +41,7 @@ public sealed class SceneDrawable : IDrawable
         return c;
     }
 
-    private static void Render(ICanvas canvas, SceneNode node)
+    internal static void Render(ICanvas canvas, SceneNode node)
     {
         switch (node)
         {

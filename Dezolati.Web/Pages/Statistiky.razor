@@ -51,6 +51,39 @@
                 </div>
             }
 
+            @if (badgeState != null)
+            {
+                @* odznaky z eventu (Vánoce …) – Achievements/{uid}, píše server *@
+                var (bGot, bTotal) = Badges.Count(badgeState);
+                <div class="section-head" @onclick="ToggleBadges">
+                    <div class="heading">Odznaky</div>
+                    <span class="link">@(badgesOpen ? "(schovat)" : "(ukázat)")</span>
+                </div>
+                @if (badgesOpen)
+                {
+                    <div class="odz-head">
+                        <span class="ev">@Events.Current?.Name</span>
+                        <span class="bar"><i style="width:@(bTotal == 0 ? 0 : bGot * 100 / bTotal)%"></i></span>
+                        <span>@bGot/@bTotal</span>
+                    </div>
+                    <div class="odz-grid">
+                        @foreach (var v in Badges.Views(badgeState))
+                        {
+                            var bv = v;
+                            <button class="odz @(bv.Got ? "got" : "")" @onclick="() => ShowBadge(bv)">
+                                <svg width="56" height="56" viewBox="0 0 56 56" aria-hidden="true">@((MarkupString)SceneKit.ToSvg(EventScene.Badge(bv.Badge.Icon, bv.Badge.Color, bv.Got)))</svg>
+                                <span class="n">@bv.Badge.Name</span>
+                                @if (bv.Sub.Length > 0)
+                                {
+                                    <span class="s">@bv.Sub</span>
+                                }
+                            </button>
+                        }
+                    </div>
+                    <div class="small soft center">ťukni na odznak – ukáže, jak ho získat</div>
+                }
+            }
+
             @if (s.Totals.Total > 0)
             {
                 <div class="section-head" @onclick="ToggleMonths">
@@ -249,6 +282,34 @@
     private List<(string, string)> months = new();
     private List<(string, string)> druhy = new();
     private bool druhyOpen, mich;
+
+    // ---------- odznaky z eventu ----------
+    private BadgeState? badgeState;
+    private bool badgesOpen = Preferences.Get("badges_open", true);
+
+    private async Task LoadBadgesAsync(string uid)
+    {
+        badgeState = null;
+        if (Events.Current == null) return;
+        try
+        {
+            var state = await Badges.LoadAsync(uid);
+            if (uid == userId && (Events.Active || state.Got.Count > 0)) badgeState = state;
+        }
+        catch
+        {
+            // bez odznaků se statistiky obejdou
+        }
+    }
+
+    private void ToggleBadges()
+    {
+        badgesOpen = !badgesOpen;
+        Preferences.Set("badges_open", badgesOpen);
+    }
+
+    private Task ShowBadge(BadgeView v) => Note.AlertAsync(v.Badge.Name,
+        v.Badge.Desc + (v.Got ? $"\n\nZískáno{(v.Sub.Length > 0 ? $": {v.Sub}" : "")} ✔" : v.IsProgress ? $"\n\nZatím {v.Sub}" : ""));
     private bool monthsOpen, monthsLoading, spendOpen, estimating;
 
     private bool chartsVisible;
@@ -286,6 +347,7 @@
             busy = true;
             stats = await firestoreService.GetStats(userId!);
             Render(stats);
+            await LoadBadgesAsync(userId!);
         }
         catch (Exception ex)
         {

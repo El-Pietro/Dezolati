@@ -194,6 +194,35 @@ service cloud.firestore {
       allow read, delete: if signedIn() && me() == 'rB2bUxNHHzbfyHx3mYW4JW61l3N2';   // správce (UsageService.AdminUid)
     }
 
+    // Eventy (Vánoce 2026): Events/aktualni = popis eventu, odznaků a zóny trhů. Čte každý přihlášený, píše jen server.
+    // (EventsAdmin – podklady pro správce – a AchievementState – stav vyhodnocení – z appky vůbec.)
+    match /Events/{id} {
+      allow read: if signedIn();
+    }
+
+    // Získané odznaky: čte každý přihlášený (kámoši ve statistikách), píše jen server.
+    match /Achievements/{uid} {
+      allow read: if signedIn();
+    }
+
+    // „Tady jsou trhy!“: vytvořit může kdokoli (za sebe, poloha z GPS), číst a mazat jen správce. Stav píše server.
+    match /TrhReports/{id} {
+      function v() { return request.resource.data; }
+      function day(x) { return x is string && x.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$'); }
+      allow create: if signedIn()
+                    && v().keys().hasOnly(['By', 'ByNick', 'Lat', 'Lon', 'Acc', 'Day', 'From', 'To', 'Note', 'At'])
+                    && v().By == me()
+                    && v().ByNick is string && v().ByNick.size() <= 80
+                    && v().Lat is number && v().Lon is number
+                    && (!('Acc' in v()) || v().Acc is number)
+                    && day(v().Day)
+                    && (!('From' in v()) || day(v().From))
+                    && (!('To' in v()) || day(v().To))
+                    && (!('Note' in v()) || (v().Note is string && v().Note.size() <= 300))
+                    && v().At == request.time;
+      allow read, delete: if signedIn() && me() == 'rB2bUxNHHzbfyHx3mYW4JW61l3N2';   // správce
+    }
+
     // DrinkSessions (sezení pití) a PubPresence zapisuje jen server – z appky nic.
 
     // PubPresence (kdo už dnes v které hospodě oznámil, že sedí) zapisuje jen server – z appky nic.

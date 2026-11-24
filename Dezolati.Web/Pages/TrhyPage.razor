@@ -1,0 +1,127 @@
+@namespace Dezolati.Web.Pages
+@page "/trhy"
+@inject NavigationManager Nav
+
+@* Detail eventu (Pages/TrhyPage v appce): odznaky, mapa trhů, „Tady jsou trhy!“ a trhy poblíž. *@
+<BackBar To="" />
+
+<div class="listek grow">
+    <div class="stack">
+        <div class="title">@(Events.Current?.Name ?? "Vánoční trhy")</div>
+        @if (Events.Current is { } ev)
+        {
+            <div class="small soft center">@Events.Short(ev.From) – @Events.Short(ev.To) · @Trhy.All.Count trhů v seznamu</div>
+        }
+        <div class="grid2 mt12">
+            <PencilButton Text="Odznaky" Variant="PencilVariant.Secondary" Small="true" OnClick="@(() => Nav.NavigateTo("statistiky"))" />
+            <PencilButton Text="Mapa trhů" Variant="PencilVariant.Secondary" Small="true" OnClick="@(() => Nav.NavigateTo("hospody"))" />
+        </div>
+
+        <div class="heading mt12">Tady jsou trhy!</div>
+        <div class="small">Jsi na vánočních trzích, které appka nezná? Nahlas je!</div>
+        <div class="grid2">
+            <Chip Text="Nevím, dokdy" Selected="@(!datesKnown)" OnClick="@(() => datesKnown = false)" />
+            <Chip Text="Vím od–do" Selected="@datesKnown" OnClick="@(() => datesKnown = true)" />
+        </div>
+        @if (datesKnown)
+        {
+            <div class="grid2">
+                <label class="small">od <input class="entry" type="date" @bind="from" /></label>
+                <label class="small">do <input class="entry" type="date" @bind="to" /></label>
+            </div>
+        }
+        <input class="entry" maxlength="300" placeholder="Poznámka (třeba náměstí, kde přesně)" @bind="note" />
+        <PencilButton Text="@(busy ? "Zjišťuju polohu…" : "Tady jsou trhy!")" Disabled="busy" OnClick="Report" />
+
+        <div class="heading mt12">Trhy poblíž</div>
+        @if (nearHint.Length > 0)
+        {
+            <div class="small soft">@nearHint</div>
+        }
+        @foreach (var (z, m) in near)
+        {
+            var zone = z;
+            <div class="trh-row" @onclick="@(() => OnZone(zone))">
+                <div class="body" style="font-family:CaveatBold,Caveat,cursive">@zone.Name</div>
+                <div class="small" style="color:@(zone.Confirmed ? "var(--ink-soft, #6B5A3A)" : "#C46A12")">
+                    @(zone.RunsOn(Events.Today) ? "běží · " : "")@zone.When@(zone.Confirmed ? "" : " (odhad)")@(m >= 0 ? $" · {Trhy.DistanceText(m)}" : "")
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private bool datesKnown, busy;
+    private DateTime from = DateTime.Today, to = DateTime.Today;
+    private string note = "";
+    private string nearHint = "";
+    private List<(TrhZone Zone, double Meters)> near = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthSession.Uid == null)
+        {
+            Nav.NavigateTo("prihlaseni", replace: true);
+            return;
+        }
+        await Events.EnsureAsync();
+        await ShowNearAsync();
+    }
+
+    private async Task ShowNearAsync()
+    {
+        var me = LastLocation.Get(TimeSpan.FromMinutes(30));
+        if (me == null)
+        {
+            nearHint = "Zjišťuju polohu…";
+            StateHasChanged();
+            if (await PushService.LocateAsync() is { } l) me = (l.Lat, l.Lon);
+        }
+        nearHint = me == null ? "Bez polohy nevím, co je blízko – tady jsou všechny." : "";
+        near = me is { } p ? Trhy.Nearest(p.Lat, p.Lon, 10) : Trhy.All.Select(z => (z, -1.0)).Take(30).ToList();
+    }
+
+    private void OnZone(TrhZone z)
+    {
+        var c = Trhy.CenterOf(z);
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        Nav.NavigateTo($"hospody?lat={c.Lat.ToString(inv)}&lon={c.Lon.ToString(inv)}");
+    }
+
+    private async Task Report()
+    {
+        if (!Events.Active)
+        {
+            await Note.AlertAsync("Trhy", "Event teď neběží, takže trhy hlásit nejde.");
+            return;
+        }
+        busy = true;
+        try
+        {
+            if (await PushService.LocateAsync() is not { } loc)
+            {
+                await Note.AlertAsync("Bez polohy to nejde", Dezolati.Web.WebGeo.Explain(Dezolati.Web.WebGeo.LastError));
+                return;
+            }
+            if (Trhy.Match(loc.Lat, loc.Lon, Events.Today) is { } known)
+            {
+                await Note.AlertAsync("Tyhle trhy známe", $"{known.Name}\n{known.When}\n\nZápisy odsud se počítají do odznaků samy.");
+                return;
+            }
+            DateTime? f = datesKnown ? from : null, t = datesKnown ? to : null;
+            if (f > t) (f, t) = (t, f);
+            await TrhyService.SendAsync(loc.Lat, loc.Lon, loc.Accuracy, f, t, note);
+            note = "";
+            await Note.AlertAsync("Díky!", "Trhy jsou nahlášené. Když je tady dnes nahlásí ještě další, schválí se samy; jinak je schválí správce. Odznaky za ně se dorovnají zpětně.");
+        }
+        catch (Exception ex)
+        {
+            await Note.AlertAsync("Nepovedlo se", Net.IsNetworkError(ex) ? "Bez signálu to nepůjde." : ex.Message);
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}

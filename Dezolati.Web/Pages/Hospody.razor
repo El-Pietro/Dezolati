@@ -184,6 +184,7 @@
         await JS.InvokeVoidAsync("dzMap.create", "dzmap", self, lat, lon, zoom);
         await JS.InvokeVoidAsync("dzMap.setFilter", onlyFav, showClosed, kinds.ToArray());
         await ShowHomeAsync();
+        await ShowTrhyAsync();
         mapReady = true;
 
         PubCatalog.Changed += OnCatalogChanged;
@@ -298,6 +299,38 @@
         if (pub == null) return;
         ShowCard(pub, null);
         StateHasChanged();
+    }
+
+    // ---------------- event: vánoční trhy na mapě ----------------
+
+    private async Task ShowTrhyAsync()
+    {
+        await Events.EnsureAsync();
+        if (!Events.Active) { await JS.InvokeVoidAsync("dzMap.setTrhy", "[]"); return; }
+        double[][] Pts((double Lat, double Lon)[] r) => r.Select(p => new[] { Math.Round(p.Lat, 6), Math.Round(p.Lon, 6) }).ToArray();
+        var list = Trhy.All.Select(z => new
+        {
+            id = z.Id,
+            color = z.Status switch { "potvrzeno" => "#2E6B3A", "nahlaseno" => "#3C6E9E", _ => "#C46A12" },
+            polys = z.Polys.Select(Pts).ToArray(),
+            lines = z.Lines.Select(Pts).ToArray(),
+            w = z.W,
+            cc = z.Center is { } cc ? new[] { cc.Lat, cc.Lon } : null,
+            r = z.R,
+            c = new[] { Trhy.CenterOf(z).Lat, Trhy.CenterOf(z).Lon }
+        });
+        await JS.InvokeVoidAsync("dzMap.setTrhy", System.Text.Json.JsonSerializer.Serialize(list));
+    }
+
+    [JSInvokable]
+    public async Task OnTrhClick(string id)
+    {
+        if (Trhy.All.FirstOrDefault(z => z.Id == id) is not { } z) return;
+        var state = z.Status switch { "potvrzeno" => "termín potvrzený", "nahlaseno" => "nahlášené od lidí", _ => "termín odhadnutý" };
+        var running = z.RunsOn(Events.Today) ? "Dnes běží. " : "";
+        var r = await Note.ShowAsync(z.Name, $"{z.When} · {state}\n{running}Zápis tady se počítá do Trhovce a Svařáku.",
+            ("OK", PencilVariant.Primary), ("Tady jsou trhy!", PencilVariant.Secondary));
+        if (r == "Tady jsou trhy!") Nav.NavigateTo("trhy");
     }
 
     [JSInvokable]

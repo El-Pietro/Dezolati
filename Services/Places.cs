@@ -259,4 +259,110 @@ namespace Dezolati.Services
             return (nowBac, soberAt);
         }
     }
+
+    /// <summary>
+    /// Ruční oprava místa (ťuknutí na „📍 …“ na lístku): appka se spletla, sedím jinde.
+    /// Platí jen na tomhle místě: když odejdu dál než 50 m, nebo se ocitnu u jiné hospody, než kterou appka poznala
+    /// při opravě, poznává se zase samo. Jen v telefonu / prohlížeči.
+    /// </summary>
+    public static class PlaceOverride
+    {
+        private const string Key = "place_override";
+        public const double KeepMeters = 50;
+
+        private sealed record Data(string? Place, string? PubId, string? PubName, double? PubLat, double? PubLon,
+            string? TrhId, double Lat, double Lon, string? DetectedPubId, DateTime Day);
+
+        private static Data? Load()
+        {
+            try
+            {
+                var json = Preferences.Get(Key, null as string);
+                return string.IsNullOrEmpty(json) ? null : JsonSerializer.Deserialize<Data>(json);
+            }
+            catch { return null; }
+        }
+
+        public static bool IsSet => Load() != null;
+
+        /// <summary>Zapamatovat opravu. me = kde teď jsem, detected = co appka poznala sama (to oprava přebíjí).</summary>
+        public static void Set(PlaceInfo place, string? trhId, (double Lat, double Lon) me, string? detectedPubId, DateTime day)
+        {
+            try
+            {
+                Preferences.Set(Key, JsonSerializer.Serialize(new Data(place.Place, place.PubId, place.PubName, place.Lat, place.Lon,
+                    trhId, me.Lat, me.Lon, detectedPubId, day.Date)));
+            }
+            catch { }
+        }
+
+        public static void Clear()
+        {
+            try { Preferences.Remove(Key); } catch { }
+        }
+
+        /// <summary>
+        /// Opravené místo pro zápis, nebo null (oprava neplatí – jiný den, odešel jsem, jsem u jiné hospody).
+        /// me = poloha teď (null = nevím → oprava platí dál), detected = co appka poznala teď.
+        /// </summary>
+        public static (PlaceInfo Place, string? TrhId)? Apply(PlaceInfo detected, (double Lat, double Lon)? me, DateTime day)
+        {
+            if (Load() is not { } d) return null;
+            var moved = me is { } m && PubCatalog.DistanceMeters(m.Lat, m.Lon, d.Lat, d.Lon) > KeepMeters;
+            var otherPub = detected.PubId != null && detected.PubId != d.PubId && detected.PubId != d.DetectedPubId;
+            if (d.Day != day.Date || moved || otherPub)
+            {
+                Clear();
+                return null;
+            }
+            return (new PlaceInfo(d.Place, d.PubId, d.PubName, d.PubLat, d.PubLon), d.TrhId);
+        }
+    }
+
+    /// <summary>Jedna volba v ruční opravě místa (Place null = zase poznávat samo).</summary>
+    public sealed record PlaceChoice(string Label, PlaceInfo? Place, string? TrhId);
+
+    /// <summary>Ruční oprava místa: nabídka (hospody okolo, trhy, doma, jinde) a uložení volby. Sdílené s webem.</summary>
+    public static class PlaceChoices
+    {
+        /// <summary>Kde jsem a co nabídnout; null = poloha nejde zjistit.</summary>
+        public static async Task<((double Lat, double Lon) Me, List<PlaceChoice> Choices)?> LoadAsync(DateTime day)
+        {
+            if (await PushService.LocateAsync() is not { } loc) return null;
+            try
+            {
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+                await PubCatalog.EnsureCellsAsync(PubCatalog.CellsNear(loc.Lat, loc.Lon), cts.Token);
+            }
+            catch { }
+            await PubService.LoadOverlayAsync();
+
+            var list = new List<PlaceChoice>();
+            foreach (var (pub, m) in PubService.Around(loc.Lat, loc.Lon, 150, 4))
+            {
+                var name = PubService.NameOf(pub);
+                list.Add(new($"{name} · {Trhy.DistanceText(m)}", new PlaceInfo(Place.Pub, pub.Id, name, pub.Lat, pub.Lon), null));
+            }
+            if (Events.Active && Trhy.All.FirstOrDefault(z => (Events.Preview || z.RunsOn(day)) && Trhy.Contains(z, loc.Lat, loc.Lon, 60)) is { } trh)
+                list.Add(new($"Trhy: {trh.Name}", new PlaceInfo(Place.Other, null, trh.Name, loc.Lat, loc.Lon), trh.Id));
+            list.Add(new("Doma", new PlaceInfo(Place.Home, null, null, loc.Lat, loc.Lon), null));
+            list.Add(new("Jinde (venku)", new PlaceInfo(Place.Other, null, null, loc.Lat, loc.Lon), null));
+            if (PlaceOverride.IsSet) list.Add(new("Poznávat samo", null, null));
+            return ((loc.Lat, loc.Lon), list);
+        }
+
+        /// <summary>Uložit volbu: platí pro další zápisy tady a lístek ji hned ukáže.</summary>
+        public static void Choose(PlaceChoice choice, (double Lat, double Lon) me, DateTime day)
+        {
+            if (AuthSession.Uid is not string uid) return;
+            if (choice.Place is not { } place)
+            {
+                PlaceOverride.Clear();
+                return;
+            }
+            var detected = PubService.Nearest(me.Lat, me.Lon, 60)?.Id;
+            PlaceOverride.Set(place, choice.TrhId, me, detected, day);
+            PushService.RememberPlace(uid, day, place);
+        }
+    }
 }

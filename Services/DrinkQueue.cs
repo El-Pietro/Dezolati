@@ -25,7 +25,10 @@ namespace Dezolati.Services
         bool PromileSet = false,       // zapsat odhad promile do profilu (kámoši ho uvidí); null hodnota = smazat
         double? PromileValue = null,
         int Michacky = 0,              // míchané drinky (od 3.12)
-        string? PanakDruh = null);     // druh panáků v zápisu (Services/PanakDruhy.cs), null = Ostatní
+        string? PanakDruh = null,      // druh panáků v zápisu (Services/PanakDruhy.cs), null = Ostatní
+        string? TrhId = null,          // event: vánoční trh poznaný v telefonu (Services/Events.cs)
+        double? EvLat = null,          // event: poloha zaokrouhlená na 0,001° (~100 m) – zpětné odznaky, vidí jen server
+        double? EvLon = null);
 
     /// <summary>
     /// Fronta zápisů v telefonu. Každý zápis jde nejdřív sem a hned se zkusí odeslat.
@@ -189,7 +192,10 @@ namespace Dezolati.Services
                     ["SharePub"] = d.SharePub, // Cloud Function pošle kámošům „sedí v hospodě“ jen při true
                     ["Place"] = d.Place,
                     ["Kc"] = d.Kc,
-                    ["ShareDrink"] = d.ShareDrink
+                    ["ShareDrink"] = d.ShareDrink,
+                    ["TrhId"] = d.TrhId,
+                    ["EvLat"] = d.EvLat,
+                    ["EvLon"] = d.EvLon
                 }, mustNotExist: true),
 
                 // 2) denní součet – atomicky přičíst (u škrtnutí odečíst)

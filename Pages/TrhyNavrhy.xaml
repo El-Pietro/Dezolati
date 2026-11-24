@@ -1,0 +1,54 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:controls="clr-namespace:Dezolati.Controls"
+             x:Class="Dezolati.Pages.TrhyNavrhy"
+             Title="Návrhy trhů">
+    <!-- Jen pro správce: hlášení „Tady jsou trhy!“ a úprava trhů ze seznamu (termíny, název, stav) -->
+    <Grid RowDefinitions="Auto, *">
+        <Image Grid.RowSpan="2" Source="{AppThemeBinding Light=woodlight.jpg, Dark=wooddark.jpg}" Aspect="AspectFill" />
+
+        <BoxView Grid.Row="0" HeightRequest="0" Color="Transparent" InputTransparent="True" Margin="{DynamicResource TopBarMargin}" />
+        <controls:PencilButton Grid.Row="0" Variant="Outline" Text="Zpět" IsVisible="{OnPlatform Default=True, Android=False}"
+                               HorizontalOptions="Start" Margin="{DynamicResource TopBarMargin}" Clicked="OnZpetClicked" />
+
+        <Border Grid.Row="1" Style="{StaticResource Listek}">
+            <ScrollView>
+                <VerticalStackLayout Spacing="6">
+                    <Label Text="Návrhy trhů " Style="{StaticResource Title}" />
+                    <ActivityIndicator x:Name="Busy" IsRunning="False" IsVisible="False" Color="{StaticResource Pencil}" />
+                    <Label x:Name="StatusLabel" Style="{StaticResource Small}" HorizontalTextAlignment="Center" IsVisible="False" />
+                    <VerticalStackLayout x:Name="ListBox" Spacing="16" />
+
+                    <!-- úprava trhu ze seznamu -->
+                    <Label Text="Upravit trh " Style="{StaticResource Heading}" Margin="0,18,0,0" />
+                    <Picker x:Name="TrhPicker" Title="Vyber trh" SelectedIndexChanged="OnTrhPicked" />
+                    <VerticalStackLayout x:Name="EditBox" Spacing="6" IsVisible="False">
+                        <Entry x:Name="EditName" Placeholder="Název" MaxLength="80" />
+                        <Grid ColumnDefinitions="Auto, *, Auto, *" ColumnSpacing="8">
+                            <Label Text="od" Style="{StaticResource Small}" VerticalOptions="Center" />
+                            <DatePicker x:Name="EditFrom" Grid.Column="1" Format="d. M. yyyy" />
+                            <Label Grid.Column="2" Text="do" Style="{StaticResource Small}" VerticalOptions="Center" />
+                            <DatePicker x:Name="EditTo" Grid.Column="3" Format="d. M. yyyy" />
+                        </Grid>
+                        <Grid ColumnDefinitions="*, *, *" ColumnSpacing="6">
+                            <controls:PencilButton x:Name="StPotvrzeno" Grid.Column="0" Text="Potvrzeno" Variant="Secondary" FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                                   CommandParameter="potvrzeno" Clicked="OnStatusClicked" />
+                            <controls:PencilButton x:Name="StOdhad" Grid.Column="1" Text="Odhad" Variant="Secondary" FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                                   CommandParameter="odhad" Clicked="OnStatusClicked" />
+                            <controls:PencilButton x:Name="StNahlaseno" Grid.Column="2" Text="Nahlášeno" Variant="Secondary" FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                                   CommandParameter="nahlaseno" Clicked="OnStatusClicked" />
+                        </Grid>
+                        <Grid ColumnDefinitions="*, *" ColumnSpacing="10">
+                            <controls:PencilButton Grid.Column="0" Text="Uložit" Variant="Primary" FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}" Clicked="OnEditSaveClicked" />
+                            <controls:PencilButton Grid.Column="1" Text="Smazat trh" Variant="Danger" FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}" Clicked="OnEditRemoveClicked" />
+                        </Grid>
+                    </VerticalStackLayout>
+
+                    <controls:PencilButton x:Name="RefreshButton" Text="Obnovit" Variant="Secondary"
+                                           Margin="0,14,0,0" Clicked="OnRefreshClicked" />
+                </VerticalStackLayout>
+            </ScrollView>
+        </Border>
+    </Grid>
+</ContentPage>

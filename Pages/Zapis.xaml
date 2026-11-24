@@ -22,11 +22,11 @@
 
                     <Label Text="Piva (velké 0,5 l):" Style="{StaticResource FieldLabel}" />
                     <Slider x:Name="PivaSlider" Minimum="0" Maximum="10" Value="1" ValueChanged="OnSliderValueChanged" />
-                    <Label x:Name="PivaLabel" Text="1" Style="{StaticResource Heading}" HorizontalOptions="Center" />
+                    <Label x:Name="PivaLabel" Text="1 " Style="{StaticResource Heading}" HorizontalOptions="Center" />
 
                     <Label Text="Víno (sklenka 2 dcl):" Style="{StaticResource FieldLabel}" />
                     <Slider x:Name="VinoSlider" Minimum="0" Maximum="10" Value="0" ValueChanged="OnSliderValueChanged" />
-                    <Label x:Name="VinoLabel" Text="0" Style="{StaticResource Heading}" HorizontalOptions="Center" />
+                    <Label x:Name="VinoLabel" Text="0 " Style="{StaticResource Heading}" HorizontalOptions="Center" />
 
                     <!-- druh panáku: schovaný za šipečkou, výchozí je „ostatní“ (stejně je to pořád panák) -->
                     <Grid ColumnDefinitions="*, Auto">
@@ -39,11 +39,11 @@
                         </Label>
                     </Grid>
                     <Slider x:Name="PanakySlider" Minimum="0" Maximum="10" Value="0" ValueChanged="OnSliderValueChanged" />
-                    <Label x:Name="PanakyLabel" Text="0" Style="{StaticResource Heading}" HorizontalOptions="Center" />
+                    <Label x:Name="PanakyLabel" Text="0 " Style="{StaticResource Heading}" HorizontalOptions="Center" />
 
                     <Label Text="Míchačky (drink s panákem):" Style="{StaticResource FieldLabel}" />
                     <Slider x:Name="MichackySlider" Minimum="0" Maximum="10" Value="0" ValueChanged="OnSliderValueChanged" />
-                    <Label x:Name="MichackyLabel" Text="0" Style="{StaticResource Heading}" HorizontalOptions="Center" />
+                    <Label x:Name="MichackyLabel" Text="0 " Style="{StaticResource Heading}" HorizontalOptions="Center" />
 
                     <controls:PencilButton x:Name="ZapsatButton" Text="Zapsat" Variant="Primary"
                                            Margin="0,12,0,0" Clicked="OnZapsatClicked" />

@@ -177,6 +177,24 @@ namespace Dezolati.Services
         /// Kde teď jsem: doma (do 80 m od domova, poloha domova jen v telefonu), v hospodě (do 60 m),
         /// jinde, nebo nevím (poznávání vypnuté / bez polohy). Nezdržuje zápis víc než pár sekund.
         /// </summary>
+        /// <summary>Přesná poloha teď (hlášení trhů): zeptá se na povolení, čeká max. 10 s. Null = nejde.</summary>
+        public static async Task<(double Lat, double Lon, double? Accuracy)?> LocateAsync()
+        {
+            try
+            {
+                if (await Permissions.RequestAsync<Permissions.LocationWhenInUse>() != PermissionStatus.Granted) return null;
+                var loc = await Geolocation.GetLocationAsync(new GeolocationRequest(GeolocationAccuracy.Best, TimeSpan.FromSeconds(10)))
+                          ?? await Geolocation.GetLastKnownLocationAsync();
+                if (loc == null) return null;
+                LastLocation.Remember(loc.Latitude, loc.Longitude);
+                return (loc.Latitude, loc.Longitude, loc.Accuracy);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
         public static async Task<PlaceInfo> PlaceHereAsync()
         {
             if (!DetectPub && !SharePub) return PlaceInfo.Unknown;
@@ -193,8 +211,9 @@ namespace Dezolati.Services
 
                 LastLocation.Remember(loc.Latitude, loc.Longitude);
                 // doma / venku: poloha se hodí kámošům na mapu (jen při hlášení „I kde“)
-                if (HomePlace.IsNear(loc.Latitude, loc.Longitude))
-                    return new PlaceInfo(Place.Home, null, null, loc.Latitude, loc.Longitude);
+                // domov má přednost před hospodou vedle (ruční oprava na lístku to přebije)
+                var homeDist = HomePlace.Location is { } home ? PubCatalog.DistanceMeters(loc.Latitude, loc.Longitude, home.Lat, home.Lon) : double.MaxValue;
+                var nearHome = homeDist <= HomePlace.RadiusMeters;
 
                 // hospody v okolí: chybí-li čtverec mapy, dotáhnout (max. pár sekund, bez signálu nic)
                 try
@@ -205,6 +224,9 @@ namespace Dezolati.Services
                 catch { }
                 await PubService.LoadOverlayAsync();
                 var pub = PubService.Nearest(loc.Latitude, loc.Longitude, PubRadiusMeters);
+                // do 80 m od domova je doma, i když je hospoda blíž (poloha doma skáče; opravit jde ťuknutím na lístek)
+                if (nearHome)
+                    return new PlaceInfo(Place.Home, null, null, loc.Latitude, loc.Longitude);
                 return pub == null
                     ? new PlaceInfo(Place.Other, null, null, loc.Latitude, loc.Longitude)
                     : new PlaceInfo(Place.Pub, pub.Id, PubService.NameOf(pub), pub.Lat, pub.Lon);

@@ -4,7 +4,8 @@
 @inject NavigationManager Nav
 
 @* Lístek (Pages/MainPage v appce). Lišta jako v appce: Hospody | Hry | Přátelé. *@
-<div class="topbar">
+@{ var theme = Events.Theme; }
+<div class="topbar @(theme != null ? "ev" : "")">
     <PencilButton Variant="PencilVariant.Outline" Text="Hospody" OnClick="@(() => Nav.NavigateTo("hospody"))" />
     <div class="spacer"></div>
     <PencilButton Variant="PencilVariant.Outline" Text="Hry" OnClick="@(() => Nav.NavigateTo("hry"))" />
@@ -18,14 +19,49 @@
     </div>
 </div>
 
-<div class="listek grow wet">
+<div class="listek grow wet @(theme != null ? "ev" : "")">
+    @if (theme != null)
+    {
+        @if (theme == "silvestr")
+        {
+            <svg class="ev-streamer" width="120" height="60" viewBox="0 0 120 60" aria-hidden="true">@((MarkupString)SceneKit.ToSvg(EventScene.Streamer()))</svg>
+        }
+        @if (theme == "vanoce")
+        {
+            <svg class="ev-mistletoe" width="78" height="70" viewBox="0 0 78 70" aria-hidden="true">@((MarkupString)SceneKit.ToSvg(EventScene.Mistletoe()))</svg>
+        }
+        else if (theme == "silvestr")
+        {
+        <svg class="ev-sekt" width="92" height="96" viewBox="0 0 92 96" aria-hidden="true">
+          <g transform="rotate(32 46 60)">
+            <!-- pěna z hrdla (za láhví, vyrůstá nahoru) -->
+            <path class="sk-foam" d="M38 18 C 34 12, 38 6, 42 8 C 41 2, 48 0, 50 5 C 54 2, 59 7, 55 11 C 59 14, 56 19, 53 18 Z" fill="#FFF8DC" stroke="#E8D9A0" stroke-width="1"></path>
+            <path d="M38 92 L38 52 C 38 44, 42 40, 42 32 L42 18 L50 18 L50 32 C 50 40, 54 44, 54 52 L54 92 Z" fill="#2F5A2A" stroke="#1F3D1C" stroke-width="1.2"></path>
+            <path d="M41 17 L51 17 L52 34 C 52 38, 40 38, 40 34 Z" fill="#D9B13B" stroke="#A9861F" stroke-width="1"></path>
+            <!-- stékající pěna po hrdle -->
+            <path class="sk-drip" d="M42 17 C 41 22, 42 26, 43.5 27 C 45 26, 44 21, 45 17 Z M48 17 C 48 20, 48 23, 49.5 23.5 C 51 23, 50.5 20, 50.5 17 Z" fill="#FFF8DC" stroke="#E8D9A0" stroke-width=".8"></path>
+            <rect x="38.5" y="58" width="15" height="18" rx="2" fill="#F4ECD2" stroke="#C9B98F" stroke-width="1"></rect>
+            <path d="M41 63 H51 M41 67 H49 M41 71 H50" stroke="#8E1B2A" stroke-width="1.2"></path>
+            <path d="M43 52 C 44 48, 44 42, 44 36" stroke="#6E9A5C" stroke-width="1.6" fill="none" opacity=".7"></path>
+            <!-- špunt na hrdle; vyletí po ose láhve -->
+            <g class="sk-cork" >
+              <path d="M42 18 L42.5 9 C 42.5 6, 49.5 6, 49.5 9 L50 18 Z" fill="#C89B5A" stroke="#8A6630" stroke-width="1"></path>
+              <path d="M43 13 H49" stroke="#8A6630" stroke-width=".8"></path>
+            </g>
+            <circle class="sk-bub" cx="44" cy="10" r="1.8" fill="#F7E7A6" style="--bx: -6px; animation-delay: .05s"></circle>
+            <circle class="sk-bub" cx="48" cy="9" r="1.4" fill="#F7E7A6" style="--bx: 5px; animation-delay: .2s"></circle>
+            <circle class="sk-bub" cx="46" cy="11" r="1.2" fill="#F7E7A6" style="--bx: -1px; animation-delay: .35s"></circle>
+          </g>
+        </svg>
+        }
+    }
     @* mokrá kolečka od piv a vín – pod čárkami, podle dne (Services/Krouzky.cs, stejně jako v appce) *@
     <svg class="rings" aria-hidden="true">
         @foreach (var r in Krouzky.For(shownDay, shownPivo, shownVino))
         {
             // poloha v % lístku, velikost v px (kruh se nesmí roztáhnout do elipsy)
             var rad = r.R * 300; var circ = rad * 2 * Math.PI;
-            var color = r.Wine ? "#7A1C2C" : "#A0661C";
+            var color = EventScene.RingColor(theme) ?? (r.Wine ? "#7A1C2C" : "#A0661C");
             var cx = F(r.X * 100) + "%"; var cy = F(r.Y * 100) + "%";
             <g opacity="@F(r.Opacity)">
                 <circle cx="@cx" cy="@cy" r="@F(rad * 0.92)" fill="@color" fill-opacity="0.18" />
@@ -39,32 +75,61 @@
         }
     </svg>
     <div class="title">Dezoláti!</div>
-    <div class="body center pre">@souhrn</div>
+    @if (EventScene.Tag(theme, DateTime.Now) is { } tag)
+    {
+        @* cedulka eventu – ťuknutím detail eventu *@
+        <div class="ev-tag @tag.Theme" @onclick="EventTagTapped">
+            <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">@((MarkupString)SceneKit.ToSvg(EventScene.TagIcon(tag.Theme)))</svg>
+            <span class="t">@tag.Title</span>
+            @if (tag.Candles >= 0)
+            {
+                <svg width="42" height="20" viewBox="0 0 42 20" aria-hidden="true">@((MarkupString)SceneKit.ToSvg(EventScene.Candles(tag.Candles)))</svg>
+            }
+            @if (tag.Detail.Length > 0)
+            {
+                <span class="d">@tag.Detail</span>
+            }
+        </div>
+    }
+    @* ťuknutí: ruční oprava místa („📍 …“), platí do 50 m *@
+    <div class="body center pre" style="cursor:pointer" @onclick="PlaceTapped">@souhrn</div>
     @if (promile != null)
     {
         <div class="small soft center">@promile</div>
     }
 
-    <div class="stack" style="margin-top:8px">
+    @* mezery mezi řádky rostou podle místa (.tally-gap, max. 40 px) *@
+    <div class="tally-rows">
         @foreach (var (kind, label, count, seed) in Rows)
         {
+            @if (kind != "Pivo")
+            {
+                <div class="tally-gap"></div>
+            }
             <div class="tally-row" @onclick="() => RowTapped(kind)">
                 <div class="heading">@label</div>
-                <div class="carky">
-                    @foreach (var (src, cross, style) in Carky(count, seed, shownDay))
-                    {
-                        <img src="img/@src" class="@(cross ? "cross" : "")" style="@style" alt="" />
-                    }
-                </div>
+                @* čárky propiskou – stejná kresba jako v appce (Services/Carky.cs) *@
+                @{ var th = TallyScene.HeightFor(count, CarkyWidth); }
+                <svg class="carky-svg" width="@F(CarkyWidth)" height="@F(th)" viewBox="0 0 @F(CarkyWidth) @F(th)" aria-hidden="true">
+                    @((MarkupString)SceneKit.ToSvg(TallyScene.Build(count, CarkyWidth, shownDay, seed - 1)))
+                </svg>
             </div>
         }
+        <div class="tally-gap"></div>
         <div class="small soft center" style="margin-top:12px">(ťukni na řádek – připíšeš nebo škrtneš čárku)</div>
     </div>
 </div>
 
 <div class="bottombar">
     <PencilButton Variant="PencilVariant.Outline" Text="Statistiky" OnClick="@(() => Nav.NavigateTo("statistiky"))" />
-    <button class="coaster" aria-label="Zapsat" @onclick="@(() => Nav.NavigateTo("zapis"))"><i class="h"></i><i class="v"></i></button>
+    <button class="coaster" aria-label="Zapsat" @onclick="@(() => Nav.NavigateTo("zapis"))"><i class="h"></i><i class="v"></i>@if (theme == "silvestr")
+        {
+            <svg class="ev-coaster-streamer" width="100" height="100" viewBox="0 0 100 100" aria-hidden="true">@((MarkupString)SceneKit.ToSvg(EventScene.CoasterStreamer()))</svg>
+        }
+        else if (theme != null)
+        {
+            <svg class="ev-coaster-cap" width="88" height="26" viewBox="0 0 88 26" aria-hidden="true">@((MarkupString)SceneKit.ToSvg(EventScene.CoasterCap()))</svg>
+        }</button>
     <PencilButton Variant="PencilVariant.Outline" Text="Nastavení" OnClick="@(() => Nav.NavigateTo("nastaveni"))" />
 </div>
 
@@ -87,24 +152,8 @@
         ("Michacky", "Míchačky:", shownMichacky, 4)
     };
 
-    private static readonly string[] CarkyImages =
-    {
-        "carka1.png", "carka2.png", "carka3.png", "carka4.png", "carka5.png",
-        "carka6.png", "carka7.png", "carka8.png", "carka9.png", "carka10.png"
-    };
-
-    // pevný seed = čárky vypadají pokaždé stejně (a stejně jako v appce); „šejdr“ podle dne
-    private static IEnumerable<(string Src, bool Cross, string Style)> Carky(int count, int seed, DateTime day)
-    {
-        var random = new Random(seed);
-        for (var i = 0; i < count; i++)
-        {
-            var cross = i % 5 == 4;
-            var (rot, dy, scale) = Krouzky.Jitter(day, seed - 1, i);
-            var style = $"transform: translateY({F(dy)}px) rotate({F((cross ? -80 : 0) + rot)}deg) scale({F(scale)})";
-            yield return (CarkyImages[random.Next(CarkyImages.Length)], cross, style);
-        }
-    }
+    // šířka, na kterou se čárky skládají (3 pětky na řádek; na užším displeji se kresba jen zmenší)
+    private const double CarkyWidth = 290;
 
     private static string F(double v) => v.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
 
@@ -125,6 +174,9 @@
         // čekající žádosti o přátelství (jen při spuštění / návratu / oznámení) a token pro oznámení
         _ = FriendBadge.RefreshAsync();
         _ = WebPush.RefreshAsync();
+        Events.Changed += OnEventChanged;
+        _ = Events.EnsureAsync();   // event (Vánoce …): max. 1× za 12 h
+        _ = ShowNewBadgesAsync();
     }
 
     private void OnBadgeChanged() => InvokeAsync(StateHasChanged);
@@ -234,7 +286,7 @@
             : "Dnes: " + Cz.Souhrn(pivo, vino, panaky, michacky);
 
         if (AuthSession.Uid is string uid && PushService.LastPubName(uid, shownDay) is string pub)
-            text += $"\n📍 {pub}";
+            text += $"\n📍 {(pub == "doma" ? "Doma" : pub)}";
 
         if (pendingCount > 0)
             text += $"\n({Cz.Plural(pendingCount, "zápis čeká", "zápisy čekají", "zápisů čeká")} na signál)";
@@ -284,8 +336,55 @@
         await LoadData();
     }
 
+    // ---------------- event (Vánoce …) ----------------
+
+    private void OnEventChanged(object? sender, EventArgs e) => InvokeAsync(StateHasChanged);
+
+    /// <summary>Ruční oprava místa: appka se spletla (doma vs. hospoda vedle) → vybrat, kde opravdu sedím.</summary>
+    private async Task PlaceTapped()
+    {
+        if (shownDay.Date != UserSession.CurrentPubDay.Date) return;   // jen dnešek
+        if (!PushService.DetectPub)
+        {
+            await Note.AlertAsync("Kde sedím", "Poznávání místa máš vypnuté v Nastavení.");
+            return;
+        }
+        ((double Lat, double Lon) Me, List<PlaceChoice> Choices)? loaded;
+        using (Note.Busy("Kde sedím", "Zjišťuju, kde jsi…")) loaded = await PlaceChoices.LoadAsync(shownDay);
+        if (loaded is not { } l)
+        {
+            await Note.AlertAsync("Kde sedím", Dezolati.Web.WebGeo.Explain(Dezolati.Web.WebGeo.LastError));
+            return;
+        }
+        var pick = await Note.ShowAsync("Kde opravdu sedíš?",
+            "Platí pro další zápisy, dokud neodejdeš dál než 50 m. Pak se místo zase pozná samo.",
+            l.Choices.Select((c, i) => (c.Label, i == 0 ? PencilVariant.Primary : PencilVariant.Secondary)).ToArray());
+        if (l.Choices.FirstOrDefault(c => c.Label == pick) is not { } choice) return;
+        PlaceChoices.Choose(choice, l.Me, shownDay);
+        await LoadData();
+        StateHasChanged();
+    }
+
+    /// <summary>Okno „Nový odznak“ (nejvýš 1× za 10 min; jen když běží event).</summary>
+    private async Task ShowNewBadgesAsync()
+    {
+        foreach (var b in await Badges.CheckNewAsync())
+        {
+            var r = await Note.ShowAsync($"Nový odznak: {b.Name}!", b.Desc,
+                ("Na zdraví!", PencilVariant.Primary), ("Ukázat odznaky", PencilVariant.Secondary));
+            if (r == "Ukázat odznaky")
+            {
+                Nav.NavigateTo("statistiky");
+                return;
+            }
+        }
+    }
+
+    private void EventTagTapped() => Nav.NavigateTo("trhy");   // detail eventu: trhy poblíž, „Tady jsou trhy!“, odznaky, mapa
+
     public void Dispose()
     {
+        Events.Changed -= OnEventChanged;
         UserSession.DrinksChanged -= OnDrinksChanged;
         FriendBadge.Changed -= OnBadgeChanged;
         WebPlatform.Changed -= OnDrinksChanged;

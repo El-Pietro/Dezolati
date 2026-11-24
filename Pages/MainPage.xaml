@@ -11,8 +11,11 @@
                Source="{AppThemeBinding Light=woodlight.jpg, Dark=wooddark.jpg}"
                Aspect="AspectFill" />
 
+        <!-- event: světýlka nahoře a ohňostroj – na stole, pod tlačítky (Services/EventScene.cs) -->
+        <GraphicsView x:Name="BackFxView" Grid.RowSpan="3" InputTransparent="True" IsVisible="False" />
+
         <!-- Horní lišta: Hospody | Hry | Přátelé -->
-        <Grid Grid.Row="0" ColumnDefinitions="Auto, *, Auto" ColumnSpacing="6" Margin="{DynamicResource TopBarMargin}">
+        <Grid x:Name="TopBar" Grid.Row="0" ColumnDefinitions="Auto, *, Auto" ColumnSpacing="6" Margin="{DynamicResource TopBarMargin}">
             <controls:PencilButton Grid.Column="0"
                                    Variant="Outline"
                                    Text="Hospody"
@@ -52,17 +55,38 @@
         </Grid>
 
         <!-- Lístek -->
-        <Border Grid.Row="1" Style="{StaticResource Listek}" Margin="16,0,16,12">
+        <Border x:Name="ListekBorder" Grid.Row="1" Style="{StaticResource Listek}" Margin="16,0,16,12">
             <Grid RowDefinitions="Auto, Auto, Auto, *">
                 <!-- mokrá kolečka od piv a vín (pod vším ostatním, ťuknutí propouští) -->
                 <GraphicsView x:Name="RingsView" Grid.RowSpan="4" InputTransparent="True" />
-                <Label Grid.Row="0" Text="Dezoláti!" Style="{StaticResource Title}" />
+                <VerticalStackLayout Grid.Row="0" Spacing="0">
+                    <Label Text="Dezoláti!" Style="{StaticResource Title}" />
+                    <!-- cedulka eventu (Advent 2/4, Silvestr · do půlnoci …) -->
+                    <Border x:Name="EventTag" IsVisible="False" HorizontalOptions="Center" Rotation="-1.5" Margin="0,2,0,4"
+                            Padding="8,1,10,1" StrokeThickness="1.5" StrokeShape="RoundRectangle 8">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnEventTagTapped" />
+                        </Border.GestureRecognizers>
+                        <!-- obsah propouští ťuknutí na celý rámeček (kreslicí plochy by si ho jinak nechaly) -->
+                        <HorizontalStackLayout Spacing="7" InputTransparent="True">
+                            <GraphicsView x:Name="EventTagIcon" WidthRequest="20" HeightRequest="20" VerticalOptions="Center" />
+                            <Label x:Name="EventTagTitle" FontFamily="CaveatBold" FontSize="19" VerticalOptions="Center" />
+                            <GraphicsView x:Name="EventTagCandles" WidthRequest="42" HeightRequest="20" VerticalOptions="Center" />
+                            <Label x:Name="EventTagDetail" FontSize="18" VerticalOptions="Center" />
+                        </HorizontalStackLayout>
+                    </Border>
+                </VerticalStackLayout>
 
+                <!-- ťuknutí: ruční oprava místa („📍 …“), platí do 50 m -->
                 <Label x:Name="SouhrnLabel"
                        Grid.Row="1"
                        Text="Načítám lístek…"
                        HorizontalOptions="Fill"
-                       HorizontalTextAlignment="Center" />
+                       HorizontalTextAlignment="Center">
+                    <Label.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="OnPlaceTapped" />
+                    </Label.GestureRecognizers>
+                </Label>
 
                 <!-- orientační promile – malým písmem, není to hlavní informace -->
                 <Label x:Name="PromileLabel"
@@ -72,62 +96,62 @@
                        HorizontalTextAlignment="Center"
                        IsVisible="False" />
 
-                <ScrollView Grid.Row="3" Margin="0,8,0,0">
-                    <VerticalStackLayout Spacing="2">
-                        <Label Text="Pívo:" Style="{StaticResource Heading}">
+                <!-- mezery mezi řádky se dopočítají podle místa (MainPage.FitRows) -->
+                <ScrollView x:Name="RowsScroll" Grid.Row="3" Margin="0,4,0,0" SizeChanged="OnRowsSizeChanged">
+                    <VerticalStackLayout x:Name="RowsStack" Spacing="0">
+                        <Label Text="Pívo:" Style="{StaticResource Heading}" Margin="0,0,0,-3">
                             <Label.GestureRecognizers>
                                 <TapGestureRecognizer Tapped="OnRowTapped" CommandParameter="Pivo" />
                             </Label.GestureRecognizers>
                         </Label>
-                        <FlexLayout x:Name="Pivo" Direction="Row" Wrap="Wrap" JustifyContent="Start"
-                                    AlignItems="Start" Margin="5" Padding="5" MinimumHeightRequest="30">
-                            <FlexLayout.GestureRecognizers>
+                        <GraphicsView x:Name="Pivo" Margin="5,0,5,2" HeightRequest="30">
+                            <GraphicsView.GestureRecognizers>
                                 <TapGestureRecognizer Tapped="OnRowTapped" CommandParameter="Pivo" />
-                            </FlexLayout.GestureRecognizers>
-                        </FlexLayout>
+                            </GraphicsView.GestureRecognizers>
+                        </GraphicsView>
 
-                        <Label Text="Víno:" Style="{StaticResource Heading}">
+                        <Label x:Name="VinoHeader" Text="Víno:" Style="{StaticResource Heading}" Margin="0,0,0,-3">
                             <Label.GestureRecognizers>
                                 <TapGestureRecognizer Tapped="OnRowTapped" CommandParameter="Vino" />
                             </Label.GestureRecognizers>
                         </Label>
-                        <FlexLayout x:Name="Vino" Direction="Row" Wrap="Wrap" JustifyContent="Start"
-                                    AlignItems="Start" Margin="5" Padding="5" MinimumHeightRequest="30">
-                            <FlexLayout.GestureRecognizers>
+                        <GraphicsView x:Name="Vino" Margin="5,0,5,2" HeightRequest="30">
+                            <GraphicsView.GestureRecognizers>
                                 <TapGestureRecognizer Tapped="OnRowTapped" CommandParameter="Vino" />
-                            </FlexLayout.GestureRecognizers>
-                        </FlexLayout>
+                            </GraphicsView.GestureRecognizers>
+                        </GraphicsView>
 
-                        <Label Text="Panáky:" Style="{StaticResource Heading}">
+                        <Label x:Name="PanakyHeader" Text="Panáky:" Style="{StaticResource Heading}" Margin="0,0,0,-3">
                             <Label.GestureRecognizers>
                                 <TapGestureRecognizer Tapped="OnRowTapped" CommandParameter="Panaky" />
                             </Label.GestureRecognizers>
                         </Label>
-                        <FlexLayout x:Name="Panaky" Direction="Row" Wrap="Wrap" JustifyContent="Start"
-                                    AlignItems="Start" Margin="5" Padding="5" MinimumHeightRequest="30">
-                            <FlexLayout.GestureRecognizers>
+                        <GraphicsView x:Name="Panaky" Margin="5,0,5,2" HeightRequest="30">
+                            <GraphicsView.GestureRecognizers>
                                 <TapGestureRecognizer Tapped="OnRowTapped" CommandParameter="Panaky" />
-                            </FlexLayout.GestureRecognizers>
-                        </FlexLayout>
+                            </GraphicsView.GestureRecognizers>
+                        </GraphicsView>
 
-                        <Label x:Name="MichackyHeader" Text="Míchačky:" Style="{StaticResource Heading}">
+                        <Label x:Name="MichackyHeader" Text="Míchačky:" Style="{StaticResource Heading}" Margin="0,0,0,-3">
                             <Label.GestureRecognizers>
                                 <TapGestureRecognizer Tapped="OnRowTapped" CommandParameter="Michacky" />
                             </Label.GestureRecognizers>
                         </Label>
-                        <FlexLayout x:Name="Michacky" Direction="Row" Wrap="Wrap" JustifyContent="Start"
-                                    AlignItems="Start" Margin="5" Padding="5" MinimumHeightRequest="30">
-                            <FlexLayout.GestureRecognizers>
+                        <GraphicsView x:Name="Michacky" Margin="5,0,5,2" HeightRequest="30">
+                            <GraphicsView.GestureRecognizers>
                                 <TapGestureRecognizer Tapped="OnRowTapped" CommandParameter="Michacky" />
-                            </FlexLayout.GestureRecognizers>
-                        </FlexLayout>
+                            </GraphicsView.GestureRecognizers>
+                        </GraphicsView>
 
-                        <Label Text="(ťukni na řádek – připíšeš nebo škrtneš čárku)" Style="{StaticResource Small}" HorizontalTextAlignment="Center"
+                        <Label x:Name="RowsHint" Text="(ťukni na řádek – připíšeš nebo škrtneš čárku)" Style="{StaticResource Small}" HorizontalTextAlignment="Center"
                                TextColor="{StaticResource InkSoft}" HorizontalOptions="Center" Margin="0,12,0,0" />
                     </VerticalStackLayout>
                 </ScrollView>
             </Grid>
         </Border>
+
+        <!-- event: sněhová čepice a jmelí / sekt přes okraj lístku (kreslí se podle polohy lístku) -->
+        <GraphicsView x:Name="DecoView" Grid.Row="1" Margin="0,-24,0,0" InputTransparent="True" IsVisible="False" />
 
         <!-- Spodní lišta: Statistiky | tácek | Nastavení -->
         <Grid Grid.Row="2"
@@ -167,6 +191,10 @@
                 </Grid>
             </Border>
 
+            <!-- event: čepice / serpentýna na tácku -->
+            <GraphicsView x:Name="CoasterFxView" Grid.Column="1" WidthRequest="108" HeightRequest="108"
+                          HorizontalOptions="Center" VerticalOptions="Center" InputTransparent="True" IsVisible="False" />
+
             <!-- Nastavení -->
             <controls:PencilButton Grid.Column="2"
                                    Variant="Outline"
@@ -175,5 +203,8 @@
                                    VerticalOptions="Center"
                                    Clicked="OnSettingsClicked" />
         </Grid>
+
+        <!-- event: padající sníh / konfety přes všechno (ťuknutí propouští) -->
+        <GraphicsView x:Name="SnowView" Grid.RowSpan="3" InputTransparent="True" IsVisible="False" />
     </Grid>
 </ContentPage>

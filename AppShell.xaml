@@ -98,5 +98,13 @@
         Title="Návrhy do OSM"
         ContentTemplate="{DataTemplate pages:OsmNavrhy}"
         Route="OsmNavrhy" />
+    <ShellContent
+        Title="Vánoční trhy"
+        ContentTemplate="{DataTemplate pages:TrhyPage}"
+        Route="Trhy" />
+    <ShellContent
+        Title="Návrhy trhů"
+        ContentTemplate="{DataTemplate pages:TrhyNavrhy}"
+        Route="TrhyNavrhy" />
 
 </Shell>

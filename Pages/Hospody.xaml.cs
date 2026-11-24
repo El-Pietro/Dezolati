@@ -2,12 +2,17 @@
 using Dezolati.Models;
 using Dezolati.Services;
 using Mapsui;
+using Mapsui.Extensions;
 using Mapsui.Layers;
+using Mapsui.Nts;
 using Mapsui.Projections;
 using Mapsui.Styles;
 using Mapsui.Tiling;
 using Mapsui.UI.Maui;
 using MBrush = Mapsui.Styles.Brush;
+using NtsGeometry = NetTopologySuite.Geometries.Geometry;
+using NtsCoordinate = NetTopologySuite.Geometries.Coordinate;
+using NetTopologySuite.Operation.Buffer;
 using MColor = Mapsui.Styles.Color;
 using MFont = Mapsui.Styles.Font;
 
@@ -173,6 +178,13 @@ public partial class Hospody : ContentPage, IQueryAttributable
 
     public void ApplyQueryAttributes(IDictionary<string, object> query)
     {
+        // z detailu eventu: zóny trhů zapnout
+        if (query.TryGetValue("trhy", out var tr) && tr as string == "1")
+        {
+            showTrhy = true;
+            Preferences.Set("map_trhy", true);
+            ShowTrhy();
+        }
         if (query.TryGetValue("focusLat", out var fla) && fla is double flat
             && query.TryGetValue("focusLon", out var flo) && flo is double flon)
         {
@@ -228,6 +240,8 @@ public partial class Hospody : ContentPage, IQueryAttributable
         pubLayer = new MemoryLayer("Hospody") { Style = null, IsMapInfoLayer = true };
         meLayer = new MemoryLayer("Já") { Style = null };
         homeLayer = new MemoryLayer("Domov") { Style = null };
+        trhyLayer = new MemoryLayer("Trhy") { Style = null, IsMapInfoLayer = true };
+        map.Layers.Add(trhyLayer);   // pod hospodami
         friendsLayer = new MemoryLayer("Kámoši") { Style = null, IsMapInfoLayer = true };
         map.Layers.Add(homeLayer);
         map.Layers.Add(pubLayer);
@@ -253,6 +267,10 @@ public partial class Hospody : ContentPage, IQueryAttributable
         };
         mapControl.Info += OnMapInfo;
         MapHost.Content = mapControl;
+
+        // event: zóny vánočních trhů jako vrstva mapy (kreslí ji Mapsui samo, posouvá se plynule s mapou)
+        ShowTrhy();
+        Events.Changed += (_, _) => MainThread.BeginInvokeOnMainThread(() => { UpdateFilterChips(); ShowTrhy(); });
     }
 
     private async Task LoadPubsAsync(bool force = false)
@@ -607,6 +625,11 @@ public partial class Hospody : ContentPage, IQueryAttributable
             MainThread.BeginInvokeOnMainThread(async () => await ShowFriendCardAsync(group));
             return;
         }
+        if (e.MapInfo?.Feature?["trh"] is string trhId && Trhy.All.FirstOrDefault(z => z.Id == trhId) is { } trh)
+        {
+            MainThread.BeginInvokeOnMainThread(async () => await ShowTrhAsync(trh));
+            return;
+        }
         if (e.MapInfo?.Feature?["id"] is not string id) return;
         var pub = PubService.Find(id)
                   ?? (Favorites.All.TryGetValue(id, out var fav) ? Favorites.ToPub(id, fav) : null);
@@ -676,7 +699,7 @@ public partial class Hospody : ContentPage, IQueryAttributable
     {
         HideFriendCard();
         selected = pub;
-        CardName.Text = PubService.NameOf(pub);
+        CardName.Text = PubService.NameOf(pub) + " ";   // mezera: Caveat na Androidu jinak ořízne konec názvu
         var info = PubService.IsClosed(pub) ? "zavřeno · " + pub.KindText : pub.KindText;
         if (!string.IsNullOrEmpty(pub.Address)) info += " · " + pub.Address;
         if (distanceMeters is double d) info += $" · {Math.Round(d)} m";
@@ -727,6 +750,8 @@ public partial class Hospody : ContentPage, IQueryAttributable
             b.Opacity = on ? 1.0 : 0.45;
         }
         Chip(ShowAll, !onlyFavorites);
+        FTrhy.IsVisible = Events.Active;
+        Chip(FTrhy, showTrhy);
         Chip(ShowFav, onlyFavorites);
         Chip(FPub, kinds.Contains("pub"));
         Chip(FBar, kinds.Contains("bar"));
@@ -765,6 +790,109 @@ public partial class Hospody : ContentPage, IQueryAttributable
     }
 
     private void OnFilterDoneClicked(object sender, EventArgs e) => FilterCard.IsVisible = false;
+
+    // ---------------- event: vánoční trhy na mapě ----------------
+
+    private bool showTrhy = Preferences.Get("map_trhy", true);
+    private bool TrhyOn => showTrhy && Events.Active;
+
+    private void OnFilterTrhyClicked(object sender, EventArgs e)
+    {
+        showTrhy = !showTrhy;
+        Preferences.Set("map_trhy", showTrhy);
+        UpdateFilterChips();
+        ShowTrhy();
+    }
+
+    private static string TrhColor(TrhZone z) => z.Status switch
+    {
+        "potvrzeno" => "#2E6B3A",
+        "nahlaseno" => "#3C6E9E",
+        _ => "#C46A12"
+    };
+
+    private MemoryLayer? trhyLayer;
+    private readonly Dictionary<string, NtsGeometry> trhGeometry = new();   // obrys zóny se počítá jen jednou
+
+    /// <summary>
+    /// Zóny trhů jako vrstva Mapsui: obrys (polygony + pásy podél ulic + kruh sloučené do jednoho tvaru),
+    /// při oddálení jen tečka. Mapsui ji kreslí samo, takže se nic nepřepočítává při každém posunu mapy.
+    /// </summary>
+    private void ShowTrhy()
+    {
+        if (trhyLayer == null) return;
+        var features = new List<IFeature>();
+        if (TrhyOn)
+            foreach (var z in Trhy.All)
+            {
+                var (r, g, b) = Rgb(TrhColor(z));
+                var color = new MColor(r, g, b, 255);
+                var key = $"{z.Id}|{z.P?.Count}|{z.L?.Count}|{z.W}|{z.C}|{z.R}";
+                if (!trhGeometry.TryGetValue(key, out var geom)) trhGeometry[key] = geom = ZoneGeometry(z);
+                var area = new GeometryFeature(geom);
+                area.Styles.Add(new VectorStyle
+                {
+                    Fill = new MBrush(new MColor(r, g, b, 72)), Outline = new Pen(color, 2), MaxVisible = 12
+                });
+                area["trh"] = z.Id;
+                features.Add(area);
+
+                var c = Trhy.CenterOf(z);
+                var (cx, cy) = SphericalMercator.FromLonLat(c.Lon, c.Lat);
+                var dot = new PointFeature(cx, cy);
+                dot.Styles.Add(new SymbolStyle
+                {
+                    SymbolType = SymbolType.Ellipse, SymbolScale = 0.45, MinVisible = 12,
+                    Fill = new MBrush(color), Outline = new Pen(new MColor(245, 245, 220), 2)
+                });
+                dot["trh"] = z.Id;
+                features.Add(dot);
+            }
+        trhyLayer.Features = features;
+        trhyLayer.DataHasChanged();
+    }
+
+    private static (int R, int G, int B) Rgb(string hex) =>
+        (Convert.ToInt32(hex.Substring(1, 2), 16), Convert.ToInt32(hex.Substring(3, 2), 16), Convert.ToInt32(hex.Substring(5, 2), 16));
+
+    /// <summary>Tvar zóny v souřadnicích mapy (Web Mercator: metry × 1/cos(šířka)).</summary>
+    private static NtsGeometry ZoneGeometry(TrhZone z)
+    {
+        var gf = NetTopologySuite.NtsGeometryServices.Instance.CreateGeometryFactory();
+        NtsCoordinate C((double Lat, double Lon) p) { var (x, y) = SphericalMercator.FromLonLat(p.Lon, p.Lat); return new NtsCoordinate(x, y); }
+        var c0 = Trhy.CenterOf(z);
+        var k = 1 / Math.Cos(c0.Lat * Math.PI / 180);
+        var parts = new List<NtsGeometry>();
+        foreach (var ring in z.Polys)
+        {
+            var pts = ring.Select(C).ToList();
+            if (!pts[0].Equals2D(pts[^1])) pts.Add(pts[0]);
+            if (pts.Count >= 4) parts.Add(gf.CreatePolygon(pts.ToArray()).Buffer(0));
+        }
+        foreach (var line in z.Lines)
+        {
+            var pts = line.Select(C).ToArray();
+            parts.Add(pts.Length == 1 ? gf.CreatePoint(pts[0]).Buffer(z.W * k, 6)
+                : gf.CreateLineString(pts).Buffer(z.W * k, new BufferParameters { EndCapStyle = EndCapStyle.Round, QuadrantSegments = 6 }));
+        }
+        if (z.Center is { } cc) parts.Add(gf.CreatePoint(C(cc)).Buffer(z.R * k, 8));
+        if (parts.Count == 0) return gf.CreatePoint(C(c0));
+        var geom = parts[0];
+        for (var i = 1; i < parts.Count; i++)
+        {
+            try { geom = geom.Union(parts[i]); } catch { geom = gf.CreateGeometryCollection(new[] { geom, parts[i] }); }
+        }
+        return geom;
+    }
+
+    private async Task ShowTrhAsync(TrhZone z)
+    {
+        var state = z.Status switch { "potvrzeno" => "termín potvrzený", "nahlaseno" => "nahlášené od lidí", _ => "termín odhadnutý" };
+        var running = z.RunsOn(Events.Today) ? "Dnes běží. " : "";
+        var r = await Listek.ShowAsync(this, z.Name + " ", $"{z.When} · {state}\n{running}Zápis tady se počítá do Trhovce a Svařáku. ",
+            ("OK", PencilVariant.Primary), ("Tady jsou trhy!", PencilVariant.Secondary));
+        if (r == "Tady jsou trhy!") await Shell.Current.GoToAsync("//Trhy");
+    }
 
     /// <summary>Najde polohu, vycentruje mapu a nabídne nejbližší hospodu.</summary>
     private async Task CenterOnMeAsync(bool silent)

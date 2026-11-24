@@ -113,11 +113,15 @@
                                            FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
                                            CommandParameter="biergarten" Clicked="OnFilterKindClicked" />
                 </Grid>
-                <Grid ColumnDefinitions="*, *" ColumnSpacing="8">
+                <Grid x:Name="FilterLastRow" ColumnDefinitions="*, *, *" ColumnSpacing="8">
                     <controls:PencilButton x:Name="FClosed" Grid.Column="0" Text="I zavřené" Variant="Secondary"
                                            FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
                                            Clicked="OnFilterClosedClicked" />
-                    <controls:PencilButton Grid.Column="1" Text="Hotovo" Variant="Primary"
+                    <!-- event: zóny vánočních trhů -->
+                    <controls:PencilButton x:Name="FTrhy" Grid.Column="1" Text="Trhy" Variant="Secondary"
+                                           FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                           Clicked="OnFilterTrhyClicked" />
+                    <controls:PencilButton Grid.Column="2" Text="Hotovo" Variant="Primary"
                                            FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
                                            Clicked="OnFilterDoneClicked" />
                 </Grid>

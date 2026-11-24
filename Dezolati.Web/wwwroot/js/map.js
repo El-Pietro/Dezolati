@@ -5,8 +5,22 @@ window.dzMap = (function () {
     var map = null, ref = null;
     var pubs = [];            // [id, lat, lon, kind, name, flags]  flags: 1 zavřeno, 2 přidané, 4 oblíbené
     var filter = { onlyFav: false, showClosed: true, kinds: { pub: 1, bar: 1, restaurant: 1, biergarten: 1 } };
-    var pubLayer = null, clusterLayer = null, friendLayer = null, meLayer = null, homeLayer = null;
+    var pubLayer = null, clusterLayer = null, friendLayer = null, meLayer = null, homeLayer = null, trhyLayer = null;
     var renderer = null;
+    var trhyLines = [], trhyDots = [];   // event: pásy trhů (tloušťka podle přiblížení) a tečky při oddálení
+
+    function trhyZoom() {
+        if (!map || !trhyLayer) return;
+        var zoom = map.getZoom();
+        trhyLines.forEach(function (t) {
+            var mpp = 40075016.686 * Math.cos(t.lat * Math.PI / 180) / Math.pow(2, zoom + 8);
+            t.line.setStyle({ weight: Math.max(3, 2 * t.w / mpp) });
+        });
+        trhyDots.forEach(function (d) {
+            if (zoom < 14) { if (!trhyLayer.hasLayer(d)) trhyLayer.addLayer(d); }
+            else if (trhyLayer.hasLayer(d)) trhyLayer.removeLayer(d);
+        });
+    }
     var LABEL_ZOOM = 16;                       // popisky až při přiblížení (v appce pod 3,5 m/px)
     var CLUSTER_ABOVE = 250, CLUSTER_PX = 72;  // víc bodů ve výřezu → shluky s počtem (jako v appce)
     var layerClicked = false;                  // ťuk na značku nemá zároveň zavřít kartičku (klik na mapu)
@@ -156,6 +170,7 @@ window.dzMap = (function () {
                 attribution: '© přispěvatelé <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>'
             }).addTo(map);
             map.attributionControl.setPrefix(false);
+            trhyLayer = L.layerGroup().addTo(map);   // event: zóny vánočních trhů (pod hospodami)
             homeLayer = L.layerGroup().addTo(map);
             pubLayer = L.layerGroup().addTo(map);
             clusterLayer = L.layerGroup().addTo(map);
@@ -163,12 +178,35 @@ window.dzMap = (function () {
             meLayer = L.layerGroup().addTo(map);
             map.setView([lat, lon], zoom);
             map.on('moveend zoomend', scheduleRender);
+            map.on('zoomend', trhyZoom);
             map.on('click', function () { if (!layerClicked) ref.invokeMethodAsync('OnMapClick'); });
             setTimeout(function () { map.invalidateSize(); }, 50);
         },
         destroy: function () {
             if (map) { map.remove(); map = null; }
             ref = null;
+        },
+        // event: zóny trhů [{id, color, polys, lines, w, cc, r, c}] – polygony, pásy podél ulic (čára o šířce w metrů,
+        // tloušťka se přepočítá při přiblížení), kruh; oddálená mapa = jen tečka. Ťuknutí → OnTrhClick
+        setTrhy: function (json) {
+            if (!trhyLayer) return;
+            trhyLayer.clearLayers();
+            trhyLines = [];
+            trhyDots = [];
+            JSON.parse(json || '[]').forEach(function (z) {
+                var open = clicked(function () { ref.invokeMethodAsync('OnTrhClick', z.id); });
+                var area = { color: z.color, weight: 2, opacity: 0.8, fillColor: z.color, fillOpacity: 0.28 };
+                (z.polys || []).forEach(function (r) { L.polygon(r, area).on('click', open).addTo(trhyLayer); });
+                (z.lines || []).forEach(function (l) {
+                    var pl = L.polyline(l, { color: z.color, opacity: 0.32, lineCap: 'round', lineJoin: 'round', weight: 4 })
+                        .on('click', open).addTo(trhyLayer);
+                    trhyLines.push({ line: pl, w: z.w, lat: l[0][0] });
+                });
+                if (z.cc) L.circle(z.cc, Object.assign({ radius: z.r }, area)).on('click', open).addTo(trhyLayer);
+                var dot = L.circleMarker(z.c, { radius: 6, color: '#F5F5DC', weight: 2, fillColor: z.color, fillOpacity: 1 }).on('click', open);
+                trhyDots.push(dot);
+            });
+            trhyZoom();
         },
         setPubs: function (json) {
             pubs = JSON.parse(json);

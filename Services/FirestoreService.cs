@@ -155,6 +155,18 @@ namespace Dezolati.Services
             // kde jsem: při ručním zápisu podle polohy, z připomínky (bez polohy) jako minule
             var last = PushService.LastPlace(userId, day);
             var place = fromReminder ? last : await PushService.PlaceHereAsync();
+            // event: vánoční trhy (hospoda nebo domov do 20 m mají přednost) + zaokrouhlená poloha pro zpětné odznaky
+            // ruční oprava místa z lístku má přednost (platí do 50 m a dokud nejsem u jiné hospody)
+            string? trhId = null; double? evLat = null, evLon = null;
+            var me = LastLocation.Get(TimeSpan.FromMinutes(2));
+            if (!fromReminder && PlaceOverride.Apply(place, me, day) is { } fixedPlace)
+            {
+                (place, trhId) = fixedPlace;
+                if (!Events.Active) trhId = null;
+                else if (me is { } m) (evLat, evLon) = (Math.Round(m.Lat, 3), Math.Round(m.Lon, 3));
+            }
+            else if (!fromReminder)
+                (place, trhId, evLat, evLon) = Trhy.Apply(place, day);
             var newVisit = place.PubId != null && place.PubId != last.PubId;
             var kc = await Prices.ForDrinkAsync(pivo, vino, panaky, place.PubId);
 
@@ -167,7 +179,8 @@ namespace Dezolati.Services
                 Place: place.Place, Kc: kc, NewVisit: newVisit,
                 ShareDrink: PushService.ShareDrink, PubLat: place.Lat, PubLon: place.Lon,
                 PromileSet: true, PromileValue: SharedPromile(userId),
-                Michacky: michacky, PanakDruh: panaky > 0 ? druh.Key : null));
+                Michacky: michacky, PanakDruh: panaky > 0 ? druh.Key : null,
+                TrhId: trhId, EvLat: evLat, EvLon: evLon));
             if (PushService.DetectPub && place.Place != null)
                 PushService.RememberPlace(userId, day, place);   // pro lístek: „📍 U Peťky“
             UserSession.OnDrinkRecorded(now, day);

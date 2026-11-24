@@ -114,10 +114,37 @@
             </div>
         }
 
+        @if (Events.Active)
+        {
+            <div class="field-label" style="margin-top:6px">@(Events.Theme == "silvestr" ? "Konfety na stole:" : "Sníh na stole:")</div>
+            <div class="grid2">
+                <Chip Text="Padá" Selected="@Events.Snow" OnClick="@(() => Events.Snow = true)" />
+                <Chip Text="Nepadá" Selected="@(!Events.Snow)" OnClick="@(() => Events.Snow = false)" />
+            </div>
+        }
+
         <PencilButton Text="Uložit změny" Class="mt24" Disabled="saving" OnClick="Save" />
 
         <div class="small center" style="margin-top:18px">Dezoláti @AppInfo.Current.VersionString</div>
         <div class="small soft center">Na webu nejsou kostky, šipky a připomínky. Ty jsou v appce pro Android.</div>
+        @if (Events.IsAdmin)
+        {
+            @* jen pro správce: event v předstihu (náhled vzhledu a map; odznaky server před začátkem nepočítá) *@
+            <div class="field-label" style="margin-top:14px">Event v předstihu (test):</div>
+            <div class="grid2">
+                <Chip Text="Zapnout" Selected="@Events.Preview" OnClick="@(() => SetPreview(true))" />
+                <Chip Text="Vypnout" Selected="@(!Events.Preview)" OnClick="@(() => SetPreview(false))" />
+            </div>
+            <div class="grid3">
+                @foreach (var (key, label) in new[] { ("vanoce", "Vánoce"), ("silvestr", "Silvestr"), ("zima", "Zima") })
+                {
+                    var k = key;
+                    <Chip Text="@label" Selected="@(Events.PreviewTheme == k)" OnClick="@(() => Events.PreviewTheme = k)" />
+                }
+            </div>
+            <div class="small soft">@EventInfo</div>
+            <PencilButton Text="Načíst event znovu" Variant="PencilVariant.Secondary" Small="true" OnClick="@(() => SetPreview(Events.Preview, reload: true))" />
+        }
         <div class="section-head" style="margin-top:14px" @onclick="() => pwOpen = !pwOpen">
             <div class="heading">Změnit heslo</div>
             <span class="link">@(pwOpen ? "(schovat)" : "(ukázat)")</span>
@@ -142,6 +169,17 @@
 
 @code {
     private readonly FirestoreService firestoreService = new();
+
+    private static string EventInfo => Events.Current is { } ev
+        ? $"{ev.Name}: {Events.Short(ev.From)} – {Events.Short(ev.To)} · {ev.Trhy?.Count ?? 0} trhů · {ev.Badges?.Count ?? 0} odznaků"
+          + (Events.Running ? " · běží" : Events.Preview ? " · náhled" : "")
+        : "Event zatím není načtený (Events/aktualni).";
+
+    private async Task SetPreview(bool on, bool reload = false)
+    {
+        Events.Preview = on;
+        if (reload || (on && Events.Current == null)) await Events.EnsureAsync(force: true);
+    }
     private string? name, nickname, gender, drinkerType;
     private string pricePivo = "", priceVino = "", pricePanak = "", weight = "";
     private bool saving;

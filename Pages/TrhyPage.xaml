@@ -1,0 +1,57 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:controls="clr-namespace:Dezolati.Controls"
+             x:Class="Dezolati.Pages.TrhyPage"
+             Title="Vánoční trhy">
+    <!-- Detail eventu (ťuknutí na cedulku na lístku): trhy poblíž, „Tady jsou trhy!“, odkaz na odznaky a mapu -->
+    <Grid RowDefinitions="Auto, *">
+        <Image Grid.RowSpan="2" Source="{AppThemeBinding Light=woodlight.jpg, Dark=wooddark.jpg}" Aspect="AspectFill" />
+
+        <BoxView Grid.Row="0" HeightRequest="0" Color="Transparent" InputTransparent="True" Margin="{DynamicResource TopBarMargin}" />
+        <controls:PencilButton Grid.Row="0" Variant="Outline" Text="Zpět" IsVisible="{OnPlatform Default=True, Android=False}"
+                               HorizontalOptions="Start" Margin="{DynamicResource TopBarMargin}" Clicked="OnZpetClicked" />
+
+        <Border Grid.Row="1" Style="{StaticResource Listek}">
+            <ScrollView>
+                <VerticalStackLayout Spacing="6">
+                    <Label x:Name="TitleLabel" Text="Vánoce " Style="{StaticResource Title}" />
+                    <Label x:Name="DatesLabel" Style="{StaticResource Small}" HorizontalTextAlignment="Center" TextColor="{StaticResource InkSoft}" />
+
+                    <Grid ColumnDefinitions="*, *" ColumnSpacing="10" Margin="0,6,0,0">
+                        <controls:PencilButton Grid.Column="0" Text="Odznaky" Variant="Secondary" FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}" Clicked="OnBadgesClicked" />
+                        <controls:PencilButton Grid.Column="1" Text="Mapa trhů" Variant="Secondary" FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}" Clicked="OnMapClicked" />
+                    </Grid>
+
+                    <!-- nahlášení trhů, které appka nezná -->
+                    <Label Text="Tady jsou trhy! " Style="{StaticResource Heading}" Margin="0,12,0,0" />
+                    <Label Style="{StaticResource Small}"
+                           Text="Jsi na vánočních trzích, které appka nezná? Nahlas je! " />
+                    <Grid ColumnDefinitions="*, *" ColumnSpacing="10">
+                        <controls:PencilButton x:Name="DatesUnknown" Grid.Column="0" Text="Nevím, dokdy" Variant="Primary" FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                               CommandParameter="0" Clicked="OnDatesKnownClicked" />
+                        <controls:PencilButton x:Name="DatesKnown" Grid.Column="1" Text="Vím od–do" Variant="Secondary" FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                               CommandParameter="1" Clicked="OnDatesKnownClicked" />
+                    </Grid>
+                    <Grid x:Name="DatesBox" ColumnDefinitions="Auto, *, Auto, *" ColumnSpacing="8" IsVisible="False">
+                        <Label Text="od" Style="{StaticResource Small}" VerticalOptions="Center" />
+                        <DatePicker x:Name="FromPicker" Grid.Column="1" Format="d. M. yyyy" />
+                        <Label Grid.Column="2" Text="do" Style="{StaticResource Small}" VerticalOptions="Center" />
+                        <DatePicker x:Name="ToPicker" Grid.Column="3" Format="d. M. yyyy" />
+                    </Grid>
+                    <Entry x:Name="NoteEntry" Placeholder="Poznámka (třeba náměstí, kde přesně)" MaxLength="300" />
+                    <controls:PencilButton x:Name="ReportButton" Text="Tady jsou trhy!" Variant="Primary" Clicked="OnReportClicked" />
+
+                    <!-- nejbližší trhy -->
+                    <Label Text="Trhy poblíž " Style="{StaticResource Heading}" Margin="0,14,0,0" />
+                    <Label x:Name="NearHint" Style="{StaticResource Small}" TextColor="{StaticResource InkSoft}" />
+                    <VerticalStackLayout x:Name="NearList" Spacing="8" />
+
+                    <!-- jen správce -->
+                    <controls:PencilButton x:Name="AdminButton" Text="Návrhy trhů" Variant="Secondary" IsVisible="False"
+                                           Margin="0,14,0,0" Clicked="OnAdminClicked" />
+                </VerticalStackLayout>
+            </ScrollView>
+        </Border>
+    </Grid>
+</ContentPage>

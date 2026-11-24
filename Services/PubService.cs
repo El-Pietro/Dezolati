@@ -151,6 +151,17 @@ namespace Dezolati.Services
                 ? (_overlay != null && _overlay.TryGetValue(id, out var o) ? o.Custom : null)
                 : PubCatalog.Find(id);
 
+        /// <summary>Otevřené podniky do maxMeters od nejbližšího (OSM i přidané).</summary>
+        public static List<(PubInfo Pub, double Meters)> Around(double lat, double lon, double maxMeters, int count)
+        {
+            var list = PubCatalog.Around(lat, lon, maxMeters, count * 2);
+            if (_overlay != null)
+                list.AddRange(_overlay.Values.Where(o => o.Custom != null).Select(o => (o.Custom!, PubCatalog.DistanceMeters(lat, lon, o.Custom!.Lat, o.Custom!.Lon)))
+                    .Where(x => x.Item2 <= maxMeters));
+            return list.Where(x => !IsClosed(x.Pub)).GroupBy(x => x.Pub.Id).Select(g => g.First())
+                .OrderBy(x => x.Meters).Take(count).ToList();
+        }
+
         /// <summary>Nejbližší otevřený podnik do maxMeters (OSM i přidané).</summary>
         public static PubInfo? Nearest(double lat, double lon, double maxMeters)
         {

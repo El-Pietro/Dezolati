@@ -32,6 +32,11 @@
     <Compile Include="$(MSBuildThisFileDirectory)..\Services\AccountService.cs" Link="Shared\Services\AccountService.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)..\Services\Pozvani.cs" Link="Shared\Services\Pozvani.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)..\Services\Krouzky.cs" Link="Shared\Services\Krouzky.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\Services\Carky.cs" Link="Shared\Services\Carky.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\Services\Events.cs" Link="Shared\Services\Events.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\Services\EventScene.cs" Link="Shared\Services\EventScene.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\Services\Badges.cs" Link="Shared\Services\Badges.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\Services\TrhyService.cs" Link="Shared\Services\TrhyService.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)..\Services\FriendAliases.cs" Link="Shared\Services\FriendAliases.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)..\Services\FriendBadge.cs" Link="Shared\Services\FriendBadge.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)..\Services\PubCatalog.cs" Link="Shared\Services\PubCatalog.cs" />

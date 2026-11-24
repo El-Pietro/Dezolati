@@ -27,6 +27,28 @@
                     <!-- průměry: popisek a pod ním hodnoty (na jeden řádek se nevejdou) -->
                     <VerticalStackLayout x:Name="AvgBox" Spacing="2" Margin="0,6,0,0" />
 
+                    <!-- odznaky z eventu (Vánoce …) – Achievements/{uid}, píše server -->
+                    <VerticalStackLayout x:Name="BadgesBox" Spacing="4" IsVisible="False">
+                        <Grid ColumnDefinitions="*, Auto" Margin="0,12,0,0">
+                            <Grid.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnBadgesTapped" />
+                            </Grid.GestureRecognizers>
+                            <Label Text="Odznaky " Style="{StaticResource Heading}" />
+                            <Label x:Name="BadgesToggle" Grid.Column="1" Text="(schovat)" Style="{StaticResource Small}"
+                                   TextColor="{StaticResource InkSoft}" VerticalOptions="End" Padding="12,0,4,4" />
+                        </Grid>
+                        <VerticalStackLayout x:Name="BadgesDetail" Spacing="8">
+                            <Grid ColumnDefinitions="Auto, *, Auto" ColumnSpacing="8">
+                                <Label x:Name="BadgesEvent" FontFamily="CaveatBold" FontSize="20" TextColor="#8E1B2A" VerticalOptions="Center" />
+                                <ProgressBar x:Name="BadgesProgress" Grid.Column="1" ProgressColor="#B3262E" VerticalOptions="Center" />
+                                <Label x:Name="BadgesCount" Grid.Column="2" FontSize="19" VerticalOptions="Center" />
+                            </Grid>
+                            <Grid x:Name="BadgesGrid" ColumnDefinitions="*, *, *" ColumnSpacing="6" RowSpacing="10" />
+                            <Label Text="ťukni na odznak – ukáže, jak ho získat " Style="{StaticResource Small}"
+                                   TextColor="{StaticResource InkSoft}" HorizontalTextAlignment="Center" />
+                        </VerticalStackLayout>
+                    </VerticalStackLayout>
+
                     <!-- po měsících (sbalené, načte se až po rozbalení) -->
                     <VerticalStackLayout x:Name="MonthsBox" Spacing="4" IsVisible="False">
                         <Grid ColumnDefinitions="*, Auto" Margin="0,12,0,0">

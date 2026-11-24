@@ -214,6 +214,50 @@
                     <controls:PencilButton x:Name="OsmButton" Text="Návrhy do OSM" Variant="Secondary"
                                            IsVisible="False" Clicked="OnOsmClicked" />
 
+                    <!-- sníh / konfety – jen když běží event -->
+                    <VerticalStackLayout x:Name="SnowBox" IsVisible="False" Spacing="4" Margin="0,8,0,0">
+                        <Label x:Name="SnowLabel" Text="Sníh na stole:" Style="{StaticResource FieldLabel}" />
+                        <Grid ColumnDefinitions="*, *" ColumnSpacing="10">
+                            <controls:PencilButton x:Name="SnowOn" Grid.Column="0" Text="Padá" Variant="Secondary"
+                                                   FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                                   CommandParameter="1" Clicked="OnSnowClicked" />
+                            <controls:PencilButton x:Name="SnowOff" Grid.Column="1" Text="Nepadá" Variant="Secondary"
+                                                   FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                                   CommandParameter="0" Clicked="OnSnowClicked" />
+                        </Grid>
+                    </VerticalStackLayout>
+
+                    <!-- jen pro správce: event v předstihu (náhled vzhledu a map; odznaky server před začátkem nepočítá) -->
+                    <VerticalStackLayout x:Name="EventAdminBox" IsVisible="False" Spacing="4" Margin="0,8,0,0">
+                        <Label Text="Event v předstihu (test):" Style="{StaticResource FieldLabel}" />
+                        <Grid ColumnDefinitions="*, *" ColumnSpacing="10">
+                            <controls:PencilButton x:Name="PreviewOn" Grid.Column="0" Text="Zapnout" Variant="Secondary"
+                                                   FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                                   CommandParameter="1" Clicked="OnPreviewClicked" />
+                            <controls:PencilButton x:Name="PreviewOff" Grid.Column="1" Text="Vypnout" Variant="Secondary"
+                                                   FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                                   CommandParameter="0" Clicked="OnPreviewClicked" />
+                        </Grid>
+                        <Grid ColumnDefinitions="*, *, *" ColumnSpacing="8">
+                            <controls:PencilButton x:Name="ThemeVanoce" Grid.Column="0" Text="Vánoce" Variant="Secondary"
+                                                   FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                                   CommandParameter="vanoce" Clicked="OnPreviewThemeClicked" />
+                            <controls:PencilButton x:Name="ThemeSilvestr" Grid.Column="1" Text="Silvestr" Variant="Secondary"
+                                                   FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                                   CommandParameter="silvestr" Clicked="OnPreviewThemeClicked" />
+                            <controls:PencilButton x:Name="ThemeZima" Grid.Column="2" Text="Zima" Variant="Secondary"
+                                                   FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                                   CommandParameter="zima" Clicked="OnPreviewThemeClicked" />
+                        </Grid>
+                        <Label x:Name="EventInfoLabel" Style="{StaticResource Small}" TextColor="{StaticResource InkSoft}" />
+                        <controls:PencilButton Text="Návrhy trhů" Variant="Secondary"
+                                               FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                               Clicked="OnTrhyNavrhyClicked" />
+                        <controls:PencilButton Text="Načíst event znovu" Variant="Secondary"
+                                               FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                               Clicked="OnEventReloadClicked" />
+                    </VerticalStackLayout>
+
                     <!-- změna hesla (sbalená) -->
                     <Grid ColumnDefinitions="*, Auto" Margin="0,14,0,0">
                         <Grid.GestureRecognizers>

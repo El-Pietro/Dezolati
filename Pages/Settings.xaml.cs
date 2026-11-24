@@ -24,6 +24,7 @@ public partial class Settings : ContentPage
         base.OnAppearing();
         VersionLabel.Text = $"Dezoláti {AppUpdater.CurrentVersionText}";
         UsageButton.IsVisible = OsmButton.IsVisible = UsageService.IsAdmin;
+        ShowEventSettings();
         LoadLocalSettings();
         await LoadUserData();
     }
@@ -353,6 +354,56 @@ public partial class Settings : ContentPage
 
     private async void OnOsmClicked(object sender, EventArgs e) =>
         await Shell.Current.GoToAsync("//OsmNavrhy");
+
+    // ---------- event (Vánoce …) ----------
+
+    private void ShowEventSettings()
+    {
+        SnowBox.IsVisible = Events.Active;
+        SnowLabel.Text = Events.Theme == "silvestr" ? "Konfety na stole:" : "Sníh na stole:";
+        SetChip(SnowOn, Events.Snow);
+        SetChip(SnowOff, !Events.Snow);
+
+        EventAdminBox.IsVisible = Events.IsAdmin;
+        if (!Events.IsAdmin) return;
+        SetChip(PreviewOn, Events.Preview);
+        SetChip(PreviewOff, !Events.Preview);
+        var theme = Events.PreviewTheme;
+        SetChip(ThemeVanoce, theme == "vanoce");
+        SetChip(ThemeSilvestr, theme == "silvestr");
+        SetChip(ThemeZima, theme == "zima");
+        EventInfoLabel.Text = Events.Current is { } ev
+            ? $"{ev.Name}: {Events.Short(ev.From)} – {Events.Short(ev.To)} · {ev.Trhy?.Count ?? 0} trhů · {ev.Badges?.Count ?? 0} odznaků"
+              + (Events.Running ? " · běží" : Events.Preview ? " · náhled" : "")
+            : "Event zatím není načtený (Events/aktualni).";
+    }
+
+    private void OnSnowClicked(object sender, EventArgs e)
+    {
+        Events.Snow = (sender as PencilButton)?.CommandParameter as string == "1";
+        ShowEventSettings();
+    }
+
+    private async void OnPreviewClicked(object sender, EventArgs e)
+    {
+        Events.Preview = (sender as PencilButton)?.CommandParameter as string == "1";
+        if (Events.Preview && Events.Current == null) await Events.EnsureAsync(force: true);
+        ShowEventSettings();
+    }
+
+    private void OnPreviewThemeClicked(object sender, EventArgs e)
+    {
+        if ((sender as PencilButton)?.CommandParameter is string theme) Events.PreviewTheme = theme;
+        ShowEventSettings();
+    }
+
+    private async void OnTrhyNavrhyClicked(object sender, EventArgs e) => await Shell.Current.GoToAsync("//TrhyNavrhy");
+
+    private async void OnEventReloadClicked(object sender, EventArgs e)
+    {
+        await Events.EnsureAsync(force: true);
+        ShowEventSettings();
+    }
 
     private async void OnNewsClicked(object sender, EventArgs e) =>
         await Shell.Current.GoToAsync("//Novinky", new Dictionary<string, object> { ["back"] = "//Settings" });

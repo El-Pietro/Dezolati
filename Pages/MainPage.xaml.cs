@@ -11,18 +11,14 @@ namespace Dezolati.Pages
         private DateTime shownDay;
         private int shownPivo, shownVino, shownPanaky, shownMichacky;
 
-        private static readonly string[] CarkyImages =
-        {
-            "carka1.png", "carka2.png", "carka3.png", "carka4.png", "carka5.png",
-            "carka6.png", "carka7.png", "carka8.png", "carka9.png", "carka10.png"
-        };
-
         private readonly WetRingsDrawable rings = new();
 
         public MainPage()
         {
             InitializeComponent();
             RingsView.Drawable = rings;
+            Pivo.SizeChanged += OnCarkySizeChanged;   // stačí jeden řádek – všechny mají stejnou šířku
+            SetupEventFx();
         }
 
         // Shell stránku drží v paměti, takže se data načítají při každém zobrazení
@@ -44,6 +40,13 @@ namespace Dezolati.Pages
             // čekající žádosti o přátelství (jen při spuštění / návratu do appky / po oznámení)
             _ = FriendBadge.RefreshAsync();
 
+            // event (Vánoce …): Events/aktualni max. 1× za 12 h; výzdoba hned podle uložené verze
+            Events.Changed -= OnEventChanged;
+            Events.Changed += OnEventChanged;
+            ApplyEvent();
+            _ = Events.EnsureAsync();
+            _ = ShowNewBadgesAsync();
+
             // po aktualizaci jednou: co je nového v téhle verzi
             await ShowWhatsNewAsync();
 
@@ -57,7 +60,177 @@ namespace Dezolati.Pages
             UserSession.DrinksChanged -= OnDrinksChanged;
             FriendBadge.Changed -= OnBadgeChanged;
             promileTimer?.Stop();
+            Events.Changed -= OnEventChanged;
+            fxTimer?.Stop();   // na pozadí nic nepadá (baterie)
         }
+
+        // ---------------- event: výzdoba lístku (Services/EventScene.cs) ----------------
+
+        private string? theme;
+        private readonly EventFxDrawable backFx = new(), deco = new(), coasterFx = new(), snow = new();
+        private readonly EventFxDrawable tagIcon = new(), tagCandles = new();
+        private IDispatcherTimer? fxTimer;
+        private readonly System.Diagnostics.Stopwatch fxClock = System.Diagnostics.Stopwatch.StartNew();
+        private DateTime tagUpdatedAt;
+        private Thickness? listekPadding, topBarMargin;
+
+        private void SetupEventFx()
+        {
+            BackFxView.Drawable = backFx;
+            DecoView.Drawable = deco;
+            CoasterFxView.Drawable = coasterFx;
+            SnowView.Drawable = snow;
+            EventTagIcon.Drawable = tagIcon;
+            EventTagCandles.Drawable = tagCandles;
+
+            // světýlka nahoře + na Silvestra ohňostroj
+            backFx.Scene = (r, t) =>
+            {
+                var n = EventScene.Lights(r.Width, theme, t);
+                if (theme == "silvestr") n.AddRange(EventScene.Fireworks(r.Width, t));
+                return n;
+            };
+            // čepice přes horní okraj lístku, roh: jmelí / sekt (+ serpentýna)
+            deco.Scene = (r, t) =>
+            {
+                var lx = ListekBorder.X - DecoView.X;
+                var ly = ListekBorder.Y - DecoView.Y;
+                var lw = ListekBorder.Width;
+                var n = new List<SceneNode>();
+                if (lw <= 0) return n;
+                if (theme == "silvestr")
+                    n.Add(new SGroup(lx - 8, ly + 6, 0, null, EventScene.Streamer()));
+                n.Add(new SGroup(lx, ly - EventScene.CapOverhang, 0, null, EventScene.Cap(lw)));
+                if (theme == "vanoce")
+                    n.Add(new SGroup(lx + lw + 6 - 78, ly - 4, 0, null, EventScene.Mistletoe()));
+                else if (theme == "silvestr")
+                    n.Add(new SGroup(lx + lw + 10 - EventScene.CornerW, ly - 20, 0, null, EventScene.Sekt(t)));
+                return n;
+            };
+            // tácek (88 px uprostřed 108 px plochy)
+            coasterFx.Scene = (r, t) => new()
+            {
+                theme == "silvestr"
+                    ? new SGroup((r.Width - 88) / 2 - 10, (r.Height - 88) / 2 - 10, 0, null, EventScene.CoasterStreamer())
+                    : new SGroup((r.Width - 88) / 2, (r.Height - 88) / 2 - 9, 0, null, EventScene.CoasterCap())
+            };
+            snow.Scene = (r, t) => Events.Snow ? EventScene.Particles(r.Width, r.Height, theme, t) : new();
+            tagIcon.Scene = (r, t) => theme == null ? new() : EventScene.TagIcon(theme);
+            tagCandles.Scene = (r, t) => EventScene.Tag(theme, DateTime.Now) is { Candles: >= 0 } tag ? EventScene.Candles(tag.Candles) : new();
+
+            ListekBorder.SizeChanged += (_, _) => DecoView.Invalidate();
+        }
+
+        private void OnEventChanged(object? sender, EventArgs e) => Dispatcher.Dispatch(ApplyEvent);
+
+        /// <summary>Zapne / vypne výzdobu podle aktuálního motivu (Events.Theme).</summary>
+        private void ApplyEvent()
+        {
+            theme = Events.Theme;
+            var on = theme != null;
+            BackFxView.IsVisible = DecoView.IsVisible = CoasterFxView.IsVisible = on;
+            SnowView.IsVisible = on && Events.Snow;
+
+            // místo pro světýlka nad tlačítky a pro čepici nad nadpisem
+            listekPadding ??= ListekBorder.Padding;
+            topBarMargin ??= TopBar.Margin;
+            ListekBorder.Padding = on ? new Thickness(listekPadding.Value.Left, listekPadding.Value.Top + 10, listekPadding.Value.Right, listekPadding.Value.Bottom) : listekPadding.Value;
+            TopBar.Margin = on ? new Thickness(topBarMargin.Value.Left, Math.Max(topBarMargin.Value.Top, 30), topBarMargin.Value.Right, topBarMargin.Value.Bottom) : topBarMargin.Value;
+
+            if (rings.ColorOverride != EventScene.RingColor(theme))
+            {
+                rings.ColorOverride = EventScene.RingColor(theme);
+                RingsView.Invalidate();
+            }
+            UpdateEventTag();
+
+            if (!on)
+            {
+                fxTimer?.Stop();
+                return;
+            }
+            if (fxTimer == null)
+            {
+                fxTimer = Dispatcher.CreateTimer();
+                fxTimer.Interval = TimeSpan.FromMilliseconds(50);   // 20 snímků za sekundu stačí
+                fxTimer.Tick += OnFxTick;
+            }
+            fxTimer.Start();
+            OnFxTick(null, EventArgs.Empty);
+            CoasterFxView.Invalidate();
+            DecoView.Invalidate();
+        }
+
+        private void OnFxTick(object? sender, EventArgs e)
+        {
+            var t = fxClock.Elapsed.TotalSeconds;
+            backFx.Time = deco.Time = snow.Time = t;
+            BackFxView.Invalidate();
+            if (theme == "silvestr") DecoView.Invalidate();   // sekt bouchá
+            if (SnowView.IsVisible) SnowView.Invalidate();
+            if (DateTime.Now - tagUpdatedAt > TimeSpan.FromSeconds(20)) UpdateEventTag();   // odpočet do půlnoci
+        }
+
+        private void UpdateEventTag()
+        {
+            tagUpdatedAt = DateTime.Now;
+            var tag = EventScene.Tag(theme, DateTime.Now);
+            EventTag.IsVisible = tag != null;
+            if (tag == null) return;
+            EventTag.BackgroundColor = Color.FromArgb(tag.Dark ? "#1E1E2A" : "#FFFDF4");
+            EventTag.Stroke = Color.FromArgb(tag.Dark ? "#D4A62A" : theme == "zima" ? "#5B87B5" : "#B3262E");
+            EventTagTitle.Text = tag.Title + " ";   // mezera: Caveat na Androidu jinak ořízne konec nápisu
+            EventTagTitle.TextColor = Color.FromArgb(tag.Dark ? "#F2C94C" : theme == "zima" ? "#3C5F86" : "#8E1B2A");
+            EventTagDetail.Text = tag.Detail + " ";
+            EventTagDetail.IsVisible = tag.Detail.Length > 0;
+            EventTagDetail.TextColor = Color.FromArgb(tag.Dark ? "#F5F5DC" : "#6B5A3A");
+            EventTagCandles.IsVisible = tag.Candles >= 0;
+            EventTagIcon.Invalidate();
+            EventTagCandles.Invalidate();
+        }
+
+        /// <summary>Ruční oprava místa: appka se spletla (doma vs. hospoda vedle) → vybrat, kde opravdu sedím.</summary>
+        private async void OnPlaceTapped(object? sender, TappedEventArgs e)
+        {
+            if (shownDay.Date != UserSession.CurrentPubDay.Date) return;   // jen dnešek
+            if (!PushService.DetectPub)
+            {
+                await Listek.AlertAsync(this, "Kde sedím", "Poznávání místa máš vypnuté v Nastavení. ");
+                return;
+            }
+            var busy = Listek.ShowBusy(this, "Kde sedím", "Zjišťuju, kde jsi…");
+            var loaded = await PlaceChoices.LoadAsync(shownDay);
+            busy?.Dispose();
+            if (loaded is not { } l)
+            {
+                await Listek.AlertAsync(this, "Kde sedím", "Bez polohy nevím, co je okolo. Povol appce polohu. ");
+                return;
+            }
+            var pick = await Listek.ShowAsync(this, "Kde opravdu sedíš? ",
+                "Platí pro další zápisy, dokud neodejdeš dál než 50 m. Pak se místo zase pozná samo. ",
+                l.Choices.Select((c, i) => (c.Label, i == 0 ? PencilVariant.Primary : PencilVariant.Secondary)).ToArray());
+            if (l.Choices.FirstOrDefault(c => c.Label == pick) is not { } choice) return;
+            PlaceChoices.Choose(choice, l.Me, shownDay);
+            await LoadData();
+        }
+
+        /// <summary>Okno „Nový odznak“ (po pushi hned, jinak nejvýš 1× za 10 min; jen když běží event).</summary>
+        private async Task ShowNewBadgesAsync()
+        {
+            foreach (var b in await Badges.CheckNewAsync())
+            {
+                var r = await Listek.ShowAsync(this, $"Nový odznak: {b.Name}! ", b.Desc + " ",
+                    ("Na zdraví!", PencilVariant.Primary), ("Ukázat odznaky", PencilVariant.Secondary));
+                if (r == "Ukázat odznaky")
+                {
+                    OnStatsClicked(this, EventArgs.Empty);
+                    return;
+                }
+            }
+        }
+
+        private async void OnEventTagTapped(object? sender, TappedEventArgs e) =>
+            await Shell.Current.GoToAsync("//Trhy");   // detail eventu: trhy poblíž, „Tady jsou trhy!“, odznaky, mapa
 
         // ---------------- orientační promile (malým písmem) ----------------
 
@@ -215,6 +388,8 @@ namespace Dezolati.Pages
             shownVino = vino;
             shownPanaky = panaky;
             shownMichacky = michacky;
+            lastPending = pendingCount;
+            lastOffline = offline;
 
             var text = pivo + vino + panaky + michacky == 0
                 ? "Zatím čistý lístek."
@@ -222,7 +397,7 @@ namespace Dezolati.Pages
 
             // kde sedím (poslední zápis dneška, z telefonu)
             if (AuthSession.Uid is string uid && PushService.LastPubName(uid, shownDay) is string pub)
-                text += $"\n📍 {pub}";
+                text += $"\n📍 {(pub == "doma" ? "Doma" : pub)}";
 
             if (pendingCount > 0)
                 text += $"\n({Cz.Plural(pendingCount, "zápis čeká", "zápisy čekají", "zápisů čeká")} na signál)";
@@ -234,51 +409,59 @@ namespace Dezolati.Pages
 
             // pevný seed = čárky vypadají pokaždé stejně, neskáčou při každém načtení;
             // „šejdr“ (natočení, posun) a mokrá kolečka podle dne – celý den stejné, zítra jiné
-            DrawCarky(Pivo, pivo, new Random(1), shownDay, 0);
-            DrawCarky(Vino, vino, new Random(2), shownDay, 1);
-            DrawCarky(Panaky, panaky, new Random(3), shownDay, 2);
-            DrawCarky(Michacky, michacky, new Random(4), shownDay, 3);
+            DrawCarky(Pivo, pivo, shownDay, 0);
+            DrawCarky(Vino, vino, shownDay, 1);
+            DrawCarky(Panaky, panaky, shownDay, 2);
+            DrawCarky(Michacky, michacky, shownDay, 3);
+            Dispatcher.Dispatch(FitRows);   // až se řádky přeměří
             rings.Rings = Krouzky.For(shownDay, pivo, vino);
             RingsView.Invalidate();
         }
 
-        private static void DrawCarky(FlexLayout flexLayout, int count, Random random, DateTime day, int kind)
+        // Čárky kreslí propiska (Services/Carky.cs) přes CarkyDrawable – stejně jako na webu.
+        private void DrawCarky(GraphicsView view, int count, DateTime day, int kind)
         {
-            flexLayout.Children.Clear();
+            var width = view.Width > 0 ? view.Width
+                : DeviceDisplay.Current.MainDisplayInfo.Width / DeviceDisplay.Current.MainDisplayInfo.Density - 90;
+            view.Drawable = new CarkyDrawable { Count = count, Day = day, Kind = kind };
+            view.HeightRequest = CarkyDrawable.HeightFor(count, width);
+            view.Invalidate();
+        }
 
-            for (int i = 0; i < count; i++)
+        // šířka lístku se změní (první měření, otočení) → výšky řádků přepočítat
+        private void OnCarkySizeChanged(object? sender, EventArgs e)
+        {
+            if (sender is GraphicsView v && v.Width > 0 && Math.Abs(v.Width - lastCarkyWidth) > 1)
             {
-                var source = CarkyImages[random.Next(CarkyImages.Length)];
-                var (rot, dy, scale) = Krouzky.Jitter(day, kind, i);
-
-                if (i % 5 == 4)
-                {
-                    // pátá čárka přeškrtne předchozí čtyři
-                    flexLayout.Children.Add(new Image
-                    {
-                        Source = source,
-                        WidthRequest = 40,
-                        Rotation = -80 + rot,
-                        Scale = scale,
-                        // přes střed čtyř čárek (krok 18 px), za ním mezera před další pětkou
-                        Margin = new Thickness(-45, -10 + dy, 19, 0)
-                    });
-                }
-                else
-                {
-                    flexLayout.Children.Add(new Image
-                    {
-                        Source = source,
-                        WidthRequest = 40,
-                        HeightRequest = 50,
-                        Rotation = rot,
-                        Scale = scale,
-                        TranslationY = dy,
-                        Margin = new Thickness(0, 0, -22, 0)   // čárky těsně vedle sebe
-                    });
-                }
+                lastCarkyWidth = v.Width;
+                Dispatcher.Dispatch(() => Render(shownPivo, shownVino, shownPanaky, lastPending, lastOffline, shownMichacky));
             }
         }
+
+        // ---------------- mezery mezi řádky podle místa ----------------
+        // Když je na lístku místo, řádky se rozestoupí (max. MaxRowGap), když ne, jsou těsně u sebe
+        // a lístek se začne posouvat.
+        private const double MaxRowGap = 40;
+        private double rowGap;
+
+        private void OnRowsSizeChanged(object? sender, EventArgs e) => FitRows();
+
+        private void FitRows()
+        {
+            var avail = RowsScroll.Height;
+            if (avail <= 0 || RowsScroll.Width <= 0) return;
+            var measured = ((IView)RowsStack).Measure(RowsScroll.Width, double.PositiveInfinity).Height;
+            var natural = measured - 4 * rowGap;                    // výška bez současných mezer
+            var gap = Math.Clamp((avail - natural) / 4, 0, MaxRowGap);
+            if (Math.Abs(gap - rowGap) < 1) return;
+            rowGap = gap;
+            VinoHeader.Margin = PanakyHeader.Margin = MichackyHeader.Margin = new Thickness(0, gap, 0, -3);
+            RowsHint.Margin = new Thickness(0, 12 + gap, 0, 0);
+        }
+
+        private double lastCarkyWidth = -1;
+        private int lastPending;
+        private bool lastOffline;
 
         private async void OnPlusTapped(object sender, TappedEventArgs e)
         {

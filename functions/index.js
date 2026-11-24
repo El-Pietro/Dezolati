@@ -14,6 +14,8 @@
  *  - deleteAccount:  smazání účtu a všech dat uživatele (appka i web, kvůli Google Play)
  *  - inviteAction:   pozvánky na vybrané kámoše (založit, Jdu / Nejdu, pozvat další, přidat se)
  *  - alkoholikDne:   v 7:00 po pátku, sobotě, svátku a dni před svátkem → top 3 mezi kámoši
+ *  - eventy (vanoce.js): eventsSync, badgesDrink, badgesCheer, badgesInvite, badgesSuchyStart, trhReport, trhAction
+ *                    → vánoční trhy (Events/aktualni) a odznaky (Achievements/{uid})
  *
  * Nasazení: firebase deploy --only functions   (viz functions/README.md)
  */
@@ -560,6 +562,7 @@ exports.deleteAccount = onCall(async (request) => {
     counts.cheersFrom = await deleteQuery(db.collection("Cheers").where("From", "==", uid));
     counts.cheersTo = await deleteQuery(db.collection("Cheers").where("To", "==", uid));
     counts.invites = await deleteQuery(db.collection("Invites").where("From", "==", uid));
+    counts.trhReports = await deleteQuery(db.collection("TrhReports").where("By", "==", uid));
 
     // společná data o hospodách nechat, jen bez přezdívky
     await anonymize(db.collection("Pubs").where("UpdatedBy", "==", uid), { UpdatedByNick: "(smazaný účet)" });
@@ -568,7 +571,8 @@ exports.deleteAccount = onCall(async (request) => {
     await anonymize(db.collection("OsmReports").where("By", "==", uid), { ByNick: "(smazaný účet)" });
 
     await db.doc("Directory/users").update({ [uid]: FieldValue.delete() }).catch(() => {});
-    for (const path of [`Users/${uid}`, `Private/${uid}`, `UserPubStats/${uid}`, `DrinkSessions/${uid}`]) {
+    for (const path of [`Users/${uid}`, `Private/${uid}`, `UserPubStats/${uid}`, `DrinkSessions/${uid}`,
+      `Achievements/${uid}`, `AchievementState/${uid}`]) {
       await db.doc(path).delete();
     }
     await getAuth().deleteUser(uid);
@@ -865,3 +869,8 @@ exports.inviteAction = onCall(async (request) => {
 
   throw new HttpsError("invalid-argument", "Neznámá akce.");
 });
+
+// ---------------- eventy (Vánoce 2026): trhy a odznaky – viz vanoce.js ----------------
+
+const vanoce = require("./vanoce")({ db, notifyData, friendsOf, ADMIN_UID });
+for (const [name, fn] of Object.entries(vanoce)) if (!name.startsWith("_")) exports[name] = fn;

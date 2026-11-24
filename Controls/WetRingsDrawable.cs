@@ -11,6 +11,9 @@ namespace Dezolati.Controls
 
         public List<WetRing> Rings { get; set; } = new();
 
+        /// <summary>Event: všechna kolečka jednou barvou (svařák / sekt), null = piva a vína zvlášť.</summary>
+        public string? ColorOverride { get; set; }
+
         public void Draw(ICanvas canvas, RectF rect)
         {
             var size = Math.Min(rect.Width, rect.Height * 0.8f);
@@ -19,7 +22,7 @@ namespace Dezolati.Controls
                 var cx = rect.X + (float)r.X * rect.Width;
                 var cy = rect.Y + (float)r.Y * rect.Height;
                 var rad = (float)r.R * size;
-                var color = (r.Wine ? Wine : Beer).WithAlpha((float)r.Opacity);
+                var color = (ColorOverride != null ? Color.FromArgb(ColorOverride) : r.Wine ? Wine : Beer).WithAlpha((float)r.Opacity);
                 var width = Math.Max(1.5f, (float)r.Width * size);
 
                 // hlavní kruh s mezerou (sklenice se zvedla dřív, než oschla)

@@ -70,7 +70,7 @@ public partial class Zapis : ContentPage
             return;
         }
 
-        var text = ((int)rounded).ToString();
+        var text = $"{(int)rounded} ";   // mezera: Caveat na Androidu jinak ořízne konec číslice
         if (slider == PivaSlider) PivaLabel.Text = text;
         else if (slider == VinoSlider) VinoLabel.Text = text;
         else if (slider == PanakySlider) PanakyLabel.Text = text;

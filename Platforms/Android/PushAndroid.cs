@@ -78,6 +78,12 @@ namespace Dezolati.Droid
                     PushAndroid.Show(this, title, body);
                     break;
 
+                case "badge":
+                    // nový odznak z eventu → při otevření lístku hned okno „Nový odznak“
+                    Services.Badges.ForceCheck();
+                    PushAndroid.Show(this, title, body);
+                    break;
+
                 default:
                     PushAndroid.Show(this, title, body);
                     break;
