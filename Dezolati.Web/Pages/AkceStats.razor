@@ -1,0 +1,128 @@
+@namespace Dezolati.Web.Pages
+@page "/akce/{Id}/statistiky"
+@inject NavigationManager Nav
+
+@* Statistiky / výsledky akce (Pages/AkceStats v appce). *@
+<BackBar To="@($"akce/{Id}")" />
+
+<div class="listek grow">
+    <div class="stack">
+        @if (akce != null)
+        {
+            <AkceDecor Look="AkceScene.Of(akce)" Fall="@(akce.Over)" />
+        }
+        <div class="title">@(akce?.Over == true ? "Výsledky" : "Statistiky")</div>
+        @if (akce != null)
+        {
+            <div class="small soft">@akce.Name · @akce.When</div>
+        }
+        @if (s == null)
+        {
+            <div class="small soft">@(error ?? "Počítám…")</div>
+        }
+        else
+        {
+            <div class="heading">@s.Pivo @Piv(s.Pivo) · @s.Liters.ToString("0.#") l</div>
+            var other = s.People.Sum(p => p.Vino + p.Panaky + p.Michacky);
+            @if (other > 0)
+            {
+                <div class="small soft">a k tomu @(other)× víno / panák / míchaný z osobních lístků</div>
+            }
+            var shown = Titles.Where(t => s.Titles.TryGetValue(t.Key, out var n) && !string.IsNullOrEmpty(n)).ToList();
+            @if (shown.Count > 0)
+            {
+                <div class="heading mt12">Tituly</div>
+                @foreach (var (key, label) in shown)
+                {
+                    <div class="friend-row"><div class="body grow-1">@label</div><div class="body">@s.Titles[key]</div></div>
+                }
+            }
+            @if (s.People.Count > 0)
+            {
+                <div class="heading mt12">Kdo kolik</div>
+                @foreach (var (p, place) in s.People.OrderByDescending(p => p.Pivo).ThenByDescending(p => p.Total).Select((p, i) => (p, i + 1)))
+                {
+                    <div class="friend-row"><div class="body grow-1">@place. @p.Name</div><div class="body">@p.Pivo @Piv(p.Pivo)</div></div>
+                    @if (Sub(p) is { Length: > 0 } sub)
+                    {
+                        <div class="small soft">@sub</div>
+                    }
+                }
+            }
+            @if (s.Days.Count > 1)
+            {
+                <div class="heading mt12">Po dnech</div>
+                @foreach (var (day, beers) in s.Days)
+                {
+                    <div class="friend-row"><div class="body grow-1">@DayName(day)</div><div class="body">@beers @Piv(beers)</div></div>
+                }
+            }
+            @if (s.Kegs.Count > 0)
+            {
+                <div class="heading mt12">Bečky</div>
+                @foreach (var k in s.Kegs)
+                {
+                    <div class="friend-row"><div class="body grow-1">@k.Name @k.Liters.ToString("0.#") l</div><div class="body">@k.Beers @Piv(k.Beers)</div></div>
+                    @if (k.Tapped is DateTime t)
+                    {
+                        <div class="small soft">@(k.Empty is DateTime e ? $"{t:H:mm} → {e:H:mm} ({(int)(e - t).TotalHours} h {(e - t).Minutes} min)" : $"naražená {t:H:mm}")</div>
+                    }
+                }
+            }
+            @if (s.Pivo == 0)
+            {
+                <div class="small soft">Zatím se nic nevypilo. To je ostuda.</div>
+            }
+            @if (akce != null && !akce.Over)
+            {
+                <div class="small soft">Počítá se průběžně, výsledky přijdou po konci akce.</div>
+            }
+            <PencilButton Class="mt12" Text="↻" Small="true" Variant="PencilVariant.Secondary" OnClick="Load" />
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Id { get; set; } = "";
+    private AkceInfo? akce;
+    private AkceService.AkceStats? s;
+    private string? error;
+
+    private static readonly (string Key, string Label)[] Titles =
+    {
+        ("kralPiva", "👑 Král piva"), ("kralVecera", "🏆 Král večera"), ("rychlik", "⚡ Rychlík"),
+        ("vytrvalec", "🦉 Vytrvalec"), ("padlPrvni", "💤 Padl první")
+    };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (AuthSession.Uid == null) { Nav.NavigateTo("prihlaseni", replace: true); return; }
+        akce = AkceService.Cached(Id) ?? await AkceService.GetAsync(Id);
+        if (akce != null) await AkceService.LoadMediaAsync(akce);
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        try { s = await AkceService.StatsAsync(Id); error = null; }
+        catch (Exception ex) { error = Net.IsNetworkError(ex) ? "Bez signálu nic nespočítám." : $"Nepovedlo se: {ex.Message}"; }
+    }
+
+    private static string Piv(int n) => n == 1 ? "pivo" : n is >= 2 and <= 4 ? "piva" : "piv";
+
+    private static string DayName(string day) =>
+        DateTime.TryParse(day, CultureInfo.InvariantCulture, DateTimeStyles.None, out var d) ? $"{d.ToString("dddd", WebPlatform.Cs)} {d.Day}. {d.Month}." : day;
+
+    private static string Sub(AkceService.StatsPerson p)
+    {
+        var parts = new List<string>();
+        var extra = new List<string>();
+        if (p.Vino > 0) extra.Add($"víno {p.Vino}");
+        if (p.Panaky > 0) extra.Add($"panáky {p.Panaky}");
+        if (p.Michacky > 0) extra.Add($"míchané {p.Michacky}");
+        if (extra.Count > 0) parts.Add(string.Join(", ", extra));
+        if (p.First is DateTime f && p.Last is DateTime l) parts.Add($"{f:H:mm}–{l:H:mm}");
+        if (p.Tempo is int t) parts.Add($"pivo za {t} min");
+        return string.Join(" · ", parts);
+    }
+}

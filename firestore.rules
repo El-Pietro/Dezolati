@@ -223,6 +223,19 @@ service cloud.firestore {
       allow read, delete: if signedIn() && me() == 'rB2bUxNHHzbfyHx3mYW4JW61l3N2';   // správce
     }
 
+    // Akce u kámoše: číst smí jen člen (Members – i anonymní host z odkazu), píše jen server (akceAction).
+    // AkceCodes (odkaz pro hosty) z appky vůbec.
+    match /Akce/{id} {
+      function member() { return signedIn() && me() in get(/databases/$(database)/documents/Akce/$(id)).data.get('Members', []); }
+      allow read: if signedIn() && me() in resource.data.get('Members', []);
+      match /Log/{logId} {
+        allow read: if member();
+      }
+      match /Media/{slot} {
+        allow read: if member();
+      }
+    }
+
     // DrinkSessions (sezení pití) a PubPresence zapisuje jen server – z appky nic.
 
     // PubPresence (kdo už dnes v které hospodě oznámil, že sedí) zapisuje jen server – z appky nic.

@@ -352,6 +352,31 @@ namespace Dezolati.Services
             return n;
         }
 
+        // ---------------- bečka na akčním lístku (64 × 80): soudek s hladinou ----------------
+
+        /// <summary>Soudek, fill = 0..1 kolik zbývá (hladina piva s pěnou).</summary>
+        public static List<SceneNode> Keg(double fill)
+        {
+            fill = Math.Clamp(fill, 0, 1);
+            const string body = "M 10 8 C 4 30 4 50 10 72 L 54 72 C 60 50 60 30 54 8 Z";
+            var top = 70 - 60 * fill;
+            var n = new List<SceneNode>
+            {
+                new SPath(body, Fill: "#E9D9B4", Stroke: "#6B3E1E", StrokeWidth: 2.5),
+                new SGroup(0, 0, 0, body, new()
+                {
+                    new SPath(Rect(0, top, 64, 80), Gradient: new SGradient(0, top, 0, 72, new[] { (0.0, "#F2B230"), (1.0, "#B5650A") })),
+                    fill > 0.02 ? new SPath(Rect(0, top - 4, 64, 5), Fill: "#FFF8E6") : new SPath("M 0 0 Z")
+                }),
+                new SPath(body, Stroke: "#6B3E1E", StrokeWidth: 2.5),
+                new SPath("M 7 22 C 22 25 42 25 57 22", Stroke: "#3A3A3A", StrokeWidth: 3, Round: true),
+                new SPath("M 7 58 C 22 61 42 61 57 58", Stroke: "#3A3A3A", StrokeWidth: 3, Round: true),
+                new SPath(Ellipse(32, 8, 22, 4), Fill: "#D6C49A", Stroke: "#6B3E1E", StrokeWidth: 2),
+                new SPath(RoundRect(28, 2, 8, 6, 1.5), Fill: "#8A8A8A", Stroke: "#3A3A3A", StrokeWidth: 1)
+            };
+            return n;
+        }
+
         // ---------------- padající sníh / konfety / ohňostroj (přes celou stránku) ----------------
 
         private sealed record Flake(double X, double Size, double Opacity, double Duration, double Delay, double Drift, int Color, bool Round, double H);

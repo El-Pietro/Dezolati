@@ -160,7 +160,7 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
         RenderSpend(stats);
         RenderPlaces(stats);
         RenderPubs(stats);
-        RenderFavorites(stats);
+        ApplyFolds();
         DrawCharts(history, today, celkem);
 
         // celý měsíc den po dni, i prázdné dny (ťuknutím se dá dopsat zapomenutý večer)
@@ -304,23 +304,94 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
         }
     }
 
-    private void RenderFavorites(UserStats stats)
+    // ---------------- sbalitelné sekce (zapamatované) ----------------
+
+    private bool placesOpen = Preferences.Get("stats_places_open", false), pubsOpen = Preferences.Get("stats_pubs_open", false);
+
+    private void ApplyFolds()
     {
-        FavList.Clear();
-        FavBox.IsVisible = stats.FavoritePubs.Count > 0;
-        foreach (var (id, fav) in stats.FavoritePubs.OrderBy(f => f.Value.Name, StringComparer.CurrentCultureIgnoreCase))
+        PlacesGrid.IsVisible = placesOpen;
+        PlacesToggle.Text = placesOpen ? "(schovat)" : "(ukázat)";
+        PubsList.IsVisible = pubsOpen;
+        PubsToggle.Text = pubsOpen ? "(schovat)" : "(ukázat)";
+    }
+
+    private void OnPlacesTapped(object? sender, TappedEventArgs e)
+    {
+        placesOpen = !placesOpen;
+        Preferences.Set("stats_places_open", placesOpen);
+        ApplyFolds();
+    }
+
+    private void OnPubsTapped(object? sender, TappedEventArgs e)
+    {
+        pubsOpen = !pubsOpen;
+        Preferences.Set("stats_pubs_open", pubsOpen);
+        ApplyFolds();
+    }
+
+    // ---------------- adventní kalendář ----------------
+
+    private bool adventOpen = Preferences.Get("advent_open", true);
+
+    private void RenderAdvent(BadgeState state)
+    {
+        AdventBox.IsVisible = Advent.Visible;
+        if (!Advent.Visible) return;
+        var open = Advent.Opened(state, isMe);
+        AdventToggle.Text = $"{open.Count}/24 {(adventOpen ? "(schovat)" : "(ukázat)")} ";
+        AdventDetail.IsVisible = adventOpen;
+        AdventCaption.Text = Advent.Title + (isMe ? " – každý den jeden díl, když si něco zapíšeš" : "") + " ";
+        AdventGrid.Children.Clear();
+        AdventGrid.RowDefinitions.Clear();
+        for (var i = 0; i < Advent.Order.Length; i++)
         {
-            var label = new Label { Text = "★ " + fav.Name, Style = AppStyle("Body") };
-            var tap = new TapGestureRecognizer();
-            var pubId = id;
-            var f = fav;
-            tap.Tapped += async (_, _) => await Shell.Current.GoToAsync("//Hospoda", new Dictionary<string, object>
+            var n = Advent.Order[i];
+            var w = Advent.StateOf(n, open);
+            if (i % 6 == 0) AdventGrid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+            var cell = new Grid { HeightRequest = 58 };
+            cell.Add(new GraphicsView
             {
-                ["pubId"] = pubId, ["lat"] = f.Lat, ["lon"] = f.Lon, ["name"] = f.Name, ["kind"] = f.Kind ?? "pub"
+                InputTransparent = true, WidthRequest = 50, HeightRequest = 58, HorizontalOptions = LayoutOptions.Center,
+                Drawable = new EventFxDrawable { Scene = (_, _) => Advent.Door(w) }
             });
-            label.GestureRecognizers.Add(tap);
-            FavList.Add(label);
+            var corner = Advent.NumberInCorner(w);
+            cell.Add(new Label
+            {
+                Text = n + " ", FontFamily = "CaveatBold", FontSize = corner ? 15 : 22, InputTransparent = true,
+                TextColor = Color.FromArgb(corner ? "#6B3E1E" : "#FFF4D8"),
+                HorizontalOptions = corner ? LayoutOptions.End : LayoutOptions.Center,
+                VerticalOptions = corner ? LayoutOptions.Start : LayoutOptions.Center,
+                Margin = corner ? new Thickness(0, 2, 4, 0) : 0
+            });
+            var tap = new TapGestureRecognizer();
+            tap.Tapped += async (_, _) => await OpenWindow(n, w);
+            cell.GestureRecognizers.Add(tap);
+            Grid.SetRow(cell, i / 6);
+            Grid.SetColumn(cell, i % 6);
+            AdventGrid.Children.Add(cell);
         }
+    }
+
+    private Task OpenWindow(int n, Advent.Win w)
+    {
+        var opened = w is Advent.Win.Open or Advent.Win.Rescued;
+        // náhled eventu (správce): přečíst jde všechno, ať se dá příběh zkontrolovat
+        if (isMe && Events.Preview && !opened)
+            return Listek.AlertAsync(this, $"Okýnko {n} (náhled) ", Advent.Story(n) + " ");
+        if (!isMe)
+            return Listek.AlertAsync(this, $"Okýnko {n} ", opened ? "Otevřené. Co je pod ním, si přečte jen on – ať si zapisuje sám. " : "Zatím zavřené. ");
+        return opened
+            ? Listek.AlertAsync(this, Advent.WindowTitle(n, w == Advent.Win.Rescued) + " ", $"{Advent.Title}, {n}. díl\n\n{Advent.Story(n)} ")
+            : Listek.AlertAsync(this, $"Okýnko {n} ", Advent.ClosedText(w) + " ");
+    }
+
+    private void OnAdventTapped(object? sender, TappedEventArgs e)
+    {
+        adventOpen = !adventOpen;
+        Preferences.Set("advent_open", adventOpen);
+        AdventDetail.IsVisible = adventOpen;
+        AdventToggle.Text = AdventToggle.Text.Replace(adventOpen ? "(ukázat)" : "(schovat)", adventOpen ? "(schovat)" : "(ukázat)");
     }
 
     // ---------------- úprava starších dní (jen u sebe) ----------------
@@ -694,13 +765,14 @@ public partial class StatsFriend : ContentPage, IQueryAttributable
 
     private async Task LoadBadgesAsync(string uid)
     {
-        BadgesBox.IsVisible = false;
+        BadgesBox.IsVisible = AdventBox.IsVisible = false;
         if (Events.Current == null) return;
         try
         {
             var state = await Badges.LoadAsync(uid);
             if (uid != userId || (!Events.Active && state.Got.Count == 0)) return;   // mezitím jiný člověk / nic k ukázání
             RenderBadges(state);
+            RenderAdvent(state);
         }
         catch
         {

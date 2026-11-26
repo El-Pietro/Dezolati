@@ -17,7 +17,18 @@ public partial class Friends : ContentPage
     {
         base.OnAppearing();
         Cheers.Received += OnCheerReceived;
+        AkceText(AkceService.Mine);
+        _ = AkceService.LoadMineAsync().ContinueWith(t => { if (t.IsCompletedSuccessfully) MainThread.BeginInvokeOnMainThread(() => AkceText(t.Result)); });
         await LoadFriendsAndRequests();
+    }
+
+    /// <summary>„Akce u kámošů (1 čeká)“ – pozvánka bez odpovědi.</summary>
+    private void AkceText(List<AkceInfo> mine)
+    {
+        var waiting = mine.Count(a => !a.Over && a.MyStatus is null or "wait");
+        var running = mine.Any(a => a.Going && a.Running);
+        AkceButton.Text = running ? "Akce právě běží 🎉" : waiting > 0 ? $"Akce u kámošů ({waiting} čeká) 🎉" : "Akce u kámošů (beta) 🎉";
+        AkceButton.Variant = running || waiting > 0 ? PencilVariant.Primary : PencilVariant.Secondary;
     }
 
     protected override void OnDisappearing()
@@ -228,6 +239,9 @@ public partial class Friends : ContentPage
 
     private async void OnInvitesClicked(object? sender, EventArgs e) =>
         await Shell.Current.GoToAsync("//Pozvanky");
+
+    private async void OnAkceClicked(object? sender, EventArgs e) =>
+        await Shell.Current.GoToAsync("//Akce");
 
     private List<DrinkingFriend> uncheered = new();
 

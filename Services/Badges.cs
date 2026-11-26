@@ -4,10 +4,13 @@ using System.Text.Json.Nodes;
 namespace Dezolati.Services
 {
     /// <summary>Odznaky jednoho člověka v eventu (Achievements/{uid}, píše jen server – functions/vanoce.js).</summary>
-    public sealed record BadgeState(string Event, Dictionary<string, (DateTime? At, string Info)> Got, Dictionary<string, int> Progress)
+    public sealed record BadgeState(string Event, Dictionary<string, (DateTime? At, string Info)> Got, Dictionary<string, int> Progress,
+        Dictionary<int, string>? AdventOpen = null)
     {
         public static readonly BadgeState Empty = new("", new(), new());
         public bool Has(string id) => Got.ContainsKey(id);
+        /// <summary>Adventní kalendář: číslo okýnka → „d“ (zápis) / „p“ (zachráněno trestnými panáky).</summary>
+        public Dictionary<int, string> Advent => AdventOpen ?? new();
     }
 
     /// <summary>Jeden odznak připravený k vykreslení (statistiky appky i webu).</summary>
@@ -50,8 +53,15 @@ namespace Dezolati.Services
             if (doc.Fields["Progress"]?["mapValue"]?["fields"] is JsonObject p)
                 foreach (var kv in p)
                     prog[kv.Key] = (int)FsDoc.ValueToLong(kv.Value);
-            return new(doc.Str("Event") ?? "", got, prog);
+            var advent = new Dictionary<int, string>();
+            if (doc.Fields["Advent"]?["mapValue"]?["fields"] is JsonObject a)
+                foreach (var kv in a)
+                    if (int.TryParse(kv.Key, out var n)) advent[n] = kv.Value?["stringValue"]?.GetValue<string>() ?? "d";
+            return new(doc.Str("Event") ?? "", got, prog, advent);
         }
+
+        /// <summary>Naposledy načtený stav (bez čtení); null = ještě nenačteno.</summary>
+        public static BadgeState? Cached(string uid) => Cache.TryGetValue(uid, out var c) ? c.State : null;
 
         /// <summary>Odznaky eventu v pořadí z Events/aktualni s popiskem: datum / hospoda, nebo postup „2/4 neděle“.</summary>
         public static List<BadgeView> Views(BadgeState state) =>

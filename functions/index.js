@@ -14,6 +14,7 @@
  *  - deleteAccount:  smazání účtu a všech dat uživatele (appka i web, kvůli Google Play)
  *  - inviteAction:   pozvánky na vybrané kámoše (založit, Jdu / Nejdu, pozvat další, přidat se)
  *  - alkoholikDne:   v 7:00 po pátku, sobotě, svátku a dni před svátkem → top 3 mezi kámoši
+ *  - akce u kámoše (akce.js): akceAction, akceDrink, akceResults → Akce/{id} (akční lístek, bečky, výsledky)
  *  - eventy (vanoce.js): eventsSync, badgesDrink, badgesCheer, badgesInvite, badgesSuchyStart, trhReport, trhAction
  *                    → vánoční trhy (Events/aktualni) a odznaky (Achievements/{uid})
  *
@@ -874,3 +875,8 @@ exports.inviteAction = onCall(async (request) => {
 
 const vanoce = require("./vanoce")({ db, notifyData, friendsOf, ADMIN_UID });
 for (const [name, fn] of Object.entries(vanoce)) if (!name.startsWith("_")) exports[name] = fn;
+
+// ---------------- akce u kámoše (3.14) – viz akce.js ----------------
+
+const akce = require("./akce")({ db, notifyData, friendsOf });
+for (const [name, fn] of Object.entries(akce)) if (!name.startsWith("_")) exports[name] = fn;

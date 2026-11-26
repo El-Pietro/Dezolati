@@ -106,5 +106,21 @@
         Title="Návrhy trhů"
         ContentTemplate="{DataTemplate pages:TrhyNavrhy}"
         Route="TrhyNavrhy" />
+    <ShellContent
+        Title="Akce"
+        ContentTemplate="{DataTemplate pages:AkceList}"
+        Route="Akce" />
+    <ShellContent
+        Title="Akce"
+        ContentTemplate="{DataTemplate pages:AkceEdit}"
+        Route="AkceEdit" />
+    <ShellContent
+        Title="Akční lístek"
+        ContentTemplate="{DataTemplate pages:AkceListek}"
+        Route="AkceListek" />
+    <ShellContent
+        Title="Statistiky akce"
+        ContentTemplate="{DataTemplate pages:AkceStats}"
+        Route="AkceStats" />
 
 </Shell>

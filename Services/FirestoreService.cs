@@ -167,6 +167,8 @@ namespace Dezolati.Services
             }
             else if (!fromReminder)
                 (place, trhId, evLat, evLon) = Trhy.Apply(place, day);
+            // akce u kámoše: jsem do 100 m od místa akce a v jejím čase → pivo se počítá i na akční lístek
+            var akceId = !fromReminder && me is { } here ? AkceService.AttendingAt(here.Lat, here.Lon, DateTime.Now) : null;
             var newVisit = place.PubId != null && place.PubId != last.PubId;
             var kc = await Prices.ForDrinkAsync(pivo, vino, panaky, place.PubId);
 
@@ -180,9 +182,10 @@ namespace Dezolati.Services
                 ShareDrink: PushService.ShareDrink, PubLat: place.Lat, PubLon: place.Lon,
                 PromileSet: true, PromileValue: SharedPromile(userId),
                 Michacky: michacky, PanakDruh: panaky > 0 ? druh.Key : null,
-                TrhId: trhId, EvLat: evLat, EvLon: evLon));
+                TrhId: trhId, EvLat: evLat, EvLon: evLon, AkceId: akceId));
             if (PushService.DetectPub && place.Place != null)
                 PushService.RememberPlace(userId, day, place);   // pro lístek: „📍 U Peťky“
+            Advent.OnDrink(Events.Iso(day), panaky, Badges.Cached(userId));   // adventní kalendář: okýnko hned, server potvrdí
             UserSession.OnDrinkRecorded(now, day);
 
             // další připomínka za X minut (lokální notifikace)

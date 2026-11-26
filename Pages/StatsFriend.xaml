@@ -49,6 +49,22 @@
                         </VerticalStackLayout>
                     </VerticalStackLayout>
 
+                    <!-- adventní kalendář (Services/Advent.cs): okýnka podle Achievements/{uid}.Advent -->
+                    <VerticalStackLayout x:Name="AdventBox" Spacing="4" IsVisible="False">
+                        <Grid ColumnDefinitions="*, Auto" Margin="0,12,0,0">
+                            <Grid.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnAdventTapped" />
+                            </Grid.GestureRecognizers>
+                            <Label Text="Adventní kalendář" Style="{StaticResource Heading}" />
+                            <Label x:Name="AdventToggle" Grid.Column="1" Text="(ukázat)" Style="{StaticResource Small}"
+                                   TextColor="{StaticResource InkSoft}" VerticalOptions="End" Padding="12,0,4,4" />
+                        </Grid>
+                        <VerticalStackLayout x:Name="AdventDetail" Spacing="4">
+                            <Label x:Name="AdventCaption" Style="{StaticResource Small}" TextColor="{StaticResource InkSoft}" HorizontalTextAlignment="Center" />
+                            <Grid x:Name="AdventGrid" ColumnDefinitions="*, *, *, *, *, *" ColumnSpacing="6" RowSpacing="6" />
+                        </VerticalStackLayout>
+                    </VerticalStackLayout>
+
                     <!-- po měsících (sbalené, načte se až po rozbalení) -->
                     <VerticalStackLayout x:Name="MonthsBox" Spacing="4" IsVisible="False">
                         <Grid ColumnDefinitions="*, Auto" Margin="0,12,0,0">
@@ -94,20 +110,28 @@
 
                     <!-- kde se pije: doma / hospoda / jinde -->
                     <VerticalStackLayout x:Name="PlacesBox" Spacing="4" IsVisible="False">
-                        <Label Text="Kde se pije" Style="{StaticResource Heading}" Margin="0,12,0,0" />
-                        <Grid x:Name="PlacesGrid" ColumnDefinitions="Auto, *" ColumnSpacing="12" RowSpacing="6" />
+                        <Grid ColumnDefinitions="*, Auto" Margin="0,12,0,0">
+                            <Grid.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnPlacesTapped" />
+                            </Grid.GestureRecognizers>
+                            <Label Text="Kde se pije" Style="{StaticResource Heading}" />
+                            <Label x:Name="PlacesToggle" Grid.Column="1" Text="(ukázat)" Style="{StaticResource Small}"
+                                   TextColor="{StaticResource InkSoft}" VerticalOptions="End" Padding="12,0,4,4" />
+                        </Grid>
+                        <Grid x:Name="PlacesGrid" ColumnDefinitions="Auto, *" ColumnSpacing="12" RowSpacing="6" IsVisible="False" />
                     </VerticalStackLayout>
 
-                    <!-- oblíbené hospody (z profilu) -->
-                    <VerticalStackLayout x:Name="FavBox" Spacing="4" IsVisible="False">
-                        <Label Text="Oblíbené hospody" Style="{StaticResource Heading}" Margin="0,12,0,0" />
-                        <VerticalStackLayout x:Name="FavList" Spacing="4" />
-                    </VerticalStackLayout>
-
-                    <!-- nejčastější hospody -->
+                    <!-- nejčastější hospody (sbalené) -->
                     <VerticalStackLayout x:Name="PubsBox" Spacing="4" IsVisible="False">
-                        <Label Text="Nejčastější hospody" Style="{StaticResource Heading}" Margin="0,12,0,0" />
-                        <VerticalStackLayout x:Name="PubsList" Spacing="6" />
+                        <Grid ColumnDefinitions="*, Auto" Margin="0,12,0,0">
+                            <Grid.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnPubsTapped" />
+                            </Grid.GestureRecognizers>
+                            <Label Text="Nejčastější hospody" Style="{StaticResource Heading}" />
+                            <Label x:Name="PubsToggle" Grid.Column="1" Text="(ukázat)" Style="{StaticResource Small}"
+                                   TextColor="{StaticResource InkSoft}" VerticalOptions="End" Padding="12,0,4,4" />
+                        </Grid>
+                        <VerticalStackLayout x:Name="PubsList" Spacing="6" IsVisible="False" />
                     </VerticalStackLayout>
 
                     <!-- Grafy vyčmárané pastelkou (Controls/SketchChart.cs); popisky jsou obyčejné Labely -->

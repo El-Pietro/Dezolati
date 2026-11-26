@@ -104,7 +104,30 @@ namespace Dezolati.Controls
         /// <summary>
         /// Obecný dialog. Vrací text zmáčknutého tlačítka, null = ťuknutí mimo lístek.
         /// </summary>
-        public static async Task<string?> ShowAsync(Page? page, string title, string? message,
+        public static Task<string?> ShowAsync(Page? page, string title, string? message,
+            params (string Text, PencilVariant Variant)[] buttons) => ShowCoreAsync(page, title, message, null, buttons);
+
+        /// <summary>Dotaz na text (jméno, název…) na lístku; null = Nic / ťuknutí mimo / prázdné.</summary>
+        public static async Task<string?> PromptAsync(Page? page, string title, string? message, string ok,
+            string? placeholder = null, int maxLength = 60, string? initial = null)
+        {
+            var entry = new Entry { Placeholder = placeholder, MaxLength = maxLength, Text = initial ?? "", Margin = new Thickness(0, 0, 0, 4) };
+            entry.SetDynamicResource(Entry.FontSizeProperty, "FontBody");
+            entry.Completed += (_, _) => { if (_active is { } a) a.TrySetResult(ok); };
+            var r = await ShowCoreAsync(page, title, message, entry, (ok, PencilVariant.Primary), ("Nic", PencilVariant.Secondary));
+            entry.Unfocus();
+            var text = entry.Text?.Trim();
+            return r == ok && !string.IsNullOrEmpty(text) ? text : null;
+        }
+
+        /// <summary>Dialog s vlastním obsahem (kalendář, hodiny…). Obsah může dialog zavřít přes <see cref="Resolve"/>.</summary>
+        public static Task<string?> ShowCustomAsync(Page? page, string title, string? message, View content,
+            params (string Text, PencilVariant Variant)[] buttons) => ShowCoreAsync(page, title, message, content, buttons);
+
+        /// <summary>Zavřít otevřený dialog s výsledkem (z vlastního obsahu).</summary>
+        public static void Resolve(string? result) => _active?.TrySetResult(result);
+
+        private static async Task<string?> ShowCoreAsync(Page? page, string title, string? message, View? extra,
             params (string Text, PencilVariant Variant)[] buttons)
         {
             var host = page as ContentPage ?? Shell.Current?.CurrentPage as ContentPage;
@@ -164,6 +187,7 @@ namespace Dezolati.Controls
                     VerticalScrollBarVisibility = ScrollBarVisibility.Default
                 });
             }
+            if (extra != null) stack.Add(extra);
             foreach (var (text, variant) in buttons)
             {
                 var b = new PencilButton { Text = text, Variant = variant };
@@ -206,6 +230,7 @@ namespace Dezolati.Controls
                 dim.FadeTo(0.55, 140),
                 card.FadeTo(1, 140),
                 card.ScaleTo(1, 160, Easing.CubicOut));
+            if (extra is Entry en) en.Focus();
 
             var result = await tcs.Task;
             if (_active == tcs) _active = null;

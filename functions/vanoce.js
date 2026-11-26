@@ -49,6 +49,7 @@ module.exports = function vanoce({ db, notifyData, friendsOf, ADMIN_UID }) {
   const BADGES = [
     { Id: "prvniSvicka", Hint: "29. 11.", Name: "První svíčka", Desc: "Zápis 1. adventní neděli (29. 11.)", Icon: "candle", Color: "#B3262E", Group: ADVENT },
     { Id: "adventniStamgast", Hint: "4 adventní neděle", Name: "Adventní štamgast", Desc: "Zápis všechny 4 adventní neděle", Icon: "candle", Color: "#B3262E", Group: ADVENT, Need: 4, Unit: "neděle" },
+    { Id: "adventniKalendar", Hint: "24 okýnek", Name: "Adventní kalendář", Desc: "Otevřít všech 24 okýnek adventního kalendáře (zápis každý den 1.–24. 12., zmeškaný den zachrání druhý den dva panáky)", Icon: "calendar", Color: "#B3262E", Group: ADVENT, Need: 24, Unit: "okýnek" },
     { Id: "mikulasska", Hint: "5. 12. večer", Name: "Mikulášská", Desc: "Zápis 5. 12. večer (od 17:00)", Icon: "bell", Color: "#C9892B", Group: ADVENT },
     { Id: "lucie", Hint: "13. 12. po 22:00", Name: "Lucie", Desc: "Zápis 13. 12. po 22:00 – Lucie noci upije", Icon: "moon", Color: "#3C6E9E", Group: ADVENT },
     { Id: "trhovec", Hint: "na trzích", Name: "Trhovec", Desc: "Zápis na vánočních trzích", Icon: "tree", Color: "#2E6B3A", Group: ADVENT },
@@ -200,7 +201,7 @@ module.exports = function vanoce({ db, notifyData, friendsOf, ADMIN_UID }) {
     const stRef = db.doc(`AchievementState/${uid}`), acRef = db.doc(`Achievements/${uid}`);
     const fresh = await db.runTransaction(async (tx) => {
       const [st, ac] = await Promise.all([tx.get(stRef), tx.get(acRef)]);
-      const S = { Days: [], Trh: [], Locs: [], CheerTo: [], CheerFrom: [], K6: [], Pubs: {}, ...(st.data() || {}) };
+      const S = { Days: [], Trh: [], Locs: [], CheerTo: [], CheerFrom: [], K6: [], Pubs: {}, Advent: {}, Pk: {}, ...(st.data() || {}) };
       const A = ac.data() || {};
       const got = { ...(A.Got || {}) };
       const prog = { ...(A.Progress || {}) };
@@ -219,8 +220,9 @@ module.exports = function vanoce({ db, notifyData, friendsOf, ADMIN_UID }) {
       if (got.vanocniLegenda && got.suchyStart) award("svatozar", "");
 
       tx.set(stRef, { ...S, UpdatedAt: now });
-      if (added.length || JSON.stringify(prog) !== JSON.stringify(A.Progress || {}) || !ac.exists) {
-        tx.set(acRef, { Event: EVENT.Id, Got: got, Progress: prog, Count: Object.keys(got).length, UpdatedAt: now });
+      const advent = S.Advent || {};
+      if (added.length || JSON.stringify(prog) !== JSON.stringify(A.Progress || {}) || JSON.stringify(advent) !== JSON.stringify(A.Advent || {}) || !ac.exists) {
+        tx.set(acRef, { Event: EVENT.Id, Got: got, Progress: prog, Advent: advent, Count: Object.keys(got).length, UpdatedAt: now });
       }
       return added;
     });
@@ -295,6 +297,22 @@ module.exports = function vanoce({ db, notifyData, friendsOf, ADMIN_UID }) {
       progress("adventniStamgast", sundays);
       if (sundays === 4) award("adventniStamgast", fmtDay(day));
       if (timed && day === "2026-12-05" && (t.min >= 17 * 60 || t.iso !== day)) award("mikulasska", fmtDay(day));
+
+      // adventní kalendář: okýnko = zápis v ten den (dodatečný zápis za jiný den se nepočítá);
+      // zmeškané okýnko zachrání hned další den dva trestné panáky
+      if (timed && between(day, "2026-12-01", "2026-12-25")) {
+        S.Advent = S.Advent || {};
+        S.Pk = S.Pk || {};
+        const num = Number(day.slice(8, 10));
+        if (num <= 24 && !S.Advent[num]) S.Advent[num] = "d";
+        if (n0(d.Panaky) > 0) {
+          S.Pk = { [day]: (S.Pk[day] || 0) + n0(d.Panaky) };   // stačí dnešek
+          if (S.Pk[day] >= 2 && num - 1 >= 1 && !S.Advent[num - 1]) S.Advent[num - 1] = "p";
+        }
+        const opened = Object.keys(S.Advent).length;
+        progress("adventniKalendar", opened);
+        if (opened >= 24) award("adventniKalendar", "");
+      }
       if (timed && day === "2026-12-13" && (t.min >= 22 * 60 || t.iso !== day)) award("lucie", fmtDay(day));
 
       // Koledník: různé hospody za jeden hospodský den

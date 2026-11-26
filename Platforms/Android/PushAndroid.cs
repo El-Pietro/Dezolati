@@ -78,6 +78,17 @@ namespace Dezolati.Droid
                     PushAndroid.Show(this, title, body);
                     break;
 
+                case "akce":
+                    // tichý push: nový stav akčního lístku (bez oznámení, 0 čtení)
+                    Services.AkceService.OnPushState(D("state"));
+                    return;
+
+                case "akceInvite":
+                case "akceResults":
+                    _ = Services.AkceService.LoadMineAsync(force: true);
+                    PushAndroid.Show(this, title, body);
+                    break;
+
                 case "badge":
                     // nový odznak z eventu → při otevření lístku hned okno „Nový odznak“
                     Services.Badges.ForceCheck();

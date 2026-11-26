@@ -1,0 +1,387 @@
+@namespace Dezolati.Web.Pages
+@page "/akce/{Id}"
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@implements IDisposable
+
+@* Akční lístek (Pages/AkceListek v appce). Jen pivo; ťuk na řádek = nabídka. Web nemá tichý push → ↻ a stav z vlastních zápisů. *@
+<BackBar To="@(Guest && akce != null ? $"a/{akce.Code}" : "akce")" />
+
+<div class="listek grow">
+    <div class="stack">
+        @if (akce is not { } a)
+        {
+            <div class="title">Akce</div>
+            <div class="small soft">@(error ?? "Načítám…")</div>
+        }
+        else
+        {
+            <AkceDecor Look="AkceScene.Of(a)" />
+            <div class="title">@a.Name</div>
+            <div class="small soft">@a.When@(a.Place.Length > 0 ? $" · {a.Place}" : "")</div>
+            @if (error != null)
+            {
+                <div class="small soft">@error</div>
+            }
+
+            @if (!a.Going)
+            {
+                <div class="body">@(a.MyStatus == "no" ? "Napsal jsi, že nejdeš. Rozmyslel sis to?" : "Jdeš?")</div>
+                <div class="grid3">
+                    <PencilButton Text="Jdu" Small="true" OnClick="@(() => Run(() => AkceService.RespondAsync(a.Id, "yes")))" />
+                    <PencilButton Text="Možná" Small="true" Variant="PencilVariant.Secondary" OnClick="@(() => Run(() => AkceService.RespondAsync(a.Id, "maybe")))" />
+                    <PencilButton Text="Nejdu" Small="true" Variant="PencilVariant.Secondary" OnClick="@(() => Run(() => AkceService.RespondAsync(a.Id, "no")))" />
+                </div>
+            }
+
+            @if (inviting)
+            {
+                <div class="heading mt12">Koho pozvat?</div>
+                <div class="small soft">Přijde jim push s Jdu / Možná / Nejdu.</div>
+                <FriendPicker Friends="free" Picked="picked" />
+                <div class="grid2">
+                    <PencilButton Text="Poslat pozvánky" Small="true" OnClick="SendInvites" />
+                    <PencilButton Text="Nic" Small="true" Variant="PencilVariant.Secondary" OnClick="@(() => inviting = false)" />
+                </div>
+            }
+
+            @* bečka *@
+            var k = a.CurrentKeg; var fill = k == null ? 0 : (double)k.Left / Math.Max(1, k.Full);
+            <div class="akce-keg mt12">
+                <svg width="64" height="80" viewBox="0 0 64 80" aria-hidden="true">@((MarkupString)SceneKit.ToSvg(EventScene.Keg(fill)))</svg>
+                <div class="grow-1">
+                    @if (k == null)
+                    {
+                        <div class="body">@(a.Kegs.Count == 0 ? "Bečka žádná" : "Bečka ještě nenaražená")</div>
+                        <div class="small soft">@(a.Kegs.Count == 0 ? "Pijete lahváče? Až narazíte, dej Přeraženo!" : $"Na řadě: {a.Kegs[0].Label}")</div>
+                    }
+                    else
+                    {
+                        <div class="body">Bečka @(a.Keg + 1)/@Math.Max(a.Kegs.Count, a.Keg + 1) · @k.Label</div>
+                        <div class="small soft">zbývá ~@k.Left @Piv(k.Left) z @k.Full</div>
+                        @if (a.KegEmptyEstimate() is DateTime est && k.Left > 0)
+                        {
+                            <div class="small soft">padne kolem @est.ToString("H:mm")</div>
+                        }
+                        @if (k.Left == 0)
+                        {
+                            <div class="small soft">Podle čárek je prázdná. Přerazte!</div>
+                        }
+                    }
+                    <div class="akce-keg-buttons">
+                        @if (a.Going && !Guest)
+                        {
+                            <PencilButton Text="Přeraženo!" Small="true" OnClick="Tap" />
+                        }
+                        <PencilButton Text="↻" Small="true" Variant="PencilVariant.Secondary" Style="width:54px" Disabled="busy" OnClick="Reload" />
+                    </div>
+                </div>
+            </div>
+            @if (customKeg)
+            {
+                <input class="entry" maxlength="40" placeholder="Jaké pivo? (Plzeň…)" @bind="customName" />
+                <div class="picker">
+                    @foreach (var l in new[] { 10.0, 15, 20, 30, 50 })
+                    {
+                        var liters = l;
+                        <Chip Text="@($"{l:0} l")" Selected="@(customLiters == l)" OnClick="@(() => customLiters = liters)" />
+                    }
+                </div>
+                <div class="grid2">
+                    <PencilButton Text="Narazit" Small="true" OnClick="TapCustom" />
+                    <PencilButton Text="Nic" Small="true" Variant="PencilVariant.Secondary" OnClick="@(() => customKeg = false)" />
+                </div>
+            }
+
+            var total = a.Rows.Sum(r => r.N);
+            <div class="akce-pivo mt12">
+                <div class="heading grow-1">@(total > 0 ? $"Piva: {total} ({total * 0.5:0.#} l)" : "Piva")</div>
+                @if (AkceScene.Of(a) is { Coaster: not "none" } look)
+                {
+                    <svg width="56" height="56" viewBox="0 0 64 64" aria-hidden="true">@((MarkupString)SceneKit.ToSvg(AkceScene.Coaster(look)))</svg>
+                }
+            </div>
+            @if (!a.Running && !a.Over)
+            {
+                <div class="small soft">Začíná @a.When. Zapisovat jde už teď, ale nespěchej.</div>
+            }
+            var rows = AkceService.RowsFor(a);
+            @if (rows.Count == 0)
+            {
+                <div class="small soft">Zatím nikdo. Pozvi lidi.</div>
+            }
+            @foreach (var r in rows)
+            {
+                var row = r;
+                <div class="tally-row akce-row" @onclick="@(() => RowMenu(row))">
+                    <div class="akce-row-head">
+                        <div class="body grow-1">@Who(a, row)</div>
+                        <div class="heading">@row.N</div>
+                    </div>
+                    @if (row.N > 0)
+                    {
+                        var th = TallyScene.HeightFor(row.N, CarkyWidth);
+                        <svg class="carky-svg" width="@F(CarkyWidth)" height="@F(th)" viewBox="0 0 @F(CarkyWidth) @F(th)" aria-hidden="true">
+                            @((MarkupString)SceneKit.ToSvg(TallyScene.Build(row.N, CarkyWidth, a.From.Date, 0)))
+                        </svg>
+                    }
+                    <div class="small soft">@AkceService.Echo(row)</div>
+                </div>
+            }
+
+            @if (addingName)
+            {
+                <input class="entry" maxlength="30" placeholder="Jméno (nemá appku ani odkaz)" @bind="newName" />
+                <div class="grid2">
+                    <PencilButton Text="Přidat" Small="true" OnClick="AddName" />
+                    <PencilButton Text="Nic" Small="true" Variant="PencilVariant.Secondary" OnClick="@(() => addingName = false)" />
+                </div>
+            }
+
+            @if (Guest)
+            {
+                <div class="heading mt12">Chceš čárky i na vlastním lístku?</div>
+                <div class="small soft">Založ si účet v Dezolátech – zůstaneš na téhle akci a příště se ti piva počítají sama (hospody, kámoši, statistiky).</div>
+                <PencilButton Text="Založit si účet" Small="true" OnClick="Claim" />
+            }
+            else
+            {
+            <div class="grid2 mt12">
+                <PencilButton Text="Přidat člověka" Small="true" Variant="PencilVariant.Secondary" OnClick="@(() => addingName = true)" />
+                <PencilButton Text="Pozvat kámoše" Small="true" Variant="PencilVariant.Secondary" OnClick="OpenInvite" />
+                <PencilButton Text="Sdílet odkaz" Small="true" Variant="PencilVariant.Secondary" OnClick="ShareLink" />
+                <PencilButton Text="Statistiky" Small="true" Variant="PencilVariant.Secondary" OnClick="@(() => Nav.NavigateTo($"akce/{a.Id}/statistiky"))" />
+                @if (a.Going)
+                {
+                    <PencilButton Text="Upravit" Small="true" Variant="PencilVariant.Secondary" OnClick="@(() => Nav.NavigateTo($"akce/upravit/{a.Id}"))" />
+                    <PencilButton Text="Historie změn" Small="true" Variant="PencilVariant.Secondary" OnClick="History" />
+                }
+            </div>
+            }
+            @if (a.Going)
+            {
+                <PencilButton Text="Nakonec nejdu" Small="true" Variant="PencilVariant.Outline" OnClick="@(() => Run(() => AkceService.RespondAsync(a.Id, "no")))" />
+            }
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Id { get; set; } = "";
+    [SupplyParameterFromQuery(Name = "pozvat")] public string? Pozvat { get; set; }
+    private const double CarkyWidth = 220;
+    private AkceInfo? akce;
+    private string? error;
+    private bool busy, inviting, addingName, customKeg;
+    private string newName = "", customName = "";
+    private double customLiters = 30;
+    private List<UserModel> free = new();
+    private HashSet<string> picked = new();
+
+    private static string F(double v) => v.ToString("0.##", CultureInfo.InvariantCulture);
+    private static string Piv(int n) => n == 1 ? "pivo" : n is >= 2 and <= 4 ? "piva" : "piv";
+    /// <summary>Host z odkazu bez účtu (anonymní): jen zápis piv a Jdu/Nejdu.</summary>
+    private static bool Guest => AuthSession.Uid == null;
+
+    private void Claim()
+    {
+        if (akce == null) return;
+        Preferences.Set(AkceClaimKey, akce.Code);
+        Nav.NavigateTo("registrace");
+    }
+
+    /// <summary>Kód akce, ke které se host po registraci přihlásí jako appkář (Registrace.razor).</summary>
+    public const string AkceClaimKey = "akce_claim";
+
+    private static string Who(AkceInfo a, AkceRow r) =>
+        r.Key == AkceService.Me ? $"{r.Name} (já)" : a.Guests.Contains(r.Key) ? $"{r.Name} (z odkazu)" : r.Name;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (AkceService.Me == null) { Nav.NavigateTo("prihlaseni", replace: true); return; }
+        AkceService.Changed -= OnChanged;
+        AkceService.Changed += OnChanged;
+        AkceService.MediaLoaded -= OnMedia;
+        AkceService.MediaLoaded += OnMedia;
+        akce = AkceService.Cached(Id);
+        await Reload();
+        if (Pozvat == "1" && akce != null && !Guest) await OpenInvite();
+    }
+
+    private void OnChanged(string id)
+    {
+        if (id != Id) return;
+        InvokeAsync(() =>
+        {
+            akce = AkceService.Cached(Id);
+            if (akce == null) Nav.NavigateTo("akce");
+            StateHasChanged();
+        });
+    }
+
+    private async Task Reload()
+    {
+        busy = true;
+        try
+        {
+            akce = await AkceService.GetAsync(Id);
+            error = akce == null ? "Tahle akce už není (nebo tě z ní vyškrtli)." : null;
+            if (akce != null) _ = AkceService.LoadMediaAsync(akce);
+        }
+        catch (Exception ex) { error = Net.IsNetworkError(ex) ? "Bez signálu ukazuju, co znám z minula." : $"Nepodařilo se načíst: {ex.Message}"; }
+        finally { busy = false; }
+    }
+
+    private async Task Run(Func<Task> action)
+    {
+        if (busy) return;
+        busy = true;
+        try
+        {
+            await action();
+            akce = AkceService.Cached(Id);
+        }
+        catch (Exception ex) { await Note.AlertAsync("Nepovedlo se", Net.IsNetworkError(ex) ? "Bez signálu to nepůjde." : ex.Message); }
+        finally { busy = false; }
+    }
+
+    // ---------------- řádky ----------------
+
+    private async Task RowMenu(AkceRow r)
+    {
+        if (akce is not { } a || busy) return;
+        if (!a.Going) { await Note.AlertAsync("Akce", "Zapisovat můžou jen ti, co jdou. Nejdřív dej Jdu."); return; }
+        var buttons = new List<(string, PencilVariant)> { ("+1 pivo", PencilVariant.Primary) };
+        if (r.N > 0) buttons.Add(("Škrtnout", PencilVariant.Danger));
+        buttons.Add(("Detail", PencilVariant.Secondary));
+        var pick = await Note.ShowAsync(r.Name, $"{r.N} {Piv(r.N)} · {AkceService.Echo(r)}", buttons.ToArray());
+        switch (pick)
+        {
+            case "+1 pivo":
+                if (r.Last is DateTime last && DateTime.Now - last < TimeSpan.FromMinutes(3) &&
+                    !await Note.ConfirmAsync("Zase?", $"{r.Name} má poslední pivo zapsané před {(int)(DateTime.Now - last).TotalMinutes} min{(r.By.Length > 0 ? $" (zapsal {r.By})" : "")}. Fakt další?", "Jo, další"))
+                    return;
+                await Run(() => AkceService.BeerAsync(a.Id, r.Key, +1));
+                break;
+            case "Škrtnout":
+                if (await Note.ConfirmAsync("Škrtnout", $"Škrtnout {r.Name} jedno pivo?", "Škrtnout", danger: true))
+                    await Run(() => AkceService.BeerAsync(a.Id, r.Key, -1));
+                break;
+            case "Detail":
+                try
+                {
+                    var items = await AkceService.LogAsync(a.Id, r.Key);
+                    var lines = items.Count == 0 ? "Žádné zápisy."
+                        : string.Join("\n", items.Take(40).Select(i =>
+                            $"{i.At.ToString("ddd H:mm", WebPlatform.Cs)}  {(i.Delta > 0 ? "+" : "")}{i.Delta}  · {i.By}{(i.Src == "lístek" ? " (z lístku)" : "")}"));
+                    await Note.AlertAsync($"{r.Name}: {r.N} {Piv(r.N)}", lines);
+                }
+                catch (Exception ex) { await Note.AlertAsync("Nepovedlo se", Net.IsNetworkError(ex) ? "Bez signálu to nepůjde." : ex.Message); }
+                break;
+        }
+    }
+
+    // ---------------- bečka ----------------
+
+    private async Task Tap()
+    {
+        if (akce is not { } a || busy) return;
+        var untapped = a.Kegs.Select((k, i) => (k, i)).Where(x => x.k.TappedAt == null).ToList();
+        var options = untapped.Select(x => ($"{x.i + 1}. {x.k.Label}", PencilVariant.Secondary)).ToList();
+        options.Add(("Jiná…", PencilVariant.Secondary));
+        var pick = await Note.ShowAsync("Přeraženo!", "Kterou bečku narážíte? Počítá se vždycky plná.", options.ToArray());
+        if (pick == null) return;
+        if (pick == "Jiná…") { customKeg = true; customName = ""; customLiters = 30; return; }
+        var keg = untapped[options.FindIndex(o => o.Item1 == pick)].i;
+        await Run(() => AkceService.TapAsync(a.Id, keg));
+    }
+
+    private async Task TapCustom()
+    {
+        if (akce is not { } a || string.IsNullOrWhiteSpace(customName)) return;
+        customKeg = false;
+        await Run(() => AkceService.TapAsync(a.Id, null, customName.Trim(), customLiters));
+    }
+
+    // ---------------- lidi ----------------
+
+    private async Task AddName()
+    {
+        if (akce is not { } a || string.IsNullOrWhiteSpace(newName)) return;
+        addingName = false;
+        var n = newName.Trim();
+        newName = "";
+        await Run(() => AkceService.AddNameAsync(a.Id, n));
+    }
+
+    private async Task OpenInvite()
+    {
+        if (akce is not { } a || AuthSession.Uid is not string me) return;
+        try
+        {
+            var (_, friends) = await new FirestoreService().GetFriendsOverview(me);
+            free = friends.Where(f => !a.Status.ContainsKey(f.UserId)).OrderBy(f => f.Display).ToList();
+        }
+        catch (Exception ex) { await Note.AlertAsync("Nepovedlo se", Net.IsNetworkError(ex) ? "Bez signálu to nepůjde." : ex.Message); return; }
+        if (free.Count == 0)
+        {
+            if (await Note.ConfirmAsync("Pozvat", "Všichni kámoši už jsou pozvaní. Pošli odkaz těm bez appky.", "Sdílet odkaz")) await ShareLink();
+            return;
+        }
+        picked = new();
+        inviting = true;
+    }
+
+    private async Task SendInvites()
+    {
+        if (akce is not { } a) return;
+        inviting = false;
+        if (picked.Count == 0) return;
+        var n = picked.Count;
+        await Run(async () => { await AkceService.InviteAsync(a.Id, picked); await AkceService.GetAsync(a.Id); });
+        if (await Note.ConfirmAsync("Pozváno", $"Poslal jsem {n}× pozvánku. Lidi bez appky pozveš odkazem.", "Sdílet odkaz", "Stačí")) await ShareLink();
+    }
+
+    private async Task ShareLink()
+    {
+        if (akce is not { } a) return;
+        var text = $"{a.Name} – {a.When}{(a.Place.Length > 0 ? $", {a.Place}" : "")}. Dej vědět, jestli jdeš:";
+        var res = await JS.InvokeAsync<string>("dz.share", a.Name, text, AkceService.ShareLink(a));
+        if (res == "copied") await Note.AlertAsync("Zkopírováno", "Odkaz je ve schránce, pošli ho, kam chceš.");
+        else if (res == "") await Note.AlertAsync("Odkaz", AkceService.ShareLink(a));
+    }
+
+    // ---------------- historie ----------------
+
+    private static readonly HashSet<string> Revertable = new() { "přejmenoval akci", "změnil začátek", "změnil konec", "změnil místo" };
+
+    private static string Before(AkceChange h) =>
+        h.What is "změnil začátek" or "změnil konec" && long.TryParse(h.Before, out var ms)
+            ? DateTimeOffset.FromUnixTimeMilliseconds(ms).LocalDateTime.ToString("d. M. H:mm")
+            : string.IsNullOrEmpty(h.Before) ? "(nic)" : h.Before!;
+
+    private async Task History()
+    {
+        if (akce is not { } a) return;
+        if (a.History.Count == 0) { await Note.AlertAsync("Historie změn", "Zatím nikdo nic neměnil."); return; }
+        var items = a.History.Select((h, i) => (h, i)).Reverse().Take(8).ToList();
+        var revertable = items.Where(x => x.h.Before != null && Revertable.Contains(x.h.What)).ToList();
+        var buttons = revertable.Select(x => ($"Vrátit: {(x.h.What.Length > 26 ? x.h.What[..25] + "…" : x.h.What)}", PencilVariant.Secondary)).ToList();
+        buttons.Add(("Zavřít", PencilVariant.Primary));
+        var text = string.Join("\n", items.Select(x =>
+            $"{(x.h.At is DateTime t ? t.ToString("d. M. H:mm") : "")} {x.h.By}: {x.h.What}{(x.h.Before != null ? $" (předtím {Before(x.h)})" : "")}"));
+        var pick = await Note.ShowAsync("Historie změn", text, buttons.ToArray());
+        if (pick == null || pick == "Zavřít") return;
+        var chosen = revertable[buttons.FindIndex(b => b.Item1 == pick)];
+        if (!await Note.ConfirmAsync("Vrátit", $"Vrátit „{chosen.h.What}“ zpátky na {Before(chosen.h)}?", "Vrátit")) return;
+        await Run(async () => { await AkceService.RevertAsync(a.Id, chosen.i); await AkceService.GetAsync(a.Id); });
+    }
+
+    private void OnMedia(string key) { if (key.StartsWith(Id + "/")) InvokeAsync(StateHasChanged); }
+
+    public void Dispose()
+    {
+        AkceService.Changed -= OnChanged;
+        AkceService.MediaLoaded -= OnMedia;
+    }
+}

@@ -161,6 +161,7 @@ public partial class Hospody : ContentPage, IQueryAttributable
     private string addKind = "pub";
 
     private bool homeRequested;   // přišlo se z Nastavení → „Nastavit domov“
+    private bool picking;         // výběr místa pro jinou stránku (místo akce – Services/MapPick.cs) místo domova
 
     public Hospody()
     {
@@ -194,7 +195,8 @@ public partial class Hospody : ContentPage, IQueryAttributable
             if (appeared && loaded) Dispatcher.Dispatch(ApplyFocus);
             return;   // jinak se použije po načtení hospod (OnAppearing → LoadPubsAsync)
         }
-        if (!(query.TryGetValue("mode", out var m) && m as string == "home")) return;
+        if (!(query.TryGetValue("mode", out var m) && m as string is "home" or "pick")) return;
+        picking = m as string == "pick";
         query.Clear();   // ať se režim domova neotevře znovu při každém návratu na mapu
         if (appeared) Dispatcher.Dispatch(OpenHomeMode);
         else homeRequested = true;
@@ -289,6 +291,7 @@ public partial class Hospody : ContentPage, IQueryAttributable
             LoadingBox.IsVisible = false;
 
             if (focus != null) ApplyFocus();             // přišlo se ze statistik kámoše → tam, ne ke mně
+            else if (HomeCard.IsVisible && (picking ? MapPick.Start ?? HomePlace.Location : HomePlace.Location) != null) { }   // domov / výběr místa: zůstat na zadaném bodě
             else await CenterOnMeAsync(silent: true);
             await EnsureViewportAsync(CancellationToken.None, showErrors: !PubCatalog.HasAny);
             _ = ShowFriendsAsync();
@@ -565,9 +568,12 @@ public partial class Hospody : ContentPage, IQueryAttributable
         Crosshair.IsVisible = true;
         HomeCard.IsVisible = true;
         AddButton.IsVisible = false;
+        HomeHint.Text = picking ? MapPick.Hint : "Posuň mapu, ať je křížek na tvém domově";
+        HomeOkButton.Text = picking ? MapPick.Ok : "Tady bydlím";
 
-        // začít na stávajícím domově, ať se dá jen doladit
-        if (HomePlace.Location is { } h && mapControl != null)
+        // začít na stávajícím domově (u výběru místa na zadaném bodě), ať se dá jen doladit
+        var start = picking ? MapPick.Start ?? HomePlace.Location : HomePlace.Location;
+        if (start is { } h && mapControl != null)
         {
             var (x, y) = SphericalMercator.FromLonLat(h.Lon, h.Lat);
             mapControl.Map.Navigator.CenterOnAndZoomTo(new MPoint(x, y), ResolutionStreet);
@@ -584,7 +590,18 @@ public partial class Hospody : ContentPage, IQueryAttributable
     private async void OnHomeCancelClicked(object sender, EventArgs e)
     {
         CloseHomeMode();
-        await Shell.Current.GoToAsync("//Settings");
+        await LeaveHomeMode(picked: false);
+    }
+
+    /// <summary>Konec režimu domova / výběru místa: zpátky do Nastavení, nebo na stránku, která o místo žádala.</summary>
+    private async Task LeaveHomeMode(bool picked)
+    {
+        if (picking)
+        {
+            picking = false;
+            await Shell.Current.GoToAsync(MapPick.Back, new Dictionary<string, object> { ["picked"] = picked ? "1" : "0" });
+        }
+        else await Shell.Current.GoToAsync("//Settings");
     }
 
     private async void OnHomeHereClicked(object sender, EventArgs e)
@@ -592,6 +609,14 @@ public partial class Hospody : ContentPage, IQueryAttributable
         if (mapControl == null) return;
         var vp = mapControl.Map.Navigator.Viewport;
         var (lon, lat) = SphericalMercator.ToLonLat(vp.CenterX, vp.CenterY);
+
+        if (picking)
+        {
+            MapPick.Result = (Math.Round(lat, 6), Math.Round(lon, 6));
+            CloseHomeMode();
+            await LeaveHomeMode(picked: true);
+            return;
+        }
 
         var replace = HomePlace.IsSet;
         if (!await Listek.ConfirmAsync(this, replace ? "Přestěhoval ses?" : "Tady bydlíš?",
@@ -1090,8 +1115,8 @@ public partial class Hospody : ContentPage, IQueryAttributable
         }
         if (HomeCard.IsVisible)
         {
-            CloseHomeMode(); // Zpět při nastavování domova = zpátky do Nastavení
-            Dispatcher.Dispatch(async () => await Shell.Current.GoToAsync("//Settings"));
+            CloseHomeMode(); // Zpět při nastavování domova = zpátky do Nastavení (u výběru místa na tu stránku)
+            Dispatcher.Dispatch(async () => await LeaveHomeMode(picked: false));
             return true;
         }
         if (FriendCard.IsVisible)

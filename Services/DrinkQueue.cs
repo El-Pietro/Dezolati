@@ -28,7 +28,8 @@ namespace Dezolati.Services
         string? PanakDruh = null,      // druh panáků v zápisu (Services/PanakDruhy.cs), null = Ostatní
         string? TrhId = null,          // event: vánoční trh poznaný v telefonu (Services/Events.cs)
         double? EvLat = null,          // event: poloha zaokrouhlená na 0,001° (~100 m) – zpětné odznaky, vidí jen server
-        double? EvLon = null);
+        double? EvLon = null,
+        string? AkceId = null);        // akce u kámoše, na které právě jsem (Services/Akce.cs) – server přičte pivo na akční lístek
 
     /// <summary>
     /// Fronta zápisů v telefonu. Každý zápis jde nejdřív sem a hned se zkusí odeslat.
@@ -195,7 +196,8 @@ namespace Dezolati.Services
                     ["ShareDrink"] = d.ShareDrink,
                     ["TrhId"] = d.TrhId,
                     ["EvLat"] = d.EvLat,
-                    ["EvLon"] = d.EvLon
+                    ["EvLon"] = d.EvLon,
+                    ["Akce"] = d.AkceId
                 }, mustNotExist: true),
 
                 // 2) denní součet – atomicky přičíst (u škrtnutí odečíst)

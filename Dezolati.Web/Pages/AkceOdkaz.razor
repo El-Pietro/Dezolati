@@ -1,0 +1,109 @@
+@namespace Dezolati.Web.Pages
+@page "/a/{Code}"
+@inject NavigationManager Nav
+
+@* Odkaz na akci pro lidi bez appky: náhled → jméno + Jdu / Možná / Nejdu → akční lístek.
+   Bez účtu vznikne anonymní účet Firebase (jen pro tuhle akci), s účtem se člověk přidá normálně. *@
+<div class="listek grow">
+    <div class="stack">
+        @if (peek is not { } p)
+        {
+            <div class="title">Akce</div>
+            <div class="small soft">@(error ?? "Načítám pozvánku…")</div>
+        }
+        else
+        {
+            <div class="small soft center">@p.Host tě zve na</div>
+            <div class="title center">@p.Name</div>
+            <div class="body center">@When(p)</div>
+            @if (p.Place.Length > 0)
+            {
+                <div class="body center">📍 @p.Place</div>
+            }
+            @if (p.Going.Count > 0)
+            {
+                <div class="small soft center mt12">Jdou: @string.Join(", ", p.Going)</div>
+            }
+
+            @if (p.Member)
+            {
+                <PencilButton Class="mt12" Text="Otevřít akční lístek" OnClick="@(() => Nav.NavigateTo($"akce/{p.Id}"))" />
+            }
+            else
+            {
+                @if (AuthSession.Uid == null)
+                {
+                    <div class="field-label mt12">Jak ti říkají?</div>
+                    <input class="entry" maxlength="40" placeholder="Jméno nebo přezdívka" @bind="name" />
+                }
+                <div class="grid3 mt12">
+                    <PencilButton Text="Jdu" Small="true" Disabled="busy" OnClick="@(() => Join("yes"))" />
+                    <PencilButton Text="Možná" Small="true" Variant="PencilVariant.Secondary" Disabled="busy" OnClick="@(() => Join("maybe"))" />
+                    <PencilButton Text="Nejdu" Small="true" Variant="PencilVariant.Secondary" Disabled="busy" OnClick="@(() => Join("no"))" />
+                </div>
+                @if (AuthSession.Uid == null)
+                {
+                    <div class="small soft mt12">Na akci si pak čárky na pivo píšeš sám, appku nepotřebuješ.
+                        Máš Dezoláty? <a class="ink-link" @onclick="Login">Přihlas se</a> a otevři odkaz znovu.</div>
+                }
+            }
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Code { get; set; } = "";
+    private AkceService.Peek? peek;
+    private string? error;
+    private string name = "";
+    private bool busy;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            if (AuthSession.Uid == null) await AuthSession.SignInGuestAsync();
+            peek = await AkceService.PeekAsync(Code);
+        }
+        catch (AuthException ex) when (ex.Code is "ADMIN_ONLY_OPERATION" or "OPERATION_NOT_ALLOWED")
+        {
+            error = "Pozvánky přes odkaz zatím nejdou (správce je musí zapnout).";
+        }
+        catch (Exception ex)
+        {
+            error = Net.IsNetworkError(ex) ? "Bez signálu pozvánku nenačtu." : ex.Message;
+        }
+    }
+
+    private static string When(AkceService.Peek p)
+    {
+        string D(DateTime d) => $"{d.ToString("dddd", WebPlatform.Cs)} {d.Day}. {d.Month}. od {d:H:mm}";
+        return D(p.From);
+    }
+
+    private void Login()
+    {
+        Preferences.Set("akce_after_login", Code);
+        Nav.NavigateTo("prihlaseni");
+    }
+
+    private async Task Join(string answer)
+    {
+        if (peek is not { } p) return;
+        var guest = AuthSession.Uid == null;
+        if (guest && string.IsNullOrWhiteSpace(name)) { await Note.AlertAsync("Jméno", "Napiš, jak ti říkají, ať víme, komu píšeme čárky."); return; }
+        busy = true;
+        try
+        {
+            var id = await AkceService.JoinAsync(Code, guest ? name.Trim() : null, answer);
+            if (answer == "no")
+            {
+                await Note.AlertAsync("Škoda", $"{p.Host} to přežije. Asi.");
+                peek = await AkceService.PeekAsync(Code);
+            }
+            else Nav.NavigateTo($"akce/{id}");
+        }
+        catch (Exception ex) { await Note.AlertAsync("Nepovedlo se", Net.IsNetworkError(ex) ? "Bez signálu to nepůjde." : ex.Message); }
+        finally { busy = false; }
+    }
+}

@@ -1,0 +1,30 @@
+@namespace Dezolati.Web.Components
+@* Výzdoba akce (Services/AkceScene.cs): pás a roh nad lístkem, padající věci přes stránku. Tácek = AkceCoaster. *@
+@if (Look is { Any: true } l)
+{
+    @if (l.Top != "none" || l.Corner != "none")
+    {
+        <svg class="akce-head" viewBox="0 0 360 @F(AkceScene.HeaderH)" preserveAspectRatio="xMidYMin meet" aria-hidden="true">
+            @((MarkupString)SceneKit.ToSvg(AkceScene.Header(360, l, 0)))
+        </svg>
+    }
+    @if (l.Fall != "none" && Fall)
+    {
+        <div class="akce-fall" aria-hidden="true">
+            @foreach (var d in AkceScene.DropsFor(l))
+            {
+                var size = l.Fall == "img" ? 30 : 18;
+                <svg width="@size" height="@size" viewBox="-@(size / 2) -@(size / 2) @size @size"
+                     style="left:@F(d.X * 100)%;animation-duration:@F(d.Duration)s;animation-delay:-@F(d.Delay)s;--dx:@F(d.Drift)px;--spin:@F(l.Fall == "img" ? d.Spin * 0.3 : d.Spin)deg">
+                    @((MarkupString)SceneKit.ToSvg(AkceScene.DropShape(l, d)))
+                </svg>
+            }
+        </div>
+    }
+}
+
+@code {
+    [Parameter] public AkceScene.Look? Look { get; set; }
+    [Parameter] public bool Fall { get; set; } = true;
+    private static string F(double v) => v.ToString("0.##", CultureInfo.InvariantCulture);
+}

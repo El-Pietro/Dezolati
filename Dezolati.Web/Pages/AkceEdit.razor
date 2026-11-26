@@ -1,0 +1,244 @@
+@namespace Dezolati.Web.Pages
+@page "/akce/nova"
+@page "/akce/upravit/{Id}"
+@inject NavigationManager Nav
+@using Microsoft.AspNetCore.Components.Forms
+
+@* Založení / úprava akce (Pages/AkceEdit v appce). *@
+<BackBar To="@(Id != null ? $"akce/{Id}" : "akce")" />
+
+<div class="listek grow">
+    <div class="stack">
+        <div class="title">@(akce == null ? "Nová akce" : "Upravit akci")</div>
+        <input class="entry" maxlength="60" placeholder="Název (třeba Mikuláš u Pepy)" @bind="name" />
+
+        <div class="field-label">Od:</div>
+        <input class="entry" type="datetime-local" @bind="from" />
+        <div class="field-label">Do:</div>
+        <input class="entry" type="datetime-local" @bind="to" />
+        <div class="small soft">Může trvat i víc dní (nejvýš týden). Výsledky přijdou po konci.</div>
+
+        <div class="field-label">Kde:</div>
+        <input class="entry" maxlength="120" placeholder="Místo (u Pepy, Komenského 12)" @bind="place" />
+        <div class="small soft">@PinText</div>
+        <PencilButton Text="@(locating ? "Zjišťuju polohu…" : lat == null ? "Vybrat místo na mapě" : "Posunout špendlík na mapě")" Variant="PencilVariant.Secondary" Small="true" Disabled="locating" OnClick="Pin" />
+
+        <div class="field-label">Bečky (v pořadí, jak se budou narážet):</div>
+        @if (kegs.Count == 0)
+        {
+            <div class="small soft">Zatím žádná. Bez bečky se jen nepočítá, kolik zbývá.</div>
+        }
+        @for (var i = 0; i < kegs.Count; i++)
+        {
+            var idx = i;
+            var k = kegs[i];
+            <div class="friend-row">
+                <div class="body grow-1">@(i + 1). @k.Label (@k.Full piv)</div>
+                <PencilButton Text="✖" Variant="PencilVariant.Secondary" Small="true" Style="width:54px" OnClick="@(() => kegs.RemoveAt(idx))" />
+            </div>
+        }
+        <input class="entry" maxlength="40" placeholder="Pivo (Plzeň, Kozel…)" @bind="kegName" />
+        <div class="picker">
+            @foreach (var l in new[] { 10.0, 15, 20, 30, 50 })
+            {
+                var liters = l;
+                <Chip Text="@($"{l:0} l")" Selected="@(kegLiters == l)" OnClick="@(() => kegLiters = liters)" />
+            }
+        </div>
+        <PencilButton Text="Přidat bečku" Variant="PencilVariant.Secondary" Small="true" OnClick="AddKeg" />
+
+        <div class="field-label">Výzdoba:</div>
+        <div class="picker">
+            @foreach (var (key, label) in AkceTheme.Presets)
+            {
+                var k = key;
+                <Chip Text="@label" Selected="@(preset == k)" OnClick="@(() => SetPreset(k))" />
+            }
+        </div>
+        @if (preset != "none")
+        {
+            <div class="small soft">Každé místo může mít motiv, vlastní obrázek (třeba hlavu kámoše), nebo nic.</div>
+            @foreach (var (slot, label) in AkceTheme.SlotLabels)
+            {
+                var sl = slot;
+                <div class="akce-slot">
+                    <div class="body lbl">@label</div>
+                    <Chip Text="Motiv" Selected="@(slots[sl] == "preset")" OnClick="@(() => slots[sl] = "preset")" />
+                    <Chip Text="Obrázek" Selected="@(slots[sl] == "img")" OnClick="@(() => slots[sl] = "img")" />
+                    <Chip Text="Nic" Selected="@(slots[sl] == "none")" OnClick="@(() => slots[sl] = "none")" />
+                </div>
+                @if (slots[sl] == "img")
+                {
+                    <div class="akce-slot">
+                        @if (AkceService.MediaOf(ImgKey(sl)) is { } m)
+                        {
+                            <img class="akce-thumb" src="data:@m.Mime;base64,@m.Data" alt="" />
+                        }
+                        <label class="pencil small secondary" style="width:auto;padding:0 14px;cursor:pointer">
+                            <span>@(uploading == sl ? "Nahrávám…" : AkceService.MediaOf(ImgKey(sl)) != null ? "Jiný obrázek" : "Vybrat obrázek")</span>
+                            <InputFile accept="image/*" style="display:none" OnChange="@(e => Pick(sl, e))" />
+                        </label>
+                    </div>
+                }
+            }
+            <div class="small soft">Náhled:</div>
+            <AkceDecor Look="PreviewLook" Fall="false" />
+            <svg width="64" height="64" viewBox="0 0 64 64" aria-hidden="true">@((MarkupString)SceneKit.ToSvg(AkceScene.Coaster(PreviewLook)))</svg>
+        }
+
+        <PencilButton Class="mt12" Text="@(saving ? "Ukládám…" : akce == null ? "Založit akci" : "Uložit změny")" Disabled="saving" OnClick="Save" />
+        @if (akce?.IsHost == true)
+        {
+            <PencilButton Text="Smazat akci" Variant="PencilVariant.Danger" Small="true" OnClick="Delete" />
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public string? Id { get; set; }
+    private AkceInfo? akce;
+    private string name = "", place = "", kegName = "", preset = "party";
+    private DateTime from = DateTime.Today.AddHours(18), to = DateTime.Today.AddDays(1).AddHours(6);
+    private double? lat, lon;
+    private double kegLiters = 30;
+    private readonly List<AkceKeg> kegs = new();
+    private bool locating, saving;
+    private Dictionary<string, string> slots = AkceTheme.SlotsOf(null);
+    private readonly HashSet<string> pending = new();   // vybrané obrázky u nové akce (nahrají se po založení)
+    private string? uploading;
+
+    private string ImgKey(string slot) => $"{akce?.Id ?? "nova"}/{slot}";
+
+    private AkceScene.Look PreviewLook =>
+        AkceScene.Of(AkceTheme.Build(preset, slots, akce?.Theme), akce?.Id ?? "nova",
+            AkceTheme.Slots.Where(s => AkceService.MediaOf(ImgKey(s)) != null).ToHashSet());
+
+    private void SetPreset(string p)
+    {
+        preset = p;
+        foreach (var s in AkceTheme.Slots)
+            if (p == "none") slots[s] = "none";
+            else if (slots[s] == "none") slots[s] = "preset";
+    }
+
+    private async Task Pick(string slot, InputFileChangeEventArgs e)
+    {
+        uploading = slot;
+        try
+        {
+            var small = await e.File.RequestImageFileAsync("image/jpeg", 320, 320);
+            using var ms = new MemoryStream();
+            await small.OpenReadStream(400_000).CopyToAsync(ms);
+            var data = Convert.ToBase64String(ms.ToArray());
+            if (data.Length > 250_000) { await Note.AlertAsync("Obrázek", "I po zmenšení je moc velký. Zkus jiný."); return; }
+            if (akce != null)
+            {
+                await AkceService.UploadMediaAsync(akce.Id, slot, data);
+                akce = AkceService.Cached(akce.Id) ?? akce;
+            }
+            else
+            {
+                AkceService.SetLocalMedia(ImgKey(slot), data);
+                pending.Add(slot);
+            }
+        }
+        catch (Exception ex) { await Note.AlertAsync("Obrázek se nepovedl", Net.IsNetworkError(ex) ? "Bez signálu to nepůjde." : ex.Message); }
+        finally { uploading = null; }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (AuthSession.Uid == null) { Nav.NavigateTo("prihlaseni", replace: true); return; }
+        akce = Id != null ? AkceService.Cached(Id) ?? await AkceService.GetAsync(Id) : null;
+        if (RestoreDraft()) return;
+        kegs.Clear();
+        if (akce != null)
+        {
+            name = akce.Name; from = akce.From; to = akce.To; place = akce.Place; (lat, lon) = (akce.Lat, akce.Lon);
+            kegs.AddRange(akce.Kegs.Where(k => k.TappedAt == null).Select(k => new AkceKeg { Name = k.Name, Liters = k.Liters }));
+            preset = AkceTheme.Preset(akce);
+            slots = AkceTheme.SlotsOf(akce.Theme);
+            await AkceService.LoadMediaAsync(akce);
+        }
+        else
+        {
+            preset = DateTime.Today.Month == 12 && DateTime.Today.Day <= 6 ? "mikulas" : DateTime.Today.Month == 12 ? "vanoce" : "party";
+            if (LastLocation.Get(TimeSpan.FromMinutes(30)) is { } me) (lat, lon) = (me.Lat, me.Lon);
+        }
+    }
+
+    private string PinText => lat is double la && lon is double lo
+        ? $"📍 špendlík nastavený ({la.ToString("0.0000", CultureInfo.InvariantCulture)}, {lo.ToString("0.0000", CultureInfo.InvariantCulture)}) – kdo zapíše do 100 m, pije na akci"
+        : "📍 špendlík zatím není – bez něj se piva z běžného lístku na akci nepočítají";
+
+    // ---------------- místo na mapě (Services/MapPick.cs); rozepsaná akce počká v Draft ----------------
+
+    [SupplyParameterFromQuery(Name = "picked")] public string? Picked { get; set; }
+
+    private sealed record DraftState(string? Id, string Name, string Place, DateTime From, DateTime To, double? Lat, double? Lon,
+        List<AkceKeg> Kegs, string Preset, Dictionary<string, string> Slots, HashSet<string> Pending);
+    private static DraftState? Draft;
+
+    private void Pin()
+    {
+        Draft = new(Id, name, place, from, to, lat, lon, kegs.ToList(), preset, new(slots), new(pending));
+        var start = lat is double la && lon is double lo ? (la, lo) : LastLocation.Get(TimeSpan.FromHours(2)) ?? HomePlace.Location;
+        var back = Id != null ? $"akce/upravit/{Id}?picked=1" : "akce/nova?picked=1";
+        MapPick.Begin(start?.Item1, start?.Item2, "Posuň mapu, ať je křížek tam, kde bude akce", "Tady to bude", back);
+        Nav.NavigateTo("hospody?mode=pick");
+    }
+
+    /// <summary>Návrat z mapy: obnovit rozepsanou akci a vzít vybrané místo. true = obnoveno.</summary>
+    private bool RestoreDraft()
+    {
+        if (Picked != "1" || Draft is not { } d || d.Id != Id) return false;
+        Draft = null;
+        (name, place, from, to, lat, lon, preset, slots) = (d.Name, d.Place, d.From, d.To, d.Lat, d.Lon, d.Preset, d.Slots);
+        kegs.Clear(); kegs.AddRange(d.Kegs);
+        pending.Clear(); foreach (var p in d.Pending) pending.Add(p);
+        if (MapPick.Take() is { } r) (lat, lon) = (r.Lat, r.Lon);
+        return true;
+    }
+
+    private void AddKeg()
+    {
+        kegs.Add(new AkceKeg { Name = string.IsNullOrWhiteSpace(kegName) ? "Bečka" : kegName.Trim(), Liters = kegLiters });
+        kegName = "";
+    }
+
+    private async Task Save()
+    {
+        var n = name.Trim();
+        if (n.Length == 0) { await Note.AlertAsync("Akce", "Dej akci název."); return; }
+        if (to <= from || (to - from).TotalDays > 7) { await Note.AlertAsync("Akce", "Konec musí být po začátku a nejvýš za týden."); return; }
+        saving = true;
+        try
+        {
+            var theme = AkceTheme.Build(preset, slots, akce?.Theme);
+            if (akce == null)
+            {
+                var (newId, _) = await AkceService.CreateAsync(n, from, to, lat, lon, place.Trim(), kegs, theme);
+                foreach (var slot in pending)
+                    if (AkceService.MediaOf($"nova/{slot}") is { } m)
+                        try { await AkceService.UploadMediaAsync(newId, slot, m.Data, m.Mime); } catch { /* zůstane motiv */ }
+                pending.Clear();
+                Nav.NavigateTo($"akce/{newId}?pozvat=1");
+            }
+            else
+            {
+                await AkceService.UpdateAsync(akce.Id, n, from, to, place.Trim(), lat, lon, kegs, theme);
+                Nav.NavigateTo($"akce/{akce.Id}");
+            }
+        }
+        catch (Exception ex) { await Note.AlertAsync("Nepovedlo se", Net.IsNetworkError(ex) ? "Bez signálu to nepůjde." : ex.Message); }
+        finally { saving = false; }
+    }
+
+    private async Task Delete()
+    {
+        if (akce == null) return;
+        if (!await Note.ConfirmAsync("Smazat akci", $"{akce.Name} zmizí všem pozvaným. Zápisy na lístcích zůstanou.", "Smazat", danger: true)) return;
+        try { await AkceService.DeleteAsync(akce.Id); Nav.NavigateTo("akce"); }
+        catch (Exception ex) { await Note.AlertAsync("Nepovedlo se", ex.Message); }
+    }
+}

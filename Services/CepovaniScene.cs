@@ -21,6 +21,9 @@ namespace Dezolati.Services
 
     public sealed record SText(double X, double Y, string Text, double Size, string Color) : SceneNode;
 
+    /// <summary>Obrázek (vlastní výzdoba akce): klíč do úložiště obrázků platformy, volitelně ořez do kolečka.</summary>
+    public sealed record SImage(string Key, double X, double Y, double W, double H, bool Circle = false) : SceneNode;
+
     public static class PourScene
     {
         public const double W = 360, H = 400;
@@ -348,6 +351,11 @@ namespace Dezolati.Services
         private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
         public static string F(double v) => v.ToString("0.##", Inv);
 
+        /// <summary>Web: odkaz (data URL) obrázku pro <see cref="SImage"/>; null = obrázek není, nekreslí se.</summary>
+        public static Func<string, string?>? ImageHref { get; set; }
+
+        private static int _svgIds;
+
         // ---------------- pomocníci ----------------
 
         public static SPath Line(double x1, double y1, double x2, double y2, string color, double width) =>
@@ -382,7 +390,8 @@ namespace Dezolati.Services
         {
             var defs = new StringBuilder();
             var body = new StringBuilder();
-            var id = 0;
+            // id ořezů a přechodů jedinečná v celé stránce (víc SVG vedle sebe by si jinak sahalo na cizí dzc0)
+            var id = System.Threading.Interlocked.Add(ref _svgIds, 10000);
             void Emit(SceneNode node)
             {
                 switch (node)
@@ -430,6 +439,16 @@ namespace Dezolati.Services
                         break;
                     case SText t:
                         body.Append($"<text x=\"{F(t.X)}\" y=\"{F(t.Y)}\" font-size=\"{F(t.Size)}\" fill=\"{t.Color}\">{t.Text}</text>");
+                        break;
+                    case SImage im when ImageHref?.Invoke(im.Key) is string href:
+                        var clip = "";
+                        if (im.Circle)
+                        {
+                            var cid = $"dzc{id++}";
+                            defs.Append($"<clipPath id=\"{cid}\" clipPathUnits=\"userSpaceOnUse\"><path d=\"{Ellipse(im.X + im.W / 2, im.Y + im.H / 2, im.W / 2, im.H / 2)}\"/></clipPath>");
+                            clip = $" clip-path=\"url(#{cid})\"";
+                        }
+                        body.Append($"<image href=\"{href}\" x=\"{F(im.X)}\" y=\"{F(im.Y)}\" width=\"{F(im.W)}\" height=\"{F(im.H)}\" preserveAspectRatio=\"xMidYMid slice\"{clip}/>");
                         break;
                 }
             }

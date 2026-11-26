@@ -217,6 +217,20 @@
           "order": "ASCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "Akce",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "Members",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "To",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []

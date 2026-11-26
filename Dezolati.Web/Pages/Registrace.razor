@@ -57,6 +57,12 @@
             if (taken != null && taken.UserId != uid)
                 final = $"{nick}{Random.Shared.Next(100, 999)}";
             await fs.EnsureUserDoc(uid, mail, final);
+            // host z odkazu na akci: teď už jako appkář (zmizí „z odkazu“, piva se mu píšou i na lístek)
+            if (Preferences.Get(AkceListek.AkceClaimKey, null as string) is string claim)
+            {
+                Preferences.Remove(AkceListek.AkceClaimKey);
+                try { await AkceService.JoinAsync(claim, null, "yes"); } catch { }
+            }
             if (final != nick)
                 await Note.AlertAsync("Přezdívka zabraná",
                     $"„{nick}“ už někdo má, dostal jsi „{final}“. Změnit si ji můžeš v Nastavení.");

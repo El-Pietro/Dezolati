@@ -9,6 +9,13 @@ window.dz = (function () {
     }
 
     return {
+        // ---- sdílení odkazu (akce): systémové sdílení, jinak schránka. Vrací "shared" | "copied" | "" ----
+        share: async function (title, text, url) {
+            try {
+                if (navigator.share) { await navigator.share({ title: title, text: text, url: url }); return 'shared'; }
+            } catch (e) { if (e && e.name === 'AbortError') return ''; }
+            try { await navigator.clipboard.writeText(text + ' ' + url); return 'copied'; } catch (e) { return ''; }
+        },
         // ---- úložiště (Preferences v appce) ----
         storageAll: function () {
             return safe(function () {

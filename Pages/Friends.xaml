@@ -49,6 +49,10 @@
                         <controls:PencilButton x:Name="InvitesButton" Text="Pozvánky do hospody" Variant="Secondary"
                                                FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
                                                Margin="0,0,0,6" Clicked="OnInvitesClicked" />
+                        <!-- akce u kámoše (večírek s akčním lístkem) -->
+                        <controls:PencilButton x:Name="AkceButton" Text="Akce u kámošů 🎉" Variant="Secondary"
+                                               FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"
+                                               Margin="0,0,0,6" Clicked="OnAkceClicked" />
                         <!-- víc kámošů pije → jedním ťukem připít všem -->
                         <controls:PencilButton x:Name="CheerAllButton" Text="Připít všem 🍺" Variant="Primary" IsVisible="False"
                                                FontSize="{DynamicResource FontButtonSmall}" HeightRequest="{DynamicResource ButtonHeightSmall}"

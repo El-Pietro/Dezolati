@@ -15,6 +15,7 @@ namespace Dezolati.Services
         // stejný veřejný klíč projektu jako v MauiProgram.cs (identifikátor, ne tajemství)
         internal const string ApiKey = "AIzaSyBmfjw3PRo85_PDq8Z763rmh49pags1PjA";
         private const string KeyUser = "auth_user";
+        private const string KeyGuest = "akce_guest";
 
         internal static HttpClient Http { get; set; } = new() { Timeout = TimeSpan.FromSeconds(20) };
 
@@ -43,6 +44,50 @@ namespace Dezolati.Services
             }
         }
 
+        // host z odkazu na akci (anonymní účet Firebase) – NENÍ přihlášení: Uid zůstává null, jen GetTokenAsync ho použije
+        private static StoredUser? _guest;
+        private static bool _guestLoaded;
+
+        private static StoredUser? Guest
+        {
+            get
+            {
+                if (!_guestLoaded)
+                {
+                    _guestLoaded = true;
+                    try
+                    {
+                        var json = Preferences.Get(KeyGuest, null as string);
+                        _guest = string.IsNullOrEmpty(json) ? null : JsonSerializer.Deserialize<StoredUser>(json);
+                    }
+                    catch { _guest = null; }
+                }
+                return _guest;
+            }
+        }
+
+        public static string? GuestUid => Guest?.Uid;
+
+        /// <summary>Anonymní účet pro hosta z odkazu (vytvoří jen jednou, pak ho pamatuje).</summary>
+        public static async Task<string> SignInGuestAsync()
+        {
+            if (Guest is { } g) return g.Uid;
+            var node = await CallAsync("accounts:signUp", new JsonObject { ["returnSecureToken"] = true });
+            var guest = new StoredUser(node["localId"]!.GetValue<string>(), null, null,
+                node["refreshToken"]!.GetValue<string>(), node["idToken"]!.GetValue<string>(),
+                DateTime.UtcNow.AddSeconds(ParseSeconds(node["expiresIn"])));
+            SaveGuest(guest);
+            return guest.Uid;
+        }
+
+        private static void SaveGuest(StoredUser? guest)
+        {
+            _guest = guest;
+            _guestLoaded = true;
+            if (guest == null) Preferences.Remove(KeyGuest);
+            else Preferences.Set(KeyGuest, JsonSerializer.Serialize(guest));
+        }
+
         public static bool IsSignedIn => User != null;
         public static string? Uid => User?.Uid;
         public static string? DisplayName => User?.DisplayName;
@@ -54,14 +99,15 @@ namespace Dezolati.Services
         /// <summary>ID token pro Firestore REST, před vypršením se sám obnoví.</summary>
         public static async Task<string> GetTokenAsync()
         {
-            var user = User ?? throw new InvalidOperationException("Uživatel není přihlášen.");
+            var user = User ?? Guest ?? throw new InvalidOperationException("Uživatel není přihlášen.");
             if (DateTime.UtcNow < user.ExpiresAtUtc.AddMinutes(-5)) return user.IdToken;
 
             await RefreshLock.WaitAsync();
             try
             {
-                user = User ?? throw new InvalidOperationException("Uživatel není přihlášen.");
+                user = User ?? Guest ?? throw new InvalidOperationException("Uživatel není přihlášen.");
                 if (DateTime.UtcNow < user.ExpiresAtUtc.AddMinutes(-5)) return user.IdToken;
+                var isGuest = User == null;
 
                 using var content = new FormUrlEncodedContent(new Dictionary<string, string>
                 {
@@ -76,6 +122,7 @@ namespace Dezolati.Services
                     // účet smazaný / zablokovaný / token zneplatněný → odhlásit, ať to nezkouší pořád dokola
                     if (code is "TOKEN_EXPIRED" or "USER_DISABLED" or "USER_NOT_FOUND" or "INVALID_REFRESH_TOKEN")
                     {
+                        if (isGuest) { SaveGuest(null); throw new AuthException(code, "Odkaz na akci otevři znovu."); }
                         SignOut();
                         throw new AuthException(code, "Přihlášení vypršelo, přihlas se znovu.");
                     }
@@ -88,7 +135,7 @@ namespace Dezolati.Services
                     RefreshToken = node["refresh_token"]?.GetValue<string>() ?? user.RefreshToken,
                     ExpiresAtUtc = DateTime.UtcNow.AddSeconds(ParseSeconds(node["expires_in"]))
                 };
-                Save(updated);
+                if (isGuest) SaveGuest(updated); else Save(updated);
                 return updated.IdToken;
             }
             finally
@@ -111,13 +158,30 @@ namespace Dezolati.Services
         /// <summary>Nový účet + přezdívka (displayName), rovnou přihlásí.</summary>
         public static async Task SignUpAsync(string email, string password, string displayName)
         {
-            var node = await CallAsync("accounts:signUp", new JsonObject
+            JsonNode node;
+            if (User == null && Guest != null)
             {
-                ["email"] = email,
-                ["password"] = password,
-                ["returnSecureToken"] = true
-            });
-            SaveFrom(node, email);
+                // host z odkazu si zakládá účet: z anonymního účtu se stane normální (stejné uid → zůstane na akci)
+                node = await CallAsync("accounts:update", new JsonObject
+                {
+                    ["idToken"] = await GetTokenAsync(),
+                    ["email"] = email,
+                    ["password"] = password,
+                    ["returnSecureToken"] = true
+                });
+                SaveFrom(node, email);
+                SaveGuest(null);
+            }
+            else
+            {
+                node = await CallAsync("accounts:signUp", new JsonObject
+                {
+                    ["email"] = email,
+                    ["password"] = password,
+                    ["returnSecureToken"] = true
+                });
+                SaveFrom(node, email);
+            }
 
             try
             {

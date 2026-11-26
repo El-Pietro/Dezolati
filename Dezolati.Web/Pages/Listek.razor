@@ -323,7 +323,10 @@
         try
         {
             if (choice == add)
+            {
                 await firestoreService.RecordDrink(userId, AuthSession.DisplayName, p, v, s, michacky: m);
+                _ = ShowAdventAsync();
+            }
             else if (choice == strike)
                 await firestoreService.RecordCorrection(userId, shownDay, p, v, s, m);
             else
@@ -378,6 +381,15 @@
                 return;
             }
         }
+        await ShowAdventAsync();
+    }
+
+    /// <summary>Adventní kalendář: nově otevřené okýnko = další díl příběhu (jen jednou).</summary>
+    private async Task ShowAdventAsync()
+    {
+        if (AuthSession.Uid is not string uid) return;
+        foreach (var (n, rescued) in Advent.TakeNew(Badges.Cached(uid)))
+            await Note.ShowAsync(Advent.WindowTitle(n, rescued), $"{Advent.Title}, {n}. díl\n\n{Advent.Story(n)}", ("Na zdraví!", PencilVariant.Primary));
     }
 
     private void EventTagTapped() => Nav.NavigateTo("trhy");   // detail eventu: trhy poblíž, „Tady jsou trhy!“, odznaky, mapa

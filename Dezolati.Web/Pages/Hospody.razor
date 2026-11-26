@@ -58,6 +58,18 @@
             </div>
         </div>
     }
+    else if (mode == Mode.Pick)
+    {
+        <div class="listek map-card">
+            <div class="stack">
+                <div class="small center">@MapPick.Hint</div>
+                <div class="grid2">
+                    <PencilButton Text="@MapPick.Ok" OnClick="SavePick" />
+                    <PencilButton Text="Zrušit" Variant="PencilVariant.Secondary" OnClick="@(() => Nav.NavigateTo(MapPick.Back))" />
+                </div>
+            </div>
+        </div>
+    }
     else if (mode == Mode.Home)
     {
         <div class="listek map-card">
@@ -128,7 +140,7 @@
 </div>
 
 @code {
-    private enum Mode { Normal, Add, Home }
+    private enum Mode { Normal, Add, Home, Pick }
 
     [SupplyParameterFromQuery(Name = "mode")] public string? QueryMode { get; set; }
     // ze statistik kámoše: hospoda posledního zápisu (a on sám)
@@ -169,7 +181,7 @@
             Nav.NavigateTo("prihlaseni", replace: true);
             return;
         }
-        mode = QueryMode == "home" ? Mode.Home : Mode.Normal;
+        mode = QueryMode switch { "home" => Mode.Home, "pick" => Mode.Pick, _ => Mode.Normal };
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -181,6 +193,7 @@
         var (lat, lon, zoom) = (49.1951, 16.6068, 13);
         if (HomePlace.Location is { } h) (lat, lon, zoom) = (h.Lat, h.Lon, mode == Mode.Home ? 17 : 15);
         if (FocusLat is double fl && FocusLon is double fo) (lat, lon, zoom) = (fl, fo, 17);
+        if (mode == Mode.Pick && MapPick.Start is { } ps) (lat, lon, zoom) = (ps.Lat, ps.Lon, 17);
         await JS.InvokeVoidAsync("dzMap.create", "dzmap", self, lat, lon, zoom);
         await JS.InvokeVoidAsync("dzMap.setFilter", onlyFav, showClosed, kinds.ToArray());
         await ShowHomeAsync();
@@ -572,6 +585,14 @@
         {
             busy = false;
         }
+    }
+
+    /// <summary>Výběr místa pro jinou stránku (místo akce): střed mapy → MapPick.Result a zpátky.</summary>
+    private async Task SavePick()
+    {
+        if (await CenterAsync() is not { } c) return;
+        MapPick.Result = (Math.Round(c.Lat, 6), Math.Round(c.Lon, 6));
+        Nav.NavigateTo(MapPick.Back);
     }
 
     private async Task SaveHome()

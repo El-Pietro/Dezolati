@@ -73,6 +73,13 @@
             Preferences.Set("LastEmail", email.Trim());
             password = "";
             try { await UserSession.EnsureReadyAsync(); } catch { /* lístek případně ukáže chybu */ }
+            // přišel z odkazu na akci → zpátky na pozvánku
+            if (Preferences.Get("akce_after_login", null as string) is string akceCode)
+            {
+                Preferences.Remove("akce_after_login");
+                Nav.NavigateTo($"a/{akceCode}", replace: true);
+                return;
+            }
             Nav.NavigateTo("", replace: true);
         }
         catch (AuthException ex)

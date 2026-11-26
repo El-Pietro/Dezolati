@@ -84,6 +84,31 @@
                 }
             }
 
+            @if (badgeState != null && Advent.Visible)
+            {
+                @* adventní kalendář: okýnko = zápis toho dne, pod ním díl příběhu (kámoši vidí jen otevřená okýnka) *@
+                var adv = Advent.Opened(badgeState, isMe);
+                <div class="section-head" @onclick="ToggleAdvent">
+                    <div class="heading">Adventní kalendář</div>
+                    <span class="link">@adv.Count/24 @(adventOpen ? "(schovat)" : "(ukázat)")</span>
+                </div>
+                @if (adventOpen)
+                {
+                    <div class="small soft center">@Advent.Title@(isMe ? " – každý den jeden díl, když si něco zapíšeš" : "")</div>
+                    <div class="advent-grid">
+                        @foreach (var n in Advent.Order)
+                        {
+                            var num = n;
+                            var w = Advent.StateOf(num, adv);
+                            <button class="advent-win" @onclick="() => OpenWindow(num, w)">
+                                <svg viewBox="0 0 50 58" aria-hidden="true">@((MarkupString)SceneKit.ToSvg(Advent.Door(w)))</svg>
+                                <span class="@(Advent.NumberInCorner(w) ? "n corner" : "n")">@num</span>
+                            </button>
+                        }
+                    </div>
+                }
+            }
+
             @if (s.Totals.Total > 0)
             {
                 <div class="section-head" @onclick="ToggleMonths">
@@ -149,34 +174,37 @@
 
             @if (places.Count > 0)
             {
-                <div class="heading mt12">Kde se pije</div>
-                <div class="rows">
-                    @foreach (var (label, value) in places)
-                    {
-                        <div class="field-label">@label</div>
-                        <div class="body">@value</div>
-                    }
+                <div class="section-head" @onclick="() => Toggle(ref placesOpen, KeyPlacesOpen)">
+                    <div class="heading">Kde se pije</div>
+                    <span class="link">@(placesOpen ? "(schovat)" : "(ukázat)")</span>
                 </div>
-            }
-
-            @if (s.FavoritePubs.Count > 0)
-            {
-                <div class="heading mt12">Oblíbené hospody</div>
-                @foreach (var (favId, fav) in s.FavoritePubs.OrderBy(f => f.Value.Name, StringComparer.CurrentCultureIgnoreCase))
+                @if (placesOpen)
                 {
-                    <div class="body" style="cursor:pointer" @onclick="@(() => OpenPub(favId))">★ @fav.Name</div>
+                    <div class="rows">
+                        @foreach (var (label, value) in places)
+                        {
+                            <div class="field-label">@label</div>
+                            <div class="body">@value</div>
+                        }
+                    </div>
                 }
             }
 
             @if (s.Pubs.Count > 0)
             {
-                <div class="heading mt12">Nejčastější hospody</div>
-                @foreach (var (p, i) in s.Pubs.Take(5).Select((p, i) => (p, i)))
+                <div class="section-head" @onclick="() => Toggle(ref pubsOpen, KeyPubsOpen)">
+                    <div class="heading">Nejčastější hospody</div>
+                    <span class="link">@(pubsOpen ? "(schovat)" : "(ukázat)")</span>
+                </div>
+                @if (pubsOpen)
                 {
-                    <div style="cursor:pointer" @onclick="@(() => OpenPub(p.PubId))">
-                        <div class="body">@(i + 1). @(p.Name ?? "?")</div>
-                        <div class="small">@PubInfo(p)</div>
-                    </div>
+                    @foreach (var (p, i) in s.Pubs.Take(5).Select((p, i) => (p, i)))
+                    {
+                        <div style="cursor:pointer" @onclick="@(() => OpenPub(p.PubId))">
+                            <div class="body">@(i + 1). @(p.Name ?? "?")</div>
+                            <div class="small">@PubInfo(p)</div>
+                        </div>
+                    }
                 }
             }
 
@@ -286,6 +314,36 @@
     // ---------- odznaky z eventu ----------
     private BadgeState? badgeState;
     private bool badgesOpen = Preferences.Get("badges_open", true);
+    private bool adventOpen = Preferences.Get("advent_open", true);
+
+    // sbalitelné sekce (zapamatované)
+    private const string KeyPlacesOpen = "stats_places_open", KeyPubsOpen = "stats_pubs_open";
+    private bool placesOpen = Preferences.Get(KeyPlacesOpen, false), pubsOpen = Preferences.Get(KeyPubsOpen, false);
+
+    private static void Toggle(ref bool flag, string key)
+    {
+        flag = !flag;
+        Preferences.Set(key, flag);
+    }
+
+    private void ToggleAdvent()
+    {
+        adventOpen = !adventOpen;
+        Preferences.Set("advent_open", adventOpen);
+    }
+
+    private Task OpenWindow(int n, Advent.Win w)
+    {
+        // náhled eventu (správce): přečíst jde všechno, ať se dá příběh zkontrolovat
+        if (isMe && Events.Preview && w is not (Advent.Win.Open or Advent.Win.Rescued))
+            return Note.AlertAsync($"Okýnko {n} (náhled)", Advent.Story(n));
+        if (!isMe)
+            return Note.AlertAsync($"Okýnko {n}", w is Advent.Win.Open or Advent.Win.Rescued
+                ? "Otevřené. Co je pod ním, si přečte jen on – ať si zapisuje sám." : "Zatím zavřené.");
+        return w is Advent.Win.Open or Advent.Win.Rescued
+            ? Note.AlertAsync(Advent.WindowTitle(n, w == Advent.Win.Rescued), $"{Advent.Title}, {n}. díl\n\n{Advent.Story(n)}")
+            : Note.AlertAsync($"Okýnko {n}", Advent.ClosedText(w));
+    }
 
     private async Task LoadBadgesAsync(string uid)
     {

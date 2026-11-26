@@ -1,0 +1,87 @@
+@namespace Dezolati.Web.Pages
+@page "/akce"
+@inject NavigationManager Nav
+@implements IDisposable
+
+@* Moje akce u kámošů (Pages/AkceList v appce). *@
+<BackBar To="pratele" />
+
+<div class="listek grow">
+    <div class="stack">
+        <div class="title">Akce (beta)</div>
+        <div class="small soft">Večírky u kámošů: akční lístek na pivo, bečky a výsledky.</div>
+        <div class="small soft">Novinka ve zkušebním provozu – když něco nesedí, napiš Petrovi. Zápisy na lístcích se neztratí.</div>
+        <PencilButton Text="Nová akce" OnClick="@(() => Nav.NavigateTo("akce/nova"))" />
+        @if (Events.IsAdmin)
+        {
+            <PencilButton Text="@(testing ? "Zakládám…" : "Zkušební akce (správce)")" Variant="PencilVariant.Secondary" Small="true" Disabled="testing" OnClick="CreateTest" />
+        }
+        @if (error != null)
+        {
+            <div class="small soft">@error</div>
+        }
+        @{ var upcoming = list.Where(a => !a.Over).OrderBy(a => a.From).ToList(); var past = list.Where(a => a.Over).OrderByDescending(a => a.From).ToList(); }
+        @if (upcoming.Count == 0)
+        {
+            <div class="small soft">Nic naplánovaného. Ty to tak necháš?</div>
+        }
+        @foreach (var a in upcoming)
+        {
+            <AkceCard Akce="a" OnOpen="Open" OnAnswer="Answer" />
+        }
+        @if (past.Count > 0)
+        {
+            <div class="heading mt12">Proběhlé</div>
+            @foreach (var a in past)
+            {
+                <AkceCard Akce="a" OnOpen="Open" OnAnswer="Answer" />
+            }
+        }
+    </div>
+</div>
+
+@code {
+    private List<AkceInfo> list = new();
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthSession.Uid == null) { Nav.NavigateTo("prihlaseni", replace: true); return; }
+        list = AkceService.Mine;
+        AkceService.Changed += OnChanged;
+        try { list = await AkceService.LoadMineAsync(force: true); }
+        catch (Exception ex) { error = Net.IsNetworkError(ex) ? "Bez signálu jen to, co znám z minula." : $"Nepodařilo se načíst: {ex.Message}"; }
+    }
+
+    private void OnChanged(string _) => InvokeAsync(() => { list = AkceService.Mine; StateHasChanged(); });
+
+    private void Open(AkceInfo a) => Nav.NavigateTo($"akce/{a.Id}");
+
+    private bool testing;
+
+    /// <summary>Správce: akce teď a tady na vyzkoušení (lístek, bečka, výzdoba, odkaz). Nikoho nezve.</summary>
+    private async Task CreateTest()
+    {
+        testing = true;
+        try
+        {
+            var loc = await PushService.LocateAsync();
+            var (id, _) = await AkceService.CreateTestAsync(loc?.Lat, loc?.Lon);
+            Nav.NavigateTo($"akce/{id}");
+        }
+        catch (Exception ex) { await Note.AlertAsync("Nepovedlo se", Net.IsNetworkError(ex) ? "Bez signálu to nepůjde." : ex.Message); }
+        finally { testing = false; }
+    }
+
+    private async Task Answer((AkceInfo A, string Answer) x)
+    {
+        try
+        {
+            await AkceService.RespondAsync(x.A.Id, x.Answer);
+            list = AkceService.Mine;
+        }
+        catch (Exception ex) { await Note.AlertAsync("Nepovedlo se", Net.IsNetworkError(ex) ? "Bez signálu to nepůjde." : ex.Message); }
+    }
+
+    public void Dispose() => AkceService.Changed -= OnChanged;
+}

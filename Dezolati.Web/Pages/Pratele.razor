@@ -25,6 +25,10 @@
         <PencilButton Text="@(Pozvani.WaitingCount > 0 ? $"Pozvánky ({Pozvani.WaitingCount} čeká)" : "Pozvánky do hospody")"
                       Variant="@(Pozvani.WaitingCount > 0 ? PencilVariant.Primary : PencilVariant.Secondary)" Small="true"
                       OnClick="@(() => Nav.NavigateTo("pozvanky"))" />
+        @{ var akceWaiting = AkceService.Mine.Count(a => !a.Over && a.MyStatus is null or "wait"); var akceRunning = AkceService.Mine.Any(a => a.Going && a.Running); }
+        <PencilButton Text="@(akceRunning ? "Akce právě běží 🎉" : akceWaiting > 0 ? $"Akce u kámošů ({akceWaiting} čeká) 🎉" : "Akce u kámošů (beta) 🎉")"
+                      Variant="@(akceRunning || akceWaiting > 0 ? PencilVariant.Primary : PencilVariant.Secondary)" Small="true"
+                      OnClick="@(() => Nav.NavigateTo("akce"))" />
 
         @if (pushHint != null)
         {
@@ -185,6 +189,7 @@
         }
         Cheers.Received += OnCheerReceived;
         _ = ShowPushHintAsync();
+        _ = AkceService.LoadMineAsync().ContinueWith(_ => InvokeAsync(StateHasChanged));
         await Load();
     }
 

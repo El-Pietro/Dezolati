@@ -80,9 +80,9 @@
         <!-- nastavení domova (otevírá se z Nastavení); poloha zůstane jen v telefonu -->
         <Border x:Name="HomeCard" Grid.Row="2" Style="{StaticResource Listek}" IsVisible="False" Margin="12,0,12,16">
             <VerticalStackLayout Spacing="6">
-                <Label Text="Posuň mapu, ať je křížek na tvém domově" Style="{StaticResource Small}" HorizontalTextAlignment="Center" />
+                <Label x:Name="HomeHint" Text="Posuň mapu, ať je křížek na tvém domově" Style="{StaticResource Small}" HorizontalTextAlignment="Center" />
                 <Grid ColumnDefinitions="*, *" ColumnSpacing="10">
-                    <controls:PencilButton Grid.Column="0" Text="Tady bydlím" Variant="Primary" Clicked="OnHomeHereClicked" />
+                    <controls:PencilButton x:Name="HomeOkButton" Grid.Column="0" Text="Tady bydlím" Variant="Primary" Clicked="OnHomeHereClicked" />
                     <controls:PencilButton Grid.Column="1" Text="Zrušit" Variant="Secondary" Clicked="OnHomeCancelClicked" />
                 </Grid>
             </VerticalStackLayout>

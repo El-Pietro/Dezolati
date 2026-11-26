@@ -1,0 +1,34 @@
+@namespace Dezolati.Web.Components
+@* Karta akce v seznamu: název, kdy · kde, můj stav; bez odpovědi Jdu / Možná / Nejdu. *@
+<div class="akce-card" @onclick="@(() => OnOpen.InvokeAsync(Akce))">
+    <div class="heading">@Akce.Name</div>
+    <div class="small soft">@Akce.When@(Akce.Place.Length > 0 ? $" · {Akce.Place}" : "")</div>
+    <div class="small">@State</div>
+</div>
+@if (!Akce.Over && Akce.MyStatus is null or "wait")
+{
+    <div class="grid3">
+        <PencilButton Text="Jdu" Small="true" OnClick="@(() => OnAnswer.InvokeAsync((Akce, "yes")))" />
+        <PencilButton Text="Možná" Small="true" Variant="PencilVariant.Secondary" OnClick="@(() => OnAnswer.InvokeAsync((Akce, "maybe")))" />
+        <PencilButton Text="Nejdu" Small="true" Variant="PencilVariant.Secondary" OnClick="@(() => OnAnswer.InvokeAsync((Akce, "no")))" />
+    </div>
+}
+
+@code {
+    [Parameter] public AkceInfo Akce { get; set; } = new();
+    [Parameter] public EventCallback<AkceInfo> OnOpen { get; set; }
+    [Parameter] public EventCallback<(AkceInfo, string)> OnAnswer { get; set; }
+
+    private string State
+    {
+        get
+        {
+            var a = Akce;
+            var going = a.Status.Count(s => s.Value == "yes");
+            var beers = a.Rows.Sum(r => r.N);
+            var me = a.MyStatus switch { "yes" => "jdeš", "maybe" => "možná", "no" => "nejdeš", _ => "čeká na odpověď" };
+            var host = a.IsHost ? "pořádáš · " : $"{a.NameOf(a.Host)} zve · ";
+            return a.Over ? $"{beers} piv · {going} lidí" : a.Running ? $"běží! · {beers} piv · {me}" : $"{host}{me} · jde {going}";
+        }
+    }
+}

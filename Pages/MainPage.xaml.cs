@@ -227,6 +227,16 @@ namespace Dezolati.Pages
                     return;
                 }
             }
+            await ShowAdventAsync();
+        }
+
+        /// <summary>Adventní kalendář: nově otevřené okýnko = další díl příběhu (jen jednou).</summary>
+        private async Task ShowAdventAsync()
+        {
+            if (AuthSession.Uid is not string uid) return;
+            foreach (var (n, rescued) in Advent.TakeNew(Badges.Cached(uid)))
+                await Listek.ShowAsync(this, Advent.WindowTitle(n, rescued) + " ",
+                    $"{Advent.Title}, {n}. díl\n\n{Advent.Story(n)} ", ("Na zdraví!", PencilVariant.Primary));
         }
 
         private async void OnEventTagTapped(object? sender, TappedEventArgs e) =>
@@ -508,6 +518,7 @@ namespace Dezolati.Pages
                 await Listek.AlertAsync(this, "Chyba", (choice == add ? "Zápis" : "Škrtnutí") + " se nepovedl: " + ex.Message);
             }
             await LoadData();
+            if (choice == add) await ShowAdventAsync();
         }
 
         private async void OnStatsClicked(object sender, EventArgs e)

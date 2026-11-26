@@ -41,6 +41,9 @@ public sealed class SceneDrawable : IDrawable
         return c;
     }
 
+    /// <summary>Obrázky pro <see cref="SImage"/> (výzdoba akce) podle klíče „{akce}/{slot}“.</summary>
+    public static readonly Dictionary<string, Microsoft.Maui.Graphics.IImage> Images = new();
+
     internal static void Render(ICanvas canvas, SceneNode node)
     {
         switch (node)
@@ -95,6 +98,16 @@ public sealed class SceneDrawable : IDrawable
                 canvas.FontSize = (float)t.Size;
                 canvas.DrawString(t.Text, (float)t.X, (float)(t.Y - t.Size), 400, (float)t.Size * 1.3f,
                     HorizontalAlignment.Left, VerticalAlignment.Center);
+                break;
+
+            case SImage im when Images.TryGetValue(im.Key, out var img):
+                canvas.SaveState();
+                if (im.Circle) canvas.ClipPath(PathOf(SceneKit.Ellipse(im.X + im.W / 2, im.Y + im.H / 2, im.W / 2, im.H / 2)));
+                // výřez na střed (jako CSS cover)
+                var scale = Math.Max(im.W / img.Width, im.H / img.Height);
+                float dw = (float)(img.Width * scale), dh = (float)(img.Height * scale);
+                canvas.DrawImage(img, (float)(im.X + (im.W - dw) / 2), (float)(im.Y + (im.H - dh) / 2), dw, dh);
+                canvas.RestoreState();
                 break;
         }
     }
